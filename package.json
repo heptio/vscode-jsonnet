@@ -1,0 +1,26 @@
+{
+    "name": "jsonnet",
+    "displayName": "Jsonnet",
+    "description": "Language support for Jsonnet",
+    "version": "0.0.1",
+    "publisher": "Heptio",
+    "engines": {
+        "vscode": "^1.10.0"
+    },
+    "categories": [
+        "Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "jsonnet",
+            "aliases": ["Jsonnet", "jsonnet"],
+            "extensions": [".jsonnet",".libsonnet"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "jsonnet",
+            "scopeName": "source.jsonnet",
+            "path": "./syntaxes/jsonnet.tmLanguage.json"
+        }]
+    }
+}
