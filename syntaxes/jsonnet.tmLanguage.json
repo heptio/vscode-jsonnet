@@ -2,17 +2,22 @@
 	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
 	"name": "Jsonnet",
 	"patterns": [
-		{ "include": "#keywords" },
-		{ "include": "#storage" },
-		{ "include": "#strings" },
-		{ "include": "#constant" },
-		{ "include": "#comment" },
-		{ "include": "#variable" },
-		{ "include": "#multiline-strings" },
-		{ "include": "#builtin-functions" },
-		{ "include": "#functions" }
+		{ "include": "#expression" }
 	],
 	"repository": {
+		"expression": {
+			"patterns": [
+				{ "include": "#keywords" },
+				{ "include": "#storage" },
+				{ "include": "#strings" },
+				{ "include": "#constant" },
+				{ "include": "#comment" },
+				{ "include": "#variable" },
+				{ "include": "#multiline-strings" },
+				{ "include": "#builtin-functions" },
+				{ "include": "#functions" }
+			]
+		},
 		"keywords": {
 			"patterns": [
 				{
@@ -81,10 +86,18 @@
 			"patterns": [
 				{
 					"name": "meta.function",
-					"match": "\\b([a-zA-Z_][a-z0-9A-Z_]*)\\s*\\(.*\\)",
-					"captures": {
+					"begin": "\\b([a-zA-Z_][a-z0-9A-Z_]*)\\s*\\(",
+					"end": "\\)",
+					"beginCaptures": {
 						"1": { "name": "entity.name.function.jsonnet" }
-					}
+					},
+					"patterns": [
+						{
+							"name": "variable.parameter",
+							"match": "[a-zA-Z_][a-z0-9A-Z_]*"
+						},
+						{ "include": "#expression" }
+					]
 				}
 			]
 		},
