@@ -1,9 +1,18 @@
 local identifier = "[a-zA-Z_][a-z0-9A-Z_]*";
 
 local Include(id) = { include: "#%s" % id };
-local Pattern(name, match) = {
-  name: name,
-  match: match,
+
+local match = {
+  Simple(name, match):: {
+    name: name,
+    match: match,
+  },
+
+  Span(name, begin, end):: {
+    name: name,
+    begin: begin,
+    end: end,
+  },
 };
 
 {
@@ -26,133 +35,66 @@ local Pattern(name, match) = {
     },
     keywords: {
       patterns: [
-        Pattern("keyword.operator.jsonnet", "[!:~\\+\\-&\\|\\^=<>\\*\\/%]"),
-        Pattern("keyword.other.jsonnet", "\\$"),
-        Pattern("keyword.other.jsonnet", "\\b(self|super|import|importstr|local|tailstrict)\\b"),
-        Pattern("keyword.control.jsonnet", "\\b(if|then|else|for|in|error|assert)\\b"),
-        Pattern("storage.type.jsonnet", "\\b(function)\\b"),
-        Pattern("entity.name.type", "%s::" % identifier,),
-        Pattern("variable.parameter.jsonnet", "%s:" % identifier),
+        match.Simple("keyword.operator.jsonnet", "[!:~\\+\\-&\\|\\^=<>\\*\\/%]"),
+        match.Simple("keyword.other.jsonnet", "\\$"),
+        match.Simple("keyword.other.jsonnet", "\\b(self|super|import|importstr|local|tailstrict)\\b"),
+        match.Simple("keyword.control.jsonnet", "\\b(if|then|else|for|in|error|assert)\\b"),
+        match.Simple("storage.type.jsonnet", "\\b(function)\\b"),
+        match.Simple("entity.name.type", "%s::" % identifier,),
+        match.Simple("variable.parameter.jsonnet", "%s:" % identifier),
 
       ]
     },
-    "literals": {
-      "patterns": [
-        {
-          "name": "constant.language.jsonnet",
-          "match": "\\b(true|false|null)\\b"
-        },
-        {
-          "name": "constant.numeric.jsonnet",
-          "match": "\\b(\\d+([Ee][+-]?\\d+)?)\\b"
-        },
-        {
-          "name": "constant.numeric.jsonnet",
-          "match": "\\b\\d+[.]\\d*([Ee][+-]?\\d+)?\\b"
-        },
-        {
-          "name": "constant.numeric.jsonnet",
-          "match": "\\b[.]\\d+([Ee][+-]?\\d+)?\\b"
-        }
+    literals: {
+      patterns: [
+         match.Simple("constant.language.jsonnet", "\\b(true|false|null)\\b"),
+         match.Simple("constant.numeric.jsonnet", "\\b(\\d+([Ee][+-]?\\d+)?)\\b"),
+         match.Simple("constant.numeric.jsonnet", "\\b\\d+[.]\\d*([Ee][+-]?\\d+)?\\b"),
+         match.Simple("constant.numeric.jsonnet", "\\b[.]\\d+([Ee][+-]?\\d+)?\\b"),
       ]
     },
     "builtin-functions": {
-      "patterns": [
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](acos|asin|atan|ceil|char|codepoint|cos|exp|exponent)\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](filter|floor|force|length|log|makeArray|mantissa)\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](objectFields|objectHas|pow|sin|sqrt|tan|type|thisFile)\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](acos|asin|atan|ceil|char|codepoint|cos|exp|exponent)\\b"
-        },
-
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](abs|assertEqual|escapeString(Bash|Dollars|Json|Python))\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](filterMap|flattenArrays|foldl|foldr|format|join)\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](lines|manifest(Ini|Python(Vars)?)|map|max|min|mod)\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](set|set(Diff|Inter|Member|Union)|sort)\\b"
-        },
-        {
-          "name": "support.function.jsonnet",
-          "match": "\\bstd[.](range|split|stringChars|substr|toString|uniq)\\b"
-        }
+      patterns: [
+        match.Simple("support.function.jsonnet", "\\bstd[.](acos|asin|atan|ceil|char|codepoint|cos|exp|exponent)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](filter|floor|force|length|log|makeArray|mantissa)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](objectFields|objectHas|pow|sin|sqrt|tan|type|thisFile)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](acos|asin|atan|ceil|char|codepoint|cos|exp|exponent)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](abs|assertEqual|escapeString(Bash|Dollars|Json|Python))\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](filterMap|flattenArrays|foldl|foldr|format|join)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](lines|manifest(Ini|Python(Vars)?)|map|max|min|mod)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](set|set(Diff|Inter|Member|Union)|sort)\\b"),
+        match.Simple("support.function.jsonnet", "\\bstd[.](range|split|stringChars|substr|toString|uniq)\\b"),
       ]
     },
-    "double-quoted-strings": {
-      "name": "string.quoted.double.jsonnet",
-      "begin": "\"",
-      "end": "\"",
-      "patterns": [
-        {
-          "name": "constant.character.escape.jsonnet",
-          "match": "\\\\([\"\\\\/bfnrt]|(u[0-9a-fA-F]{4}))"
-        },
-        {
-          "name": "invalid.illegal.jsonnet",
-          "match": "\\\\[^\"\\\\/bfnrtu]"
-        }
-      ]
-    },
+    "double-quoted-strings":
+      match.Span("string.quoted.double.jsonnet", "\"", "\"") {
+        "patterns": [
+          match.Simple("constant.character.escape.jsonnet", "\\\\([\"\\\\/bfnrt]|(u[0-9a-fA-F]{4}))"),
+          match.Simple("invalid.illegal.jsonnet", "\\\\[^\"\\\\/bfnrtu]"),
+        ]
+      },
     "triple-quoted-strings": {
       "patterns": [
-        {
-          "name": "string.quoted.triple.jsonnet",
-          "begin": "\\|\\|\\|",
-          "end": "\\|\\|\\|"
-        }
+        match.Span("string.quoted.triple.jsonnet", "\\|\\|\\|", "\\|\\|\\|"),
       ]
     },
     "functions": {
       "patterns": [
-        {
-          "name": "meta.function",
-          "begin": "\\b([a-zA-Z_][a-z0-9A-Z_]*)\\s*\\(",
-          "end": "\\)",
+        match.Span("meta.function", "\\b([a-zA-Z_][a-z0-9A-Z_]*)\\s*\\(", "\\)") {
           "beginCaptures": {
             "1": { "name": "entity.name.function.jsonnet" }
           },
           "patterns": [
-            { "include": "#expression" }
-          ]
-        }
+            Include("expression"),
+          ],
+        },
       ]
     },
     "comment": {
       "patterns": [
-        {
-          "name": "comment.block.jsonnet",
-          "begin": "/\\*",
-          "end": "\\*/"
-        },
-
-        {
-          "name": "comment.line.jsonnet",
-          "match": "//.*$"
-        },
-
-        {
-          "name": "comment.block.jsonnet",
-          "match": "#.*$"
-        }
+        match.Span("comment.block.jsonnet", "/\\*", "\\*/"),
+        match.Simple("comment.line.jsonnet", "//.*$"),
+        match.Simple("comment.block.jsonnet", "#.*$"),
       ]
     }
   },
