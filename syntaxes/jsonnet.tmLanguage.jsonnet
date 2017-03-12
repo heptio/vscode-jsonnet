@@ -68,35 +68,35 @@ local match = {
     },
     "double-quoted-strings":
       match.Span("string.quoted.double.jsonnet", "\"", "\"") {
-        "patterns": [
+        patterns: [
           match.Simple("constant.character.escape.jsonnet", "\\\\([\"\\\\/bfnrt]|(u[0-9a-fA-F]{4}))"),
           match.Simple("invalid.illegal.jsonnet", "\\\\[^\"\\\\/bfnrtu]"),
         ]
       },
     "triple-quoted-strings": {
-      "patterns": [
+      patterns: [
         match.Span("string.quoted.triple.jsonnet", "\\|\\|\\|", "\\|\\|\\|"),
       ]
     },
-    "functions": {
-      "patterns": [
+    functions: {
+      patterns: [
         match.Span("meta.function", "\\b([a-zA-Z_][a-z0-9A-Z_]*)\\s*\\(", "\\)") {
-          "beginCaptures": {
-            "1": { "name": "entity.name.function.jsonnet" }
+          beginCaptures: {
+            "1": { name: "entity.name.function.jsonnet" }
           },
-          "patterns": [
+          patterns: [
             Include("expression"),
           ],
         },
       ]
     },
-    "comment": {
-      "patterns": [
+    comment: {
+      patterns: [
         match.Span("comment.block.jsonnet", "/\\*", "\\*/"),
         match.Simple("comment.line.jsonnet", "//.*$"),
         match.Simple("comment.block.jsonnet", "#.*$"),
       ]
     }
   },
-  "scopeName": "source.jsonnet"
+  scopeName: "source.jsonnet"
 }
