@@ -2,6 +2,21 @@ local identifier = "[a-zA-Z_][a-z0-9A-Z_]*";
 
 local Include(id) = { include: "#%s" % id };
 
+local string = {
+  local escapeCharsPattern = "\\\\([%s\\\\/bfnrt]|(u[0-9a-fA-F]{4}))",
+  local illegalCharsPattern = "\\\\[^%s\\\\/bfnrtu]",
+
+  escape:: {
+    single: escapeCharsPattern % "'",
+    double: escapeCharsPattern % "\"",
+  },
+
+  illegal:: {
+    single: illegalCharsPattern % "'",
+    double: illegalCharsPattern % "\"",
+  },
+};
+
 local match = {
   Simple(name, match):: {
     name: name,
@@ -27,6 +42,7 @@ local match = {
       patterns: [
         Include("literals"),
         Include("comment"),
+        Include("single-quoted-strings"),
         Include("double-quoted-strings"),
         Include("triple-quoted-strings"),
         Include("builtin-functions"),
@@ -66,11 +82,18 @@ local match = {
         match.Simple("support.function.jsonnet", "\\bstd[.](range|split|stringChars|substr|toString|uniq)\\b"),
       ]
     },
+    "single-quoted-strings":
+      match.Span("string.quoted.double.jsonnet", "'", "'") {
+        patterns: [
+          match.Simple("constant.character.escape.jsonnet", string.escape.single),
+          match.Simple("invalid.illegal.jsonnet", string.illegal.single),
+        ]
+      },
     "double-quoted-strings":
       match.Span("string.quoted.double.jsonnet", "\"", "\"") {
         patterns: [
-          match.Simple("constant.character.escape.jsonnet", "\\\\([\"\\\\/bfnrt]|(u[0-9a-fA-F]{4}))"),
-          match.Simple("invalid.illegal.jsonnet", "\\\\[^\"\\\\/bfnrtu]"),
+          match.Simple("constant.character.escape.jsonnet", string.escape.double),
+          match.Simple("invalid.illegal.jsonnet", string.illegal.double),
         ]
       },
     "triple-quoted-strings": {

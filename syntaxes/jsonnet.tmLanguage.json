@@ -91,6 +91,9 @@
                "include": "#comment"
             },
             {
+               "include": "#single-quoted-strings"
+            },
+            {
                "include": "#double-quoted-strings"
             },
             {
@@ -172,6 +175,21 @@
             {
                "match": "\\b[.]\\d+([Ee][+-]?\\d+)?\\b",
                "name": "constant.numeric.jsonnet"
+            }
+         ]
+      },
+      "single-quoted-strings": {
+         "begin": "'",
+         "end": "'",
+         "name": "string.quoted.double.jsonnet",
+         "patterns": [
+            {
+               "match": "\\\\(['\\\\/bfnrt]|(u[0-9a-fA-F]{4}))",
+               "name": "constant.character.escape.jsonnet"
+            },
+            {
+               "match": "\\\\[^'\\\\/bfnrtu]",
+               "name": "invalid.illegal.jsonnet"
             }
          ]
       },
