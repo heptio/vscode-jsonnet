@@ -3,7 +3,7 @@
     "displayName": "Jsonnet",
     "description": "Language support for Jsonnet",
     "version": "0.0.1",
-    "publisher": "Heptio",
+    "publisher": "Heptio, Inc.",
     "engines": {
         "vscode": "^1.10.0"
     },
