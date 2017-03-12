@@ -4,12 +4,18 @@
     "description": "Language support for Jsonnet",
     "version": "0.0.1",
     "publisher": "heptio",
+    "license": "SEE LICENSE IN 'LICENSE' file",
     "engines": {
         "vscode": "^1.10.0"
     },
     "categories": [
         "Languages"
     ],
+    "homepage": "https://github.com/heptio/vscode-jsonnet/blob/master/README.md",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heptio/vscode-jsonnet.git"
+    },
     "contributes": {
         "languages": [{
             "id": "jsonnet",
