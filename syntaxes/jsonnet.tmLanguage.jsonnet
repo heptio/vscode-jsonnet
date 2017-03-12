@@ -56,8 +56,9 @@ local match = {
         match.Simple("keyword.other.jsonnet", "\\b(self|super|import|importstr|local|tailstrict)\\b"),
         match.Simple("keyword.control.jsonnet", "\\b(if|then|else|for|in|error|assert)\\b"),
         match.Simple("storage.type.jsonnet", "\\b(function)\\b"),
-        match.Simple("entity.name.type", "%s::" % identifier,),
-        match.Simple("variable.parameter.jsonnet", "%s:" % identifier),
+        match.Simple("variable.parameter.jsonnet", "%s\\s*(:::|\\+:::)" % identifier),
+        match.Simple("entity.name.type", "%s\\s*(::|\\+::)" % identifier,),
+        match.Simple("variable.parameter.jsonnet", "%s\\s*(:|\\+:)" % identifier),
 
       ]
     },

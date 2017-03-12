@@ -149,11 +149,15 @@
                "name": "storage.type.jsonnet"
             },
             {
-               "match": "[a-zA-Z_][a-z0-9A-Z_]*::",
+               "match": "[a-zA-Z_][a-z0-9A-Z_]*\\s*(:::|\\+:::)",
+               "name": "variable.parameter.jsonnet"
+            },
+            {
+               "match": "[a-zA-Z_][a-z0-9A-Z_]*\\s*(::|\\+::)",
                "name": "entity.name.type"
             },
             {
-               "match": "[a-zA-Z_][a-z0-9A-Z_]*:",
+               "match": "[a-zA-Z_][a-z0-9A-Z_]*\\s*(:|\\+:)",
                "name": "variable.parameter.jsonnet"
             }
          ]
