@@ -2,6 +2,4 @@
 
 This extension adds simple syntax highlighting for Jsonnet files (specifically, files with the `.jsonnet` and `.libsonent` suffixes).
 
-![Jsonnet syntax highlighting][syntax]
-
-[syntax]: https://github.com/heptio/vscode-jsonnet/tree/master/images/syntax.png "Jsonnet syntax highlighting"
+![Jsonnet syntax highlighting](https://raw.githubusercontent.com/heptio/vscode-jsonnet/master/images/syntax.png)
