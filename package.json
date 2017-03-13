@@ -2,7 +2,7 @@
   "name": "jsonnet",
   "displayName": "Jsonnet",
   "description": "Language support for Jsonnet",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "heptio",
   "license": "SEE LICENSE IN 'LICENSE' file",
   "engines": {
