@@ -7,6 +7,8 @@ const previewScheme = "jsonnet-preview";
 let jsonnetExecutable = "jsonnet";
 
 export function activate(context: vscode.ExtensionContext) {
+    workspace.configure(vscode.workspace.getConfiguration('jsonnet'));
+
     // Create Jsonnet provider, register it to provide for documents
     // with `previewScheme` URI scheme.
     const provider = new jsonnet.DocumentProvider();
@@ -18,9 +20,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register commands.
     context.subscriptions.push(vscode.commands.registerCommand(
-        'extension.previewJsonnetToSide', () => display.previewJsonnet(true)));
+        'jsonnet.previewToSide', () => display.previewJsonnet(true)));
     context.subscriptions.push(vscode.commands.registerCommand(
-        'extension.previewJsonnet', () => display.previewJsonnet(false)));
+        'jsonnet.preview', () => display.previewJsonnet(false)));
 
     // Register workspace events.
     context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(
@@ -32,6 +34,46 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+}
+
+namespace workspace {
+    export function configure(config: vscode.WorkspaceConfiguration): boolean {
+        if (os.type() === "Windows_NT") {
+            return configureWindows(config);
+        } else {
+            return configureUnix(config);
+        }
+    }
+
+    function configureUnix(config: vscode.WorkspaceConfiguration): boolean {
+        if (config["executablePath"] != null) {
+            jsonnetExecutable = config["executablePath"];
+        } else {
+            try {
+                // If this doesn't throw, 'jsonnet' was found on
+                // $PATH.
+                //
+                // TODO: Probably should find a good non-shell way of
+                // doing this.
+                execSync(`which jsonnet`);
+            } catch(e) {
+                alert.jsonnetCommandNotOnPath();
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function configureWindows(config: vscode.WorkspaceConfiguration): boolean {
+        if (config["executablePath"] == null) {
+            alert.jsonnetCommandIsNull();
+            return false;
+        }
+
+        jsonnetExecutable = config["executablePath"];
+        return true;
+    }
 }
 
 namespace alert {
@@ -47,6 +89,14 @@ namespace alert {
 
     export function couldNotRenderJsonnet(reason) {
         alert(`Error: Could not render Jsonnet; ${reason}`);
+    }
+
+    export function jsonnetCommandNotOnPath() {
+        alert(`Error: could not find 'jsonnet' command on path`);
+    }
+
+    export function jsonnetCommandIsNull() {
+        alert(`Error: 'jsonnet.executablePath' must be set in vscode settings`);
     }
 }
 

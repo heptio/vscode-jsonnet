@@ -12,8 +12,8 @@
     "Languages"
   ],
   "activationEvents": [
-    "onCommand:extension.previewJsonnetToSide",
-    "onCommand:extension.previewJsonnet"
+    "onCommand:jsonnet.previewToSide",
+    "onCommand:jsonnet.preview"
   ],
   "main": "./out/src/extension",
   "homepage": "https://github.com/heptio/vscode-jsonnet/blob/master/README.md",
@@ -22,6 +22,17 @@
     "url": "https://github.com/heptio/vscode-jsonnet.git"
   },
   "contributes": {
+    "configuration": {
+        "type": "object",
+        "title": "Jsonnet configuration",
+        "properties": {
+            "jsonnet.executablePath": {
+                "type": "string",
+                "default": null,
+                "description": "Location of the `jsonnet` executable."
+            }
+        }
+    },
     "languages": [{
       "id": "jsonnet",
       "aliases": ["Jsonnet", "jsonnet"],
@@ -35,16 +46,16 @@
     }],
     "commands": [
       {
-        "command": "extension.previewJsonnetToSide",
+        "command": "jsonnet.previewToSide",
         "title": "Jsonnet: Open Preview to the Side"
       },
       {
-        "command": "extension.previewJsonnet",
+        "command": "jsonnet.preview",
         "title": "Jsonnet: Open Preview"
       }],
     "keybindings": [
       {
-        "command": "extension.previewJsonnetToSide",
+        "command": "jsonnet.previewToSide",
         "key": "shift+ctrl+i",
         "mac": "shift+cmd+i",
         "when": "editorFocus"
