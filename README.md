@@ -44,4 +44,4 @@ keys:
   keybinding.
 
 [jsonnet]: http://jsonnet.org/ "Jsonnet"
-[jsonnet-demo]: images/kube-demo.gif
+[jsonnet-demo]: https://raw.githubusercontent.com/heptio/vscode-jsonnet/master/images/kube-demo.gif
