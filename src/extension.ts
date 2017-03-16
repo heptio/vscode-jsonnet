@@ -1,11 +1,14 @@
 'use strict';
 import * as vscode from 'vscode';
 import { execSync } from 'child_process';
+import * as os from 'os';
 
 const previewScheme = "jsonnet-preview";
+let jsonnetExecutable = "jsonnet";
 
 export function activate(context: vscode.ExtensionContext) {
-    // Create Jsonnet provider.
+    // Create Jsonnet provider, register it to provide for documents
+    // with `previewScheme` URI scheme.
     const provider = new jsonnet.DocumentProvider();
     const registration = vscode.workspace.registerTextDocumentContentProvider(
         previewScheme, provider);
@@ -72,7 +75,16 @@ namespace jsonnet {
     }
 
     export class DocumentProvider implements vscode.TextDocumentContentProvider {
-        private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
+        public provideTextDocumentContent =
+            (uri: vscode.Uri): Thenable<string> => {
+                const sourceUri = vscode.Uri.parse(uri.query);
+                return vscode.workspace.openTextDocument(sourceUri)
+                    .then(this.renderDocument);
+            }
+
+        //
+        // Document update API.
+        //
 
         get onDidChange(): vscode.Event<vscode.Uri> {
             return this._onDidChange.event;
@@ -82,15 +94,20 @@ namespace jsonnet {
             this._onDidChange.fire(uri);
         }
 
-        public provideTextDocumentContent(uri: vscode.Uri): Thenable<string> {
-            const sourceUri = vscode.Uri.parse(uri.query);
-            return vscode.workspace.openTextDocument(sourceUri)
-                .then(document => {
-                    const jsonOutput = execSync(`jsonnet ${document.fileName}`)
-                        .toString();
-                    return html.body(html.prettyPrintObject(jsonOutput));
-                });
+        //
+        // Private members.
+        //
+
+        private renderDocument(document: vscode.TextDocument): string {
+            // TODO: This will throw on error, we should avoid using it or
+            // catch.
+            const jsonOutput =
+                execSync(`${jsonnetExecutable} ${document.fileName}`).toString();
+            return html.body(html.prettyPrintObject(jsonOutput));
         }
+
+        private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
+
     }
 }
 
