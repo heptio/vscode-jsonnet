@@ -6,6 +6,8 @@ import * as os from 'os';
 const previewScheme = "jsonnet-preview";
 let jsonnetExecutable = "jsonnet";
 
+const JSONNET_MODE: vscode.DocumentFilter = { language: 'jsonnet', scheme: 'file' };
+
 export function activate(context: vscode.ExtensionContext) {
     workspace.configure(vscode.workspace.getConfiguration('jsonnet'));
 
@@ -29,8 +31,10 @@ export function activate(context: vscode.ExtensionContext) {
         (document) => {
             provider.update(jsonnet.canonicalPreviewUri(document.uri))
         }));
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(
-        (e) => {}));
+
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider(
+            JSONNET_MODE, new jsonnet.CompletionProvider(), '.', '\"'));
 }
 
 export function deactivate() {
@@ -122,6 +126,17 @@ namespace jsonnet {
             path: `${fileUri.path}.rendered`,
             query: fileUri.toString(),
         });
+    }
+
+    export class CompletionProvider implements vscode.CompletionItemProvider {
+        public provideCompletionItems(
+            document: vscode.TextDocument,
+            position: vscode.Position,
+            token: vscode.CancellationToken):
+        Thenable<vscode.CompletionItem[]> {
+            const candidate = new vscode.CompletionItem("xzyzx");
+            return Promise.all([]);
+        }
     }
 
     export class DocumentProvider implements vscode.TextDocumentContentProvider {
