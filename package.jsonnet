@@ -18,6 +18,9 @@ local previewToSide = contributes.command.Default(
   "jsonnet.previewToSide",
   "Jsonnet: Open Preview to the Side");
 
+local previewKeybinding = keybinding.FromCommand(
+  previewToSide, "editorFocus", "shift+ctrl+i", mac="shift+cmd+i");
+
 package.Default() +
 package.Name(jsonnetLanguage.name) +
 package.DisplayName(jsonnetLanguage.displayName) +
@@ -32,23 +35,18 @@ package.Category("Languages") +
 package.ActivationEvent(event.OnCommand(previewToSide.command)) +
 package.ActivationEvent(event.OnCommand(preview.command)) +
 package.Main("./out/src/extension") +
+package.contributes.Language(language.FromLanguageSpec(
+  jsonnetLanguage, "./language-configuration.json")) +
+package.contributes.Grammar(grammar.FromLanguageSpec(
+  jsonnetLanguage, "source.jsonnet", "./syntaxes/jsonnet.tmLanguage.json")) +
+package.contributes.Command(previewToSide) +
+package.contributes.Command(preview) +
+package.contributes.Keybinding(previewKeybinding) +
+package.contributes.DefaultConfiguration(
+  "Jsonnet configuration",
+  contributes.configuration.DefaultStringProperty(
+    "jsonnet.executablePath", "Location of the `jsonnet` executable.")) +
 {
-  local previewKeybinding = keybinding.FromCommand(
-    previewToSide, "editorFocus", "shift+ctrl+i", mac="shift+cmd+i"),
-
-  contributes:
-    contributes.Default() +
-    contributes.Language(language.FromLanguageSpec(
-      jsonnetLanguage, "./language-configuration.json")) +
-    contributes.Grammar(grammar.FromLanguageSpec(
-      jsonnetLanguage, "source.jsonnet", "./syntaxes/jsonnet.tmLanguage.json")) +
-    contributes.Command(previewToSide) +
-    contributes.Command(preview) +
-    contributes.Keybinding(previewKeybinding) +
-    contributes.DefaultConfiguration(
-      "Jsonnet configuration",
-      contributes.configuration.DefaultStringProperty(
-        "jsonnet.executablePath", "Location of the `jsonnet` executable.")),
   scripts: {
     "vscode:prepublish": "tsc -p ./",
     compile: "tsc -watch -p ./",

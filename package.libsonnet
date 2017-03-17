@@ -4,7 +4,9 @@
     engines: {},
     categories: [],
     activationEvents: [],
+    contributes: $.contributes.Default(),
   },
+
   Name(name):: {name: name},
   DisplayName(displayName):: {displayName: displayName},
   Description(description):: {description: description},
@@ -53,16 +55,18 @@
       keybindings: [],
     },
 
-    Language(language):: {languages+: [language]},
-    Grammar(grammar):: {grammars+: [grammar]},
-    Command(command):: {commands+: [command]},
-    Keybinding(keybinding):: {keybindings+: [keybinding]},
+    Language(language):: {contributes+: {languages+: [language]}},
+    Grammar(grammar):: {contributes+: {grammars+: [grammar]}},
+    Command(command):: {contributes+: {commands+: [command]}},
+    Keybinding(keybinding):: {contributes+: {keybindings+: [keybinding]}},
 
     DefaultConfiguration(title, properties):: {
-      configuration: {
-        type: "object",
-        title: title,
-        properties: properties,
+      contributes+: {
+          configuration: {
+          type: "object",
+          title: title,
+          properties: properties,
+        },
       },
     },
 
