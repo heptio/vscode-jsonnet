@@ -29,12 +29,18 @@ package.Version("0.0.5") +
 package.Publisher("heptio") +
 package.License("SEE LICENSE IN 'LICENSE' file") +
 package.Homepage("https://github.com/heptio/vscode-jsonnet/blob/master/README.md") +
-package.repository.Default("git", "https://github.com/heptio/vscode-jsonnet.git") +
-package.engines.VsCode("^1.10.0") +
 package.Category("Languages") +
 package.ActivationEvent(event.OnCommand(previewToSide.command)) +
 package.ActivationEvent(event.OnCommand(preview.command)) +
 package.Main("./out/src/extension") +
+
+// Repository.
+package.repository.Default("git", "https://github.com/heptio/vscode-jsonnet.git") +
+
+// Engines.
+package.engines.VsCode("^1.10.0") +
+
+// Contribution points.
 package.contributes.Language(language.FromLanguageSpec(
   jsonnetLanguage, "./language-configuration.json")) +
 package.contributes.Grammar(grammar.FromLanguageSpec(
@@ -46,6 +52,8 @@ package.contributes.DefaultConfiguration(
   "Jsonnet configuration",
   contributes.configuration.DefaultStringProperty(
     "jsonnet.executablePath", "Location of the `jsonnet` executable.")) +
+
+// Everything else.
 {
   scripts: {
     "vscode:prepublish": "tsc -p ./",
