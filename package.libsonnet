@@ -58,6 +58,24 @@
     Command(command):: {commands+: [command]},
     Keybinding(keybinding):: {keybindings+: [keybinding]},
 
+    DefaultConfiguration(title, properties):: {
+      configuration: {
+        type: "object",
+        title: title,
+        properties: properties,
+      },
+    },
+
+    configuration:: {
+      DefaultStringProperty(property, description, default=null):: {
+        [property]: {
+          type: "string",
+          default: default,
+          description: description,
+        },
+      },
+    },
+
     command:: {
       Default(command, title):: {
         command: command,

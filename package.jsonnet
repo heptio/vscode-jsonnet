@@ -45,19 +45,10 @@ package.Main("./out/src/extension") +
     contributes.Command(previewToSide) +
     contributes.Command(preview) +
     contributes.Keybinding(previewKeybinding) +
-    {
-      configuration: {
-          type: "object",
-          title: "Jsonnet configuration",
-          properties: {
-              "jsonnet.executablePath": {
-                  type: "string",
-                  default: null,
-                  description: "Location of the `jsonnet` executable."
-              }
-          }
-      },
-    },
+    contributes.DefaultConfiguration(
+      "Jsonnet configuration",
+      contributes.configuration.DefaultStringProperty(
+        "jsonnet.executablePath", "Location of the `jsonnet` executable.")),
   scripts: {
     "vscode:prepublish": "tsc -p ./",
     compile: "tsc -watch -p ./",
