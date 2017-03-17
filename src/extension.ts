@@ -113,6 +113,10 @@ namespace html {
         return `<pre><code>${code}</code></pre>`
     }
 
+    export function errorMessage(message:string): string {
+        return `<i><pre>${message}</pre></i>`;
+    }
+
     export function prettyPrintObject(json): string {
         const prettyJson = JSON.stringify(JSON.parse(json), null, 4);
         return codeLiteral(prettyJson);
@@ -164,11 +168,14 @@ namespace jsonnet {
         //
 
         private renderDocument(document: vscode.TextDocument): string {
-            // TODO: This will throw on error, we should avoid using it or
-            // catch.
-            const jsonOutput =
-                execSync(`${jsonnetExecutable} ${document.fileName}`).toString();
-            return html.body(html.prettyPrintObject(jsonOutput));
+            try {
+                const jsonOutput = execSync(
+                    `${jsonnetExecutable} ${document.fileName}`
+                ).toString();
+                return html.body(html.prettyPrintObject(jsonOutput));
+            } catch (e) {
+                return html.body(html.errorMessage(e.message));
+            }
         }
 
         private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
