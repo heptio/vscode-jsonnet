@@ -78,6 +78,14 @@
           description: description,
         },
       },
+
+      DefaultObjectProperty(property, description, default=null):: {
+        [property]: {
+          type: "object",
+          default: default,
+          description: description,
+        },
+      },
     },
 
     command:: {

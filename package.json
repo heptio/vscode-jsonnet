@@ -23,6 +23,11 @@
                "default": null,
                "description": "Location of the `jsonnet` executable.",
                "type": "string"
+            },
+            "jsonnet.extStrs": {
+               "default": null,
+               "description": "External strings to pass to `jsonnet` executable.",
+               "type": "object"
             }
          },
          "title": "Jsonnet configuration",
@@ -85,5 +90,5 @@
       "test": "node ./node_modules/vscode/bin/test",
       "vscode:prepublish": "tsc -p ./"
    },
-   "version": "0.0.6"
+   "version": "0.0.7"
 }

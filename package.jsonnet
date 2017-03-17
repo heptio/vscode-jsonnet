@@ -25,7 +25,7 @@ package.Default() +
 package.Name(jsonnetLanguage.name) +
 package.DisplayName(jsonnetLanguage.displayName) +
 package.Description("Language support for Jsonnet") +
-package.Version("0.0.6") +
+package.Version("0.0.7") +
 package.Publisher("heptio") +
 package.License("SEE LICENSE IN 'LICENSE' file") +
 package.Homepage("https://github.com/heptio/vscode-jsonnet/blob/master/README.md") +
@@ -51,7 +51,9 @@ package.contributes.Keybinding(previewKeybinding) +
 package.contributes.DefaultConfiguration(
   "Jsonnet configuration",
   contributes.configuration.DefaultStringProperty(
-    "jsonnet.executablePath", "Location of the `jsonnet` executable.")) +
+    "jsonnet.executablePath", "Location of the `jsonnet` executable.") +
+  contributes.configuration.DefaultObjectProperty(
+    "jsonnet.extStrs", "External strings to pass to `jsonnet` executable.")) +
 
 // Everything else.
 {

@@ -41,6 +41,16 @@ export function deactivate() {
 }
 
 namespace workspace {
+    export function extStrs(): string {
+        const extStrsObj =
+            vscode.workspace.getConfiguration('jsonnet')["extStrs"];
+        return extStrsObj == null
+            ? ""
+            : Object.keys(extStrsObj)
+                .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
+                .join(" ");
+    }
+
     export function configure(config: vscode.WorkspaceConfiguration): boolean {
         if (os.type() === "Windows_NT") {
             return configureWindows(config);
@@ -169,8 +179,9 @@ namespace jsonnet {
 
         private renderDocument(document: vscode.TextDocument): string {
             try {
+                const extStrs = workspace.extStrs();
                 const jsonOutput = execSync(
-                    `${jsonnetExecutable} ${document.fileName}`
+                    `${jsonnetExecutable} ${extStrs} ${document.fileName}`
                 ).toString();
                 return html.body(html.prettyPrintObject(jsonOutput));
             } catch (e) {

@@ -42,6 +42,11 @@ keys:
 * `jsonnet.previewToSide`: Compiles the Jsonnet file to JSON, places
   result in a "preview" window in the current active pane. Default: no
   keybinding.
+* `jsonnet.extStrs`: An object of variable, value pairs. Allows you to
+  customize the external variables passed to the `jsonnet` command
+  line. It can be particularly useful to set this in a workspace
+  configuration, so that you can set different variables on a
+  per-project basis.
 
 [jsonnet]: http://jsonnet.org/ "Jsonnet"
 [jsonnet-demo]: https://raw.githubusercontent.com/heptio/vscode-jsonnet/master/images/kube-demo.gif
