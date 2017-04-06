@@ -2,7 +2,7 @@
 
 A simple bare-bones extension providing simple syntax highlighting
 for [Jsonnet][jsonnet] files (specifically, files with the `.jsonnet`
-and `.libsonent` suffixes), as well as a Markdown-style preview pane
+and `.libsonnet` suffixes), as well as a Markdown-style preview pane
 that auto-updates every time you save.
 
 ![Jsonnet preview][jsonnet-demo]
