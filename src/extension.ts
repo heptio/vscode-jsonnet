@@ -18,7 +18,8 @@ export function activate(context: vscode.ExtensionContext) {
     const registration = vscode.workspace.registerTextDocumentContentProvider(
         previewScheme, provider);
 
-    // Subscribe to document updates.
+    // Subscribe to document updates. This allows us to detect (e.g.)
+    // when a document was saved.
     context.subscriptions.push(registration);
 
     // Register commands.
@@ -33,9 +34,14 @@ export function activate(context: vscode.ExtensionContext) {
             provider.update(jsonnet.canonicalPreviewUri(document.uri))
         }));
 
+    // Register language events.
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
             JSONNET_MODE, new jsonnet.CompletionProvider(), '.', '\"'));
+
+    context.subscriptions.push(
+        vscode.languages.registerHoverProvider(
+            JSONNET_MODE, new jsonnet.HoverProvider()));
 }
 
 export function deactivate() {
@@ -158,6 +164,29 @@ namespace jsonnet {
             Thenable<vscode.CompletionItem[]> {
             const candidate = new vscode.CompletionItem("xzyzx");
             return Promise.all([]);
+        }
+    }
+
+    export class HoverProvider implements vscode.HoverProvider {
+        public provideHover(
+            document: vscode.TextDocument,
+            position: vscode.Position,
+            token: vscode.CancellationToken
+        ): vscode.Hover {
+            // TODO: Check whether suggestions are turned on, and stuff.
+
+            let wordRange = document.getWordRangeAtPosition(position);
+            if (!wordRange) {
+                return;
+            }
+            let name = document.getText(wordRange);
+            let line = document.lineAt(position.line);
+
+            let contents: vscode.MarkedString[] = [
+                { language: 'jsonnet', value: line.text.trim() },
+                `You have highlighted \`${name}\``
+            ];
+            return new vscode.Hover(contents, wordRange);;
         }
     }
 
