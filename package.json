@@ -1,5 +1,6 @@
 {
    "activationEvents": [
+      "onLanguage:jsonnet",
       "onCommand:jsonnet.previewToSide",
       "onCommand:jsonnet.preview"
    ],

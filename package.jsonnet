@@ -30,6 +30,7 @@ package.Publisher("heptio") +
 package.License("SEE LICENSE IN 'LICENSE' file") +
 package.Homepage("https://github.com/heptio/vscode-jsonnet/blob/master/README.md") +
 package.Category("Languages") +
+package.ActivationEvent(event.OnLanguage(jsonnetLanguage.name)) +
 package.ActivationEvent(event.OnCommand(previewToSide.command)) +
 package.ActivationEvent(event.OnCommand(preview.command)) +
 package.Main("./out/src/extension") +

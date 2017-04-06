@@ -36,6 +36,7 @@
   },
 
   event:: {
+    OnLanguage(languageId):: "onLanguage:%s" % languageId,
     OnCommand(id):: "onCommand:%s" % id,
   },
 
