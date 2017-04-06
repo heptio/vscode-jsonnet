@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { execSync } from 'child_process';
 import * as os from 'os';
+import * as yaml from "js-yaml";
 
 const previewScheme = "jsonnet-preview";
 let jsonnetExecutable = "jsonnet";
@@ -51,6 +52,10 @@ namespace workspace {
                 .join(" ");
     }
 
+    export function outputStyle(): string {
+        return vscode.workspace.getConfiguration('jsonnet')["outputStyle"];
+    }
+
     export function configure(config: vscode.WorkspaceConfiguration): boolean {
         if (os.type() === "Windows_NT") {
             return configureWindows(config);
@@ -70,7 +75,7 @@ namespace workspace {
                 // TODO: Probably should find a good non-shell way of
                 // doing this.
                 execSync(`which jsonnet`);
-            } catch(e) {
+            } catch (e) {
                 alert.jsonnetCommandNotOnPath();
                 return false;
             }
@@ -123,13 +128,16 @@ namespace html {
         return `<pre><code>${code}</code></pre>`
     }
 
-    export function errorMessage(message:string): string {
+    export function errorMessage(message: string): string {
         return `<i><pre>${message}</pre></i>`;
     }
 
-    export function prettyPrintObject(json): string {
-        const prettyJson = JSON.stringify(JSON.parse(json), null, 4);
-        return codeLiteral(prettyJson);
+    export function prettyPrintObject(json: string, outputStyle: string): string {
+        if (outputStyle == "yaml") {
+            return codeLiteral(yaml.safeDump(JSON.parse(json)));
+        } else {
+            return codeLiteral(JSON.stringify(JSON.parse(json), null, 4));
+        }
     }
 }
 
@@ -147,7 +155,7 @@ namespace jsonnet {
             document: vscode.TextDocument,
             position: vscode.Position,
             token: vscode.CancellationToken):
-        Thenable<vscode.CompletionItem[]> {
+            Thenable<vscode.CompletionItem[]> {
             const candidate = new vscode.CompletionItem("xzyzx");
             return Promise.all([]);
         }
@@ -155,11 +163,11 @@ namespace jsonnet {
 
     export class DocumentProvider implements vscode.TextDocumentContentProvider {
         public provideTextDocumentContent =
-            (uri: vscode.Uri): Thenable<string> => {
-                const sourceUri = vscode.Uri.parse(uri.query);
-                return vscode.workspace.openTextDocument(sourceUri)
-                    .then(this.renderDocument);
-            }
+        (uri: vscode.Uri): Thenable<string> => {
+            const sourceUri = vscode.Uri.parse(uri.query);
+            return vscode.workspace.openTextDocument(sourceUri)
+                .then(this.renderDocument);
+        }
 
         //
         // Document update API.
@@ -180,10 +188,11 @@ namespace jsonnet {
         private renderDocument(document: vscode.TextDocument): string {
             try {
                 const extStrs = workspace.extStrs();
+                const outputStyle = workspace.outputStyle();
                 const jsonOutput = execSync(
                     `${jsonnetExecutable} ${extStrs} ${document.fileName}`
                 ).toString();
-                return html.body(html.prettyPrintObject(jsonOutput));
+                return html.body(html.prettyPrintObject(jsonOutput, outputStyle));
             } catch (e) {
                 return html.body(html.errorMessage(e.message));
             }
@@ -213,7 +222,7 @@ namespace display {
             jsonnet.canonicalPreviewUri(editor.document.uri),
             getViewColumn(sideBySide),
             "Jsonnet property preview"
-        ).then((success) => {}, (reason) => {
+        ).then((success) => { }, (reason) => {
             alert.couldNotRenderJsonnet(reason);
         });
     }

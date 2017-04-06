@@ -86,6 +86,15 @@
           description: description,
         },
       },
+
+      DefaultEnumProperty(property, description, enum=[], default=null):: {
+       [property]: {
+         default: default,
+         enum: enum,
+         description: description,
+       },
+      },
+
     },
 
     command:: {
