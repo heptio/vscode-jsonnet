@@ -1,47 +1,45 @@
 'use strict';
-import * as vscode from 'vscode';
+import * as vs from 'vscode';
 import { execSync } from 'child_process';
 import * as os from 'os';
 import * as yaml from "js-yaml";
 
-const previewScheme = "jsonnet-preview";
-let jsonnetExecutable = "jsonnet";
 
-const JSONNET_MODE: vscode.DocumentFilter = { language: 'jsonnet', scheme: 'file' };
 
-export function activate(context: vscode.ExtensionContext) {
-    workspace.configure(vscode.workspace.getConfiguration('jsonnet'));
+export function activate(context: vs.ExtensionContext) {
+    workspace.configure(vs.workspace.getConfiguration('jsonnet'));
 
     // Create Jsonnet provider, register it to provide for documents
-    // with `previewScheme` URI scheme.
+    // with `PREVIEW_SCHEME` URI scheme.
     const provider = new jsonnet.DocumentProvider();
-    const registration = vscode.workspace.registerTextDocumentContentProvider(
-        previewScheme, provider);
+    const registration = vs.workspace.registerTextDocumentContentProvider(
+        jsonnet.PREVIEW_SCHEME, provider);
 
     // Subscribe to document updates. This allows us to detect (e.g.)
     // when a document was saved.
     context.subscriptions.push(registration);
 
     // Register commands.
-    context.subscriptions.push(vscode.commands.registerCommand(
+    context.subscriptions.push(vs.commands.registerCommand(
         'jsonnet.previewToSide', () => display.previewJsonnet(true)));
-    context.subscriptions.push(vscode.commands.registerCommand(
+    context.subscriptions.push(vs.commands.registerCommand(
         'jsonnet.preview', () => display.previewJsonnet(false)));
 
     // Register workspace events.
-    context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(
+    context.subscriptions.push(vs.workspace.onDidSaveTextDocument(
         (document) => {
             provider.update(jsonnet.canonicalPreviewUri(document.uri))
         }));
 
     // Register language events.
     context.subscriptions.push(
-        vscode.languages.registerCompletionItemProvider(
-            JSONNET_MODE, new jsonnet.CompletionProvider(), '.', '\"'));
+        vs.languages.registerCompletionItemProvider(
+            jsonnet.DOCUMENT_FILTER,
+            new jsonnet.CompletionProvider(), '.', '\"'));
 
     context.subscriptions.push(
-        vscode.languages.registerHoverProvider(
-            JSONNET_MODE, new jsonnet.HoverProvider()));
+        vs.languages.registerHoverProvider(
+            jsonnet.DOCUMENT_FILTER, new jsonnet.HoverProvider()));
 }
 
 export function deactivate() {
@@ -50,7 +48,7 @@ export function deactivate() {
 namespace workspace {
     export function extStrs(): string {
         const extStrsObj =
-            vscode.workspace.getConfiguration('jsonnet')["extStrs"];
+            vs.workspace.getConfiguration('jsonnet')["extStrs"];
         return extStrsObj == null
             ? ""
             : Object.keys(extStrsObj)
@@ -59,10 +57,10 @@ namespace workspace {
     }
 
     export function outputFormat(): "json" | "yaml" {
-        return vscode.workspace.getConfiguration('jsonnet')["outputFormat"];
+        return vs.workspace.getConfiguration('jsonnet')["outputFormat"];
     }
 
-    export function configure(config: vscode.WorkspaceConfiguration): boolean {
+    export function configure(config: vs.WorkspaceConfiguration): boolean {
         if (os.type() === "Windows_NT") {
             return configureWindows(config);
         } else {
@@ -70,9 +68,9 @@ namespace workspace {
         }
     }
 
-    function configureUnix(config: vscode.WorkspaceConfiguration): boolean {
+    function configureUnix(config: vs.WorkspaceConfiguration): boolean {
         if (config["executablePath"] != null) {
-            jsonnetExecutable = config["executablePath"];
+            jsonnet.executable = config["executablePath"];
         } else {
             try {
                 // If this doesn't throw, 'jsonnet' was found on
@@ -90,19 +88,19 @@ namespace workspace {
         return true;
     }
 
-    function configureWindows(config: vscode.WorkspaceConfiguration): boolean {
+    function configureWindows(config: vs.WorkspaceConfiguration): boolean {
         if (config["executablePath"] == null) {
             alert.jsonnetCommandIsNull();
             return false;
         }
 
-        jsonnetExecutable = config["executablePath"];
+        jsonnet.executable = config["executablePath"];
         return true;
     }
 }
 
 namespace alert {
-    const alert = vscode.window.showErrorMessage;
+    const alert = vs.window.showErrorMessage;
 
     export function noActiveWindow() {
         alert("Can't open Jsonnet preview because there is no active window");
@@ -148,31 +146,38 @@ namespace html {
 }
 
 namespace jsonnet {
-    export function canonicalPreviewUri(fileUri: vscode.Uri) {
+    export let executable = "jsonnet";
+    export const PREVIEW_SCHEME = "jsonnet-preview";
+    export const DOCUMENT_FILTER: vs.DocumentFilter = {
+        language: 'jsonnet',
+        scheme: 'file'
+    };
+
+    export function canonicalPreviewUri(fileUri: vs.Uri) {
         return fileUri.with({
-            scheme: previewScheme,
+            scheme: jsonnet.PREVIEW_SCHEME,
             path: `${fileUri.path}.rendered`,
             query: fileUri.toString(),
         });
     }
 
-    export class CompletionProvider implements vscode.CompletionItemProvider {
+    export class CompletionProvider implements vs.CompletionItemProvider {
         public provideCompletionItems(
-            document: vscode.TextDocument,
-            position: vscode.Position,
-            token: vscode.CancellationToken):
-            Thenable<vscode.CompletionItem[]> {
-            const candidate = new vscode.CompletionItem("xzyzx");
+            document: vs.TextDocument,
+            position: vs.Position,
+            token: vs.CancellationToken):
+            Thenable<vs.CompletionItem[]> {
+            const candidate = new vs.CompletionItem("xzyzx");
             return Promise.all([]);
         }
     }
 
-    export class HoverProvider implements vscode.HoverProvider {
+    export class HoverProvider implements vs.HoverProvider {
         public provideHover(
-            document: vscode.TextDocument,
-            position: vscode.Position,
-            token: vscode.CancellationToken
-        ): vscode.Hover {
+            document: vs.TextDocument,
+            position: vs.Position,
+            token: vs.CancellationToken
+        ): vs.Hover {
             // TODO: Check whether suggestions are turned on, and stuff.
 
             let wordRange = document.getWordRangeAtPosition(position);
@@ -182,19 +187,19 @@ namespace jsonnet {
             let name = document.getText(wordRange);
             let line = document.lineAt(position.line);
 
-            let contents: vscode.MarkedString[] = [
+            let contents: vs.MarkedString[] = [
                 { language: 'jsonnet', value: line.text.trim() },
                 `You have highlighted \`${name}\``
             ];
-            return new vscode.Hover(contents, wordRange);;
+            return new vs.Hover(contents, wordRange);;
         }
     }
 
-    export class DocumentProvider implements vscode.TextDocumentContentProvider {
+    export class DocumentProvider implements vs.TextDocumentContentProvider {
         public provideTextDocumentContent =
-        (uri: vscode.Uri): Thenable<string> => {
-            const sourceUri = vscode.Uri.parse(uri.query);
-            return vscode.workspace.openTextDocument(sourceUri)
+        (uri: vs.Uri): Thenable<string> => {
+            const sourceUri = vs.Uri.parse(uri.query);
+            return vs.workspace.openTextDocument(sourceUri)
                 .then(this.renderDocument);
         }
 
@@ -202,11 +207,11 @@ namespace jsonnet {
         // Document update API.
         //
 
-        get onDidChange(): vscode.Event<vscode.Uri> {
+        get onDidChange(): vs.Event<vs.Uri> {
             return this._onDidChange.event;
         }
 
-        public update(uri: vscode.Uri) {
+        public update(uri: vs.Uri) {
             this._onDidChange.fire(uri);
         }
 
@@ -214,12 +219,12 @@ namespace jsonnet {
         // Private members.
         //
 
-        private renderDocument(document: vscode.TextDocument): string {
+        private renderDocument(document: vs.TextDocument): string {
             try {
                 const extStrs = workspace.extStrs();
                 const outputFormat = workspace.outputFormat();
                 const jsonOutput = execSync(
-                    `${jsonnetExecutable} ${extStrs} ${document.fileName}`
+                    `${jsonnet.executable} ${extStrs} ${document.fileName}`
                 ).toString();
                 return html.body(html.prettyPrintObject(jsonOutput, outputFormat));
             } catch (e) {
@@ -227,14 +232,14 @@ namespace jsonnet {
             }
         }
 
-        private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
+        private _onDidChange = new vs.EventEmitter<vs.Uri>();
 
     }
 }
 
 namespace display {
     export function previewJsonnet(sideBySide: boolean) {
-        const editor = vscode.window.activeTextEditor;
+        const editor = vs.window.activeTextEditor;
         if (editor == null) {
             alert.noActiveWindow();
             return;
@@ -246,7 +251,7 @@ namespace display {
             return;
         }
 
-        return vscode.commands.executeCommand(
+        return vs.commands.executeCommand(
             'vscode.previewHtml',
             jsonnet.canonicalPreviewUri(editor.document.uri),
             getViewColumn(sideBySide),
@@ -256,10 +261,10 @@ namespace display {
         });
     }
 
-    function getViewColumn(sideBySide: boolean): vscode.ViewColumn | undefined {
-        const active = vscode.window.activeTextEditor;
+    function getViewColumn(sideBySide: boolean): vs.ViewColumn | undefined {
+        const active = vs.window.activeTextEditor;
         if (!active) {
-            return vscode.ViewColumn.One;
+            return vs.ViewColumn.One;
         }
 
         if (!sideBySide) {
@@ -267,10 +272,10 @@ namespace display {
         }
 
         switch (active.viewColumn) {
-            case vscode.ViewColumn.One:
-                return vscode.ViewColumn.Two;
-            case vscode.ViewColumn.Two:
-                return vscode.ViewColumn.Three;
+            case vs.ViewColumn.One:
+                return vs.ViewColumn.Two;
+            case vs.ViewColumn.Two:
+                return vs.ViewColumn.Three;
         }
 
         return active.viewColumn;
