@@ -53,8 +53,9 @@ package.contributes.DefaultConfiguration(
   contributes.configuration.DefaultStringProperty(
     "jsonnet.executablePath", "Location of the `jsonnet` executable.") +
   contributes.configuration.DefaultObjectProperty(
-    "jsonnet.extStrs", "External strings to pass to `jsonnet` executable.")) +
-
+    "jsonnet.extStrs", "External strings to pass to `jsonnet` executable.") +
+  contributes.configuration.DefaultEnumProperty(
+    "jsonnet.outputStyle", "Preview output mode (yaml / json)", ["json", "yaml"], "json")) +
 // Everything else.
 {
   scripts: {
@@ -62,6 +63,9 @@ package.contributes.DefaultConfiguration(
     compile: "tsc -watch -p ./",
     postinstall: "node ./node_modules/vscode/bin/install",
     test: "node ./node_modules/vscode/bin/test"
+  },
+  dependencies: {
+    "js-yaml": "^3.0.0"
   },
   devDependencies: {
     typescript: "^2.0.3",

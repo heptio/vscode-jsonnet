@@ -28,6 +28,14 @@
                "default": null,
                "description": "External strings to pass to `jsonnet` executable.",
                "type": "object"
+            },
+            "jsonnet.outputStyle": {
+               "default": "json",
+               "description": "Preview output mode (yaml / json)",
+               "enum": [
+                  "json",
+                  "yaml"
+               ]
             }
          },
          "title": "Jsonnet configuration",
@@ -62,6 +70,9 @@
             "id": "jsonnet"
          }
       ]
+   },
+   "dependencies": {
+      "js-yaml": "^3.0.0"
    },
    "description": "Language support for Jsonnet",
    "devDependencies": {
