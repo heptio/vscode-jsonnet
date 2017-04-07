@@ -89,7 +89,7 @@
    },
    "homepage": "https://github.com/heptio/vscode-jsonnet/blob/master/README.md",
    "license": "SEE LICENSE IN 'LICENSE' file",
-   "main": "./out/src/extension",
+   "main": "./out/client/extension",
    "name": "jsonnet",
    "publisher": "heptio",
    "repository": {
