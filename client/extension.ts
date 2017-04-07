@@ -2,11 +2,19 @@
 import * as vs from 'vscode';
 import { execSync } from 'child_process';
 import * as os from 'os';
+import * as path from 'path';
 import * as yaml from "js-yaml";
-
-
+import * as client from 'vscode-languageclient';
 
 export function activate(context: vs.ExtensionContext) {
+    // The server is implemented in node
+    let languageClient = jsonnet.languageClient(
+        context.asAbsolutePath(path.join('out', 'server', 'server.js')));
+
+    // Push the disposable to the context's subscriptions so that the
+    // client can be deactivated on extension deactivation
+    context.subscriptions.push(languageClient.start());
+
     workspace.configure(vs.workspace.getConfiguration('jsonnet'));
 
     // Create Jsonnet provider, register it to provide for documents
@@ -30,16 +38,6 @@ export function activate(context: vs.ExtensionContext) {
         (document) => {
             provider.update(jsonnet.canonicalPreviewUri(document.uri))
         }));
-
-    // Register language events.
-    context.subscriptions.push(
-        vs.languages.registerCompletionItemProvider(
-            jsonnet.DOCUMENT_FILTER,
-            new jsonnet.CompletionProvider(), '.', '\"'));
-
-    context.subscriptions.push(
-        vs.languages.registerHoverProvider(
-            jsonnet.DOCUMENT_FILTER, new jsonnet.HoverProvider()));
 }
 
 export function deactivate() {
@@ -153,46 +151,52 @@ namespace jsonnet {
         scheme: 'file'
     };
 
+    export function languageClient(serverModule: string) {
+        // The debug options for the server
+        let debugOptions = { execArgv: ["--nolazy", "--debug=6009"] };
+
+        // If the extension is launched in debug mode then the debug
+        // server options are used. Otherwise the run options are used
+        let serverOptions: client.ServerOptions = {
+            run : {
+                module: serverModule,
+                transport: client.TransportKind.ipc,
+            },
+            debug: {
+                module: serverModule,
+                transport: client.TransportKind.ipc,
+                options: debugOptions
+            }
+        }
+
+        // Options to control the language client
+        let clientOptions: client.LanguageClientOptions = {
+            // Register the server for plain text documents
+            documentSelector: [jsonnet.DOCUMENT_FILTER.language],
+            synchronize: {
+                // Synchronize the setting section 'languageServerExample'
+                // to the server
+                configurationSection: 'languageServerExample',
+                // Notify the server about file changes to '.clientrc
+                // files contain in the workspace
+                fileEvents: vs.workspace.createFileSystemWatcher('**/.clientrc')
+            }
+        }
+
+        // Create the language client and start the client.
+        return new client.LanguageClient(
+            'JsonnetLanguageServer',
+            'Jsonnet Language Server',
+            serverOptions,
+            clientOptions);
+    }
+
     export function canonicalPreviewUri(fileUri: vs.Uri) {
         return fileUri.with({
             scheme: jsonnet.PREVIEW_SCHEME,
             path: `${fileUri.path}.rendered`,
             query: fileUri.toString(),
         });
-    }
-
-    export class CompletionProvider implements vs.CompletionItemProvider {
-        public provideCompletionItems(
-            document: vs.TextDocument,
-            position: vs.Position,
-            token: vs.CancellationToken):
-            Thenable<vs.CompletionItem[]> {
-            const candidate = new vs.CompletionItem("xzyzx");
-            return Promise.all([]);
-        }
-    }
-
-    export class HoverProvider implements vs.HoverProvider {
-        public provideHover(
-            document: vs.TextDocument,
-            position: vs.Position,
-            token: vs.CancellationToken
-        ): vs.Hover {
-            // TODO: Check whether suggestions are turned on, and stuff.
-
-            let wordRange = document.getWordRangeAtPosition(position);
-            if (!wordRange) {
-                return;
-            }
-            let name = document.getText(wordRange);
-            let line = document.lineAt(position.line);
-
-            let contents: vs.MarkedString[] = [
-                { language: 'jsonnet', value: line.text.trim() },
-                `You have highlighted \`${name}\``
-            ];
-            return new vs.Hover(contents, wordRange);;
-        }
     }
 
     export class DocumentProvider implements vs.TextDocumentContentProvider {

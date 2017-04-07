@@ -73,7 +73,9 @@
       ]
    },
    "dependencies": {
-      "js-yaml": "^3.0.0"
+      "js-yaml": "^3.0.0",
+      "vscode-languageclient": "^3.1.0",
+      "vscode-languageserver": "^3.1.0"
    },
    "description": "Language support for Jsonnet",
    "devDependencies": {

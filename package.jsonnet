@@ -70,13 +70,15 @@ package.contributes.DefaultConfiguration(
     test: "node ./node_modules/vscode/bin/test"
   },
   dependencies: {
-    "js-yaml": "^3.0.0"
+    "js-yaml": "^3.0.0",
+    "vscode-languageclient": "^3.1.0",
+    "vscode-languageserver": "^3.1.0",
   },
   devDependencies: {
     typescript: "^2.0.3",
     vscode: "^1.0.0",
     mocha: "^2.3.3",
     "@types/node": "^6.0.40",
-    "@types/mocha": "^2.2.32"
+    "@types/mocha": "^2.2.32",
   }
 }
