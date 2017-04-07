@@ -47,6 +47,9 @@ keys:
   line. It can be particularly useful to set this in a workspace
   configuration, so that you can set different variables on a
   per-project basis.
+* `jsonnet.outputFormat`: A choice of two string literals: `["json",
+  "yaml"]`. This tells the extension what format you'd like the output
+  to be (_i.e._, allows you to either output JSON or YAML).
 
 [jsonnet]: http://jsonnet.org/ "Jsonnet"
 [jsonnet-demo]: https://raw.githubusercontent.com/heptio/vscode-jsonnet/master/images/kube-demo.gif

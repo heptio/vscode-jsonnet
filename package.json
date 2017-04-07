@@ -29,9 +29,9 @@
                "description": "External strings to pass to `jsonnet` executable.",
                "type": "object"
             },
-            "jsonnet.outputStyle": {
-               "default": "json",
-               "description": "Preview output mode (yaml / json)",
+            "jsonnet.outputFormat": {
+               "default": "yaml",
+               "description": "Preview output format (yaml / json)",
                "enum": [
                   "json",
                   "yaml"

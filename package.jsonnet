@@ -35,7 +35,8 @@ package.ActivationEvent(event.OnCommand(preview.command)) +
 package.Main("./out/src/extension") +
 
 // Repository.
-package.repository.Default("git", "https://github.com/heptio/vscode-jsonnet.git") +
+package.repository.Default(
+  "git", "https://github.com/heptio/vscode-jsonnet.git") +
 
 // Engines.
 package.engines.VsCode("^1.10.0") +
@@ -55,7 +56,10 @@ package.contributes.DefaultConfiguration(
   contributes.configuration.DefaultObjectProperty(
     "jsonnet.extStrs", "External strings to pass to `jsonnet` executable.") +
   contributes.configuration.DefaultEnumProperty(
-    "jsonnet.outputStyle", "Preview output mode (yaml / json)", ["json", "yaml"], "json")) +
+    "jsonnet.outputFormat",
+    "Preview output format (yaml / json)",
+    ["json", "yaml"],
+    "yaml")) +
 // Everything else.
 {
   scripts: {

@@ -52,8 +52,8 @@ namespace workspace {
                 .join(" ");
     }
 
-    export function outputStyle(): string {
-        return vscode.workspace.getConfiguration('jsonnet')["outputStyle"];
+    export function outputFormat(): "json" | "yaml" {
+        return vscode.workspace.getConfiguration('jsonnet')["outputFormat"];
     }
 
     export function configure(config: vscode.WorkspaceConfiguration): boolean {
@@ -132,8 +132,8 @@ namespace html {
         return `<i><pre>${message}</pre></i>`;
     }
 
-    export function prettyPrintObject(json: string, outputStyle: string): string {
-        if (outputStyle == "yaml") {
+    export function prettyPrintObject(json: string, outputFormat: "json" | "yaml"): string {
+        if (outputFormat == "yaml") {
             return codeLiteral(yaml.safeDump(JSON.parse(json)));
         } else {
             return codeLiteral(JSON.stringify(JSON.parse(json), null, 4));
@@ -188,11 +188,11 @@ namespace jsonnet {
         private renderDocument(document: vscode.TextDocument): string {
             try {
                 const extStrs = workspace.extStrs();
-                const outputStyle = workspace.outputStyle();
+                const outputFormat = workspace.outputFormat();
                 const jsonOutput = execSync(
                     `${jsonnetExecutable} ${extStrs} ${document.fileName}`
                 ).toString();
-                return html.body(html.prettyPrintObject(jsonOutput, outputStyle));
+                return html.body(html.prettyPrintObject(jsonOutput, outputFormat));
             } catch (e) {
                 return html.body(html.errorMessage(e.message));
             }
