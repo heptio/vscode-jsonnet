@@ -174,18 +174,18 @@ namespace jsonnet {
             // Register the server for plain text documents
             documentSelector: [jsonnet.DOCUMENT_FILTER.language],
             synchronize: {
-                // Synchronize the setting section 'languageServerExample'
-                // to the server
-                configurationSection: 'languageServerExample',
+                // Synchronize the workspace/user settings sections
+                // prefixed with 'jsonnet' to the server.
+                configurationSection: DOCUMENT_FILTER.language,
                 // Notify the server about file changes to '.clientrc
-                // files contain in the workspace
+                // files contain in the workspace.
                 fileEvents: vs.workspace.createFileSystemWatcher('**/.clientrc')
             }
         }
 
         // Create the language client and start the client.
         return new client.LanguageClient(
-            'JsonnetLanguageServer',
+            "JsonnetLanguageServer",
             'Jsonnet Language Server',
             serverOptions,
             clientOptions);

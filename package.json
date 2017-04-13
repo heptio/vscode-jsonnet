@@ -37,6 +37,11 @@
                   "json",
                   "yaml"
                ]
+            },
+            "jsonnet.server": {
+               "default": null,
+               "description": "Location of the `jsonnet` language server (for static analysis).",
+               "type": "string"
             }
          },
          "title": "Jsonnet configuration",

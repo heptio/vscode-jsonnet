@@ -6,11 +6,10 @@ import * as server from 'vscode-languageserver';
 import * as ast from './schema';
 import * as astVisitor from './visitor';
 
-const command = `/Users/alex/src/go/src/github.com/google/go-jsonnet/main`;
-const base = `/Users/alex/src/vscode-jsonnet/testData`;
-
-export function getProperties(filePath): {[key: string]: ast.ObjectField} {
-    return parseJsonnetFile(filePath)
+export function getProperties(
+    command: string, filePath: string
+): {[key: string]: ast.ObjectField} {
+    return parseJsonnetFile(command, filePath)
         .fields
         .reduce((acc, field) => {
             acc[field.id] = field;
@@ -19,15 +18,15 @@ export function getProperties(filePath): {[key: string]: ast.ObjectField} {
 }
 
 export function getNodeAtPosition(
-    doc: server.TextDocument, pos: server.Position,
+    command: string, doc: server.TextDocument, pos: server.Position,
 ): ast.Node {
     const filePath = url.parse(doc.uri).path;
-    const rootNode = parseJsonnetFile(filePath);
+    const rootNode = parseJsonnetFile(command, filePath);
     return new astVisitor.CursorVisitor(doc, pos).Visit(rootNode);
     // return parseJsonnetFile(filePath);
 }
 
-function parseJsonnetFile(filePath: string): ast.ObjectNode {
+function parseJsonnetFile(command: string, filePath: string): ast.ObjectNode {
     const result = execSync(`${command} ast ${filePath}`);
 
     return <ast.ObjectNode>JSON.parse(result.toString());

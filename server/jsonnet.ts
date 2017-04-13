@@ -5,6 +5,8 @@ import * as os from 'os';
 import * as ast from './ast/schema';
 import * as astUtil from './ast/util';
 
+export let jsonnetServer: string = null;
+
 export function initializer(
     documents: server.TextDocuments,
     params: server.InitializeParams,
@@ -22,6 +24,17 @@ export function initializer(
             hoverProvider: true,
         }
     }
+}
+
+export function configUpdateProvider(
+    change: server.DidChangeConfigurationParams,
+): void {
+    if ("server" in change.settings.jsonnet) {
+        jsonnetServer = change.settings.jsonnet["server"];
+    }
+    console.log(JSON.stringify(change.settings.jsonnet));
+    console.log(jsonnetServer);
+    // throw new Error(JSON.stringify(change.settings))
 }
 
 export function completionProvider(
@@ -50,11 +63,16 @@ export function hoverProvider(
     documents: server.TextDocuments,
     posParams: server.TextDocumentPositionParams,
 ): Promise<server.Hover> {
+    if (jsonnetServer == null) {
+        return Promise.resolve().then(() => <server.Hover>{});
+    }
+
     const doc = documents.get(posParams.textDocument.uri);
     const line = doc.getText().split(os.EOL)[posParams.position.line].trim();
 
     // Get symbol we're hovering over.
-    const nodeAtCursor = astUtil.getNodeAtPosition(doc, posParams.position);
+    const nodeAtCursor = astUtil.getNodeAtPosition(
+        jsonnetServer, doc, posParams.position);
 
     // TODO: Resolve symbol to some import or member.
     const id = "foo";
@@ -63,7 +81,7 @@ export function hoverProvider(
     const library = `/Users/alex/src/vscode-jsonnet/testData/test.libsonnet`;
 
     // TODO: Get documentation for library.
-    const importedMembers = astUtil.getProperties(library);
+    const importedMembers = astUtil.getProperties(jsonnetServer, library);
     let commentText: string;
     if (id in importedMembers) {
         const field = importedMembers[id];

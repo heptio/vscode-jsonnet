@@ -18,6 +18,7 @@ const documents = new server.TextDocuments();
 documents.listen(connection);
 
 connection.onInitialize((params) => jsonnet.initializer(documents, params));
+connection.onDidChangeConfiguration(jsonnet.configUpdateProvider);
 connection.onCompletion(jsonnet.completionProvider);
 connection.onHover((position) => jsonnet.hoverProvider(documents, position));
 

@@ -54,6 +54,8 @@ package.contributes.DefaultConfiguration(
   "Jsonnet configuration",
   contributes.configuration.DefaultStringProperty(
     "jsonnet.executablePath", "Location of the `jsonnet` executable.") +
+  contributes.configuration.DefaultStringProperty(
+    "jsonnet.server", "Location of the `jsonnet` language server (for static analysis).") +
   contributes.configuration.DefaultObjectProperty(
     "jsonnet.extStrs", "External strings to pass to `jsonnet` executable.") +
   contributes.configuration.DefaultEnumProperty(
