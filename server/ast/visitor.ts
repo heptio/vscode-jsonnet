@@ -27,7 +27,7 @@ export interface Visitor<T> {
   // VisitLiteralNull(node: ast.LiteralNull): T
   // VisitLiteralNumber(node: ast.LiteralNumber): T
   // VisitLiteralString(node: ast.LiteralString): T
-  // // VisitObjectField(node: ast.ObjectField): T
+  VisitObjectField(node: ast.ObjectField): T
   VisitObject(node: ast.ObjectNode): T
   // VisitDesugaredObjectField(node: ast.DesugaredObjectField): T
   // VisitDesugaredObject(node: ast.DesugaredObject): T
@@ -68,7 +68,7 @@ export abstract class VisitorBase<T> implements Visitor<T> {
     // case "LiteralNullNode": return this.VisitLiteralNull(node);
     // case "LiteralNumberNode": return this.VisitLiteralNumber(node);
     // case "LiteralStringNode": return this.VisitLiteralString(node);
-    // // case "ObjectFieldNode": return this.VisitObjectField(<ast.ObjectField>node);
+    case "ObjectFieldNode": return this.VisitObjectField(<ast.ObjectField>node);
     case "ObjectNode": return this.VisitObject(<ast.ObjectNode>node);
     // case "DesugaredObjectFieldNode": return this.VisitDesugaredObjectField(node);
     // case "DesugaredObjectNode": return this.VisitDesugaredObject(node);
@@ -105,7 +105,7 @@ export abstract class VisitorBase<T> implements Visitor<T> {
   // public abstract VisitLiteralNull(node: ast.LiteralNull): T
   // public abstract VisitLiteralNumber(node: ast.LiteralNumber): T
   // public abstract VisitLiteralString(node: ast.LiteralString): T
-  // // public abstract VisitObjectField(node: ast.ObjectField): T
+  public abstract VisitObjectField(node: ast.ObjectField): T
   public abstract VisitObject(node: ast.ObjectNode): T
   // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): T
   // public abstract VisitDesugaredObject(node: ast.DesugaredObject): T
@@ -122,12 +122,17 @@ export abstract class VisitorBase<T> implements Visitor<T> {
 export class CursorVisitor extends VisitorBase<ast.Node> {
   constructor(
     private document: server.TextDocument,
-    private position: server.Position
+    position: server.Position,
   ) {
     super();
+    this.position = {
+      line: position.line + 1,
+      col: position.character + 1,
+    };
   }
 
   private tightestWrappingNode: ast.NodeBase;
+  private position: {line: number, col: number};
 
   public VisitComment(node: ast.Comment): ast.Node {
     this.updateIfCursorInRange(node);
@@ -178,13 +183,24 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitLiteralNull(node: ast.LiteralNull): T
   // public abstract VisitLiteralNumber(node: ast.LiteralNumber): T
   // public abstract VisitLiteralString(node: ast.LiteralString): T
-  // // public abstract VisitObjectField(node: ast.ObjectField): T
+  public VisitObjectField(node: ast.ObjectField): ast.Node {
+    this.updateIfCursorInRange(node);
+    this.Visit(node.expr1);
+    this.Visit(node.expr2);
+    this.Visit(node.expr3);
+
+    if (node.headingComments != null) {
+      node.headingComments.forEach(comment => {
+        this.Visit(comment);
+      });
+    }
+
+    return this.tightestWrappingNode;
+  }
   public VisitObject(node: ast.ObjectNode): ast.Node {
     this.updateIfCursorInRange(node);
     node.fields.forEach(field => {
-      this.Visit(field.expr1);
-      this.Visit(field.expr2);
-      this.Visit(field.expr3);
+      this.Visit(field);
     });
 
     return this.tightestWrappingNode;
@@ -208,12 +224,8 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
       beginCol: locationRange.begin.column,
       endCol: locationRange.end.column,
     };
-    const cursor = {
-      line: this.position.line,
-      col: this.position.character,
-    };
 
-    if (cursorInLocationRange(cursor, range) &&
+    if (cursorInLocationRange(this.position, range) &&
       nodeRangeIsTighter(node, this.tightestWrappingNode)
     ) {
       this.tightestWrappingNode = node;

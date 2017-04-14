@@ -68,7 +68,7 @@ export class LocationRange {
 type ObjectFieldKind = "ObjectAssert" | "ObjectFieldID" | "ObjectFieldExpr" |
                        "ObjectFieldStr" |"ObjectLocal";
 
-export class ObjectField {
+export class ObjectField extends NodeBase {
   kind:            ObjectFieldKind
   // hide             ObjectFieldHide // (ignore if kind != astObjectField*)
   superSugar:      boolean         // +:  (ignore if kind != astObjectField*)
