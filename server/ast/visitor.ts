@@ -18,6 +18,7 @@ export interface Visitor<T> {
   // VisitDollar(node: ast.Dollar): T
   // VisitError(node: ast.Error): T
   // VisitFunction(node: ast.Function): T
+  VisitIdentifier(node: ast.Identifier): T
   VisitImport(node: ast.Import): T
   VisitImportStr(node: ast.ImportStr): T
   VisitIndex(node: ast.Index): T
@@ -59,6 +60,7 @@ export abstract class VisitorBase<T> implements Visitor<T> {
     // case "DollarNode": return this.VisitDollar(node);
     // case "ErrorNode": return this.VisitError(node);
     // case "FunctionNode": return this.VisitFunction(node);
+    case "IdentifierNode": return this.VisitIdentifier(<ast.Identifier>node);
     case "ImportNode": return this.VisitImport(<ast.Import>node);
     case "ImportStrNode": return this.VisitImportStr(<ast.ImportStr>node);
     case "IndexNode": return this.VisitIndex(<ast.Index>node);
@@ -96,6 +98,7 @@ export abstract class VisitorBase<T> implements Visitor<T> {
   // public abstract VisitDollar(node: ast.Dollar): T
   // public abstract VisitError(node: ast.Error): T
   // public abstract VisitFunction(node: ast.Function): T
+  public abstract VisitIdentifier(node: ast.Identifier): T
   public abstract VisitImport(node: ast.Import): T
   public abstract VisitImportStr(node: ast.ImportStr): T
   public abstract VisitIndex(node: ast.Index): T
@@ -150,6 +153,10 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitDollar(node: ast.Dollar): T
   // public abstract VisitError(node: ast.Error): T
   // public abstract VisitFunction(node: ast.Function): T
+  public VisitIdentifier(node: ast.Identifier): ast.Node {
+    this.updateIfCursorInRange(node);
+    return this.tightestWrappingNode;
+  }
   public VisitImport(node: ast.Import): ast.Node {
     this.updateIfCursorInRange(node);
     return this.tightestWrappingNode;
@@ -162,6 +169,7 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
 
   public VisitIndex(node: ast.Index): ast.Node {
     this.updateIfCursorInRange(node);
+    node.id != null && this.Visit(node.id);
     node.target != null && this.Visit(node.target);
     node.index != null && this.Visit(node.index);
     return this.tightestWrappingNode;
@@ -170,7 +178,6 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // // public abstract VisitLocalBind(node: ast.LocalBind): T
   public VisitLocal(node: ast.Local): ast.Node {
     this.updateIfCursorInRange(node);
-
     node.binds.forEach(bind => {
       bind.body != null && this.Visit(bind.body);
     });
@@ -185,6 +192,7 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitLiteralString(node: ast.LiteralString): T
   public VisitObjectField(node: ast.ObjectField): ast.Node {
     this.updateIfCursorInRange(node);
+    node.id != null && this.Visit(node.id);
     node.expr1 != null && this.Visit(node.expr1);
     node.expr2 != null && this.Visit(node.expr2);
     node.expr3 != null && this.Visit(node.expr3);
@@ -212,6 +220,7 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitSuperIndex(node: ast.SuperIndex): T
   // public abstract VisitUnary(node: ast.Unary): T
   public VisitVar(node: ast.Var): ast.Node {
+    node.id != null && this.Visit(node.id);
     return this.tightestWrappingNode;
   }
 

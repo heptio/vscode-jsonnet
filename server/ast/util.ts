@@ -15,7 +15,7 @@ export function getProperties(
             if (field.id == null) {
                 return acc;
             }
-            acc[field.id] = field;
+            acc[field.id.name] = field;
             return acc;
         }, {});
 }

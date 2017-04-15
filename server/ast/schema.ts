@@ -16,6 +16,7 @@ export type NodeTypes =
   "DollarNode" |
   "ErrorNode" |
   "FunctionNode" |
+  "IdentifierNode" |
   "ImportNode" |
   "ImportStrNode" |
   "IndexNode" |
@@ -43,12 +44,16 @@ export interface Node {
 export class NodeBase implements Node {
   nodeType: NodeTypes
   locationRange: LocationRange
-  freeVariables: Identifier[]
+  freeVariables: IdentifierName[]
 };
 
 // ---------------------------------------------------------------------------
 
-type Identifier = string;
+export class Identifier extends NodeBase {
+	name: IdentifierName
+}
+
+type IdentifierName = string;
 
 // ---------------------------------------------------------------------------
 
@@ -71,14 +76,14 @@ type ObjectFieldKind = "ObjectAssert" | "ObjectFieldID" | "ObjectFieldExpr" |
 export class ObjectField extends NodeBase {
   kind:            ObjectFieldKind
   // hide             ObjectFieldHide // (ignore if kind != astObjectField*)
-  superSugar:      boolean         // +:  (ignore if kind != astObjectField*)
-  methodSugar:     boolean         // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
-  expr1:           Node | null     // Not in scope of the object
+  superSugar:      boolean          // +:  (ignore if kind != astObjectField*)
+  methodSugar:     boolean          // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
+  expr1:           Node | null      // Not in scope of the object
   id:              Identifier | null
-  ids:             Identifier[]    // If methodSugar == true then holds the params.
-  trailingComma:   boolean         // If methodSugar == true then remembers the trailing comma
-  expr2:           Node | null     // In scope of the object (can see self).
-  expr3:           Node | null     // In scope of the object (can see self).
+  ids:             IdentifierName[] // If methodSugar == true then holds the params.
+  trailingComma:   boolean          // If methodSugar == true then remembers the trailing comma
+  expr2:           Node | null      // In scope of the object (can see self).
+  expr3:           Node | null      // In scope of the object (can see self).
   headingComments: Comment[] | null
 };
 
@@ -104,7 +109,7 @@ export class LocalBind {
   variable:      Identifier
   body:          Node | null
   functionSugar: boolean
-  params:        Identifier[] // if functionSugar is true
+  params:        IdentifierName[] // if functionSugar is true
   trailingComma: boolean
 }
 
