@@ -147,5 +147,5 @@ export class Index extends NodeBase {
 
 // Var represents variables.
 export class Var extends NodeBase {
-	Id: Identifier
+	id: Identifier
 }
