@@ -42,7 +42,7 @@ export interface Visitor<T> {
 export abstract class VisitorBase<T> implements Visitor<T> {
   public Visit = (node: ast.Node): T => {
     if (node == null) {
-      return;
+      throw Error("Can't visit a null node");
     }
 
     switch(node.nodeType) {
@@ -162,8 +162,8 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
 
   public VisitIndex(node: ast.Index): ast.Node {
     this.updateIfCursorInRange(node);
-    this.Visit(node.target);
-    this.Visit(node.index);
+    node.target != null && this.Visit(node.target);
+    node.index != null && this.Visit(node.index);
     return this.tightestWrappingNode;
   }
 
@@ -172,10 +172,10 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
     this.updateIfCursorInRange(node);
 
     node.binds.forEach(bind => {
-      this.Visit(bind.body);
+      bind.body != null && this.Visit(bind.body);
     });
 
-    this.Visit(node.body);
+    node.body != null && this.Visit(node.body);
 
     return this.tightestWrappingNode;
   }
@@ -185,15 +185,14 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitLiteralString(node: ast.LiteralString): T
   public VisitObjectField(node: ast.ObjectField): ast.Node {
     this.updateIfCursorInRange(node);
-    this.Visit(node.expr1);
-    this.Visit(node.expr2);
-    this.Visit(node.expr3);
+    node.expr1 != null && this.Visit(node.expr1);
+    node.expr2 != null && this.Visit(node.expr2);
+    node.expr3 != null && this.Visit(node.expr3);
 
-    if (node.headingComments != null) {
+    node.headingComments != null &&
       node.headingComments.forEach(comment => {
         this.Visit(comment);
       });
-    }
 
     return this.tightestWrappingNode;
   }

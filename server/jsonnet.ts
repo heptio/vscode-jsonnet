@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as ast from './ast/schema';
 import * as astUtil from './ast/util';
 
-export let jsonnetServer: string = null;
+export let jsonnetServer: string | null = null;
 
 export function initializer(
     documents: server.TextDocuments,
@@ -87,7 +87,7 @@ export function hoverProvider(
         const field = importedMembers[id];
         if (field.headingComments != null) {
             commentText = field.headingComments
-                .reduce((acc, curr) => {
+                .reduce((acc: string[], curr) => {
                     acc.push(curr.text);
                     return acc;
                 }, [])

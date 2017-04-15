@@ -73,13 +73,13 @@ export class ObjectField extends NodeBase {
   // hide             ObjectFieldHide // (ignore if kind != astObjectField*)
   superSugar:      boolean         // +:  (ignore if kind != astObjectField*)
   methodSugar:     boolean         // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
-  expr1:           Node            // Not in scope of the object
-  id:              Identifier
+  expr1:           Node | null     // Not in scope of the object
+  id:              Identifier | null
   ids:             Identifier[]    // If methodSugar == true then holds the params.
   trailingComma:   boolean         // If methodSugar == true then remembers the trailing comma
-  expr2:           Node            // In scope of the object (can see self).
-  expr3:           Node            // In scope of the object (can see self).
-  headingComments: Comment[]
+  expr2:           Node | null     // In scope of the object (can see self).
+  expr3:           Node | null     // In scope of the object (can see self).
+  headingComments: Comment[] | null
 };
 
 export class ObjectNode extends NodeBase {
@@ -102,7 +102,7 @@ export class Comment extends NodeBase {
 // LocalBind is a helper struct for Local
 export class LocalBind {
   variable:      Identifier
-  body:          Node
+  body:          Node | null
   functionSugar: boolean
   params:        Identifier[] // if functionSugar is true
   trailingComma: boolean
@@ -111,7 +111,7 @@ export class LocalBind {
 // Local represents local x = e; e.  After desugaring, functionSugar is false.
 export class Local extends NodeBase {
   binds: LocalBind[]
-  body:  Node
+  body:  Node | null
 }
 
 // ---------------------------------------------------------------------------
@@ -133,9 +133,9 @@ export class ImportStr extends NodeBase {
 // One of index and id will be nil before desugaring.  After desugaring id
 // will be nil.
 export class Index extends NodeBase {
-  target: Node
-  index:  Node
-  id:     Identifier
+  target: Node | null
+  index:  Node | null
+  id:     Identifier | null
 }
 
 // ---------------------------------------------------------------------------

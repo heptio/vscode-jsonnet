@@ -146,7 +146,7 @@ namespace html {
 namespace jsonnet {
     export let executable = "jsonnet";
     export const PREVIEW_SCHEME = "jsonnet-preview";
-    export const DOCUMENT_FILTER: vs.DocumentFilter = {
+    export const DOCUMENT_FILTER = {
         language: 'jsonnet',
         scheme: 'file'
     };
