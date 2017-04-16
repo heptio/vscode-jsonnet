@@ -39,9 +39,12 @@ export type NodeTypes =
 
 export interface Node {
   nodeType: NodeTypes
+  parent: Node | null; // Filled in by the visitor.
 };
 
 export class NodeBase implements Node {
+  parent: Node | null; // Filled in by the visitor.
+
   nodeType: NodeTypes
   locationRange: LocationRange
   freeVariables: IdentifierName[]

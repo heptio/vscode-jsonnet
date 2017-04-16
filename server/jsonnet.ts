@@ -95,6 +95,16 @@ export function hoverProvider(
         }
     }
 
+    const json = "```\n" + JSON.stringify(
+        <ast.NodeBase>nodeAtCursor,
+        (k, v) => {
+            if (k === "parent") {
+                return (<ast.Node>v).nodeType;
+            } else {
+                return v;
+            }
+        },
+        "  ") + "\n```";
     return Promise.resolve().then(
         () => <server.Hover> {
             contents: <server.MarkedString[]> [
@@ -102,7 +112,7 @@ export function hoverProvider(
                 // commentText
                 // JSON.stringify(nodeAtCursor)
                 // JSON.stringify(posParams.position)
-                `${JSON.stringify(posParams.position)}\n\n${JSON.stringify((<ast.NodeBase>nodeAtCursor))}`
+                `${JSON.stringify(posParams.position)}\n\n${json}`
             ]
         });
 };

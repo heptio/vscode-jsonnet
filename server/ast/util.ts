@@ -29,8 +29,9 @@ export function getNodeAtPosition(
     }
 
     const rootNode = parseJsonnetFile(command, filePath);
-    return new astVisitor.CursorVisitor(doc, pos).Visit(rootNode);
-    // return parseJsonnetFile(filePath);
+    const visitor = new astVisitor.CursorVisitor(doc, pos);
+    visitor.Visit(rootNode, null);
+    return visitor.NodeAtPosition;
 }
 
 function parseJsonnetFile(command: string, filePath: string): ast.ObjectNode {
