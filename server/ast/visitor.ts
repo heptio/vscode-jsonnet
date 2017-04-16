@@ -1,10 +1,11 @@
 'use strict';
 import * as server from 'vscode-languageserver';
+import * as immutable from 'immutable';
 
 import * as ast from './schema';
 
 export interface Visitor {
-  Visit(node: ast.Node, parent: ast.Node | null): void
+  Visit(node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment): void
   VisitComment(node: ast.Comment): void
   // VisitCompSpec(node: ast.CompSpec): void
   // VisitApply(node: ast.Apply): void
@@ -41,12 +42,15 @@ export interface Visitor {
 }
 
 export abstract class VisitorBase implements Visitor {
-  public Visit = (node: ast.Node, parent: ast.Node | null): void => {
+  public Visit = (
+    node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
+  ): void => {
     if (node == null) {
       throw Error("Can't visit a null node");
     }
 
     node.parent = parent;
+    node.env = currEnv;
 
     switch(node.nodeType) {
     case "CommentNode": {
@@ -71,19 +75,25 @@ export abstract class VisitorBase implements Visitor {
     case "IndexNode": {
       const castedNode = <ast.Index>node;
       this.VisitIndex(castedNode);
-      castedNode.id != null && this.Visit(castedNode.id, castedNode);
-      castedNode.target != null && this.Visit(castedNode.target, castedNode);
-      castedNode.index != null && this.Visit(castedNode.index, castedNode);
+      castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+      castedNode.target != null && this.Visit(
+        castedNode.target, castedNode, currEnv);
+      castedNode.index != null && this.Visit(
+        castedNode.index, castedNode, currEnv);
       return;
     }
     // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
     case "LocalNode": {
       const castedNode = <ast.Local>node;
+      const newEnv = currEnv.merge(ast.environmentFromLocal(castedNode));
+
       this.VisitLocal(castedNode);
       castedNode.binds.forEach(bind => {
-        bind.body != null && this.Visit(bind.body, castedNode);
+        bind.body != null && this.Visit(bind.body, castedNode, newEnv);
       });
-      castedNode.body != null && this.Visit(castedNode.body, castedNode);
+      castedNode.body != null && this.Visit(
+        castedNode.body, castedNode, newEnv);
+      // throw new Error(`${newEnv.get("fooModule")}`);
       return;
     }
     // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
@@ -93,13 +103,16 @@ export abstract class VisitorBase implements Visitor {
     case "ObjectFieldNode": {
       const castedNode = <ast.ObjectField>node;
       this.VisitObjectField(castedNode);
-      castedNode.id != null && this.Visit(castedNode.id, castedNode);
-      castedNode.expr1 != null && this.Visit(castedNode.expr1, castedNode);
-      castedNode.expr2 != null && this.Visit(castedNode.expr2, castedNode);
-      castedNode.expr3 != null && this.Visit(castedNode.expr3, castedNode);
+      castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+      castedNode.expr1 != null && this.Visit(
+        castedNode.expr1, castedNode, currEnv);
+      castedNode.expr2 != null && this.Visit(
+        castedNode.expr2, castedNode, currEnv);
+      castedNode.expr3 != null && this.Visit(
+        castedNode.expr3, castedNode, currEnv);
       castedNode.headingComments != null &&
         castedNode.headingComments.forEach(comment => {
-          this.Visit(comment, castedNode);
+          this.Visit(comment, castedNode, currEnv);
         });
       return;
     }
@@ -107,7 +120,7 @@ export abstract class VisitorBase implements Visitor {
       const castedNode = <ast.ObjectNode>node;
       this.VisitObject(castedNode);
       castedNode.fields.forEach(field => {
-        this.Visit(field, castedNode);
+        this.Visit(field, castedNode, currEnv);
       });
       return;
     }
@@ -121,7 +134,7 @@ export abstract class VisitorBase implements Visitor {
     case "VarNode": {
       const castedNode = <ast.Var>node;
       this.VisitVar(castedNode);
-      castedNode.id != null && this.Visit(castedNode.id, castedNode);
+      castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
       return
     }
     default: throw new Error(

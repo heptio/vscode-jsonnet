@@ -73,6 +73,7 @@ package.contributes.DefaultConfiguration(
   },
   dependencies: {
     "js-yaml": "^3.0.0",
+    "immutable": "^3.8.1",
     "vscode-languageclient": "^3.1.0",
     "vscode-languageserver": "^3.1.0",
   },

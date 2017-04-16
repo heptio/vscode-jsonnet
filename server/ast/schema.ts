@@ -1,4 +1,5 @@
 'use strict';
+import * as immutable from 'immutable';
 
 // TODO: Consider grouping these by `node.*`, `object.*`, and so on.
 
@@ -37,13 +38,48 @@ export type NodeTypes =
   "UnaryNode" |
   "VarNode";
 
+export type Environment = immutable.Map<string, LocalBind>;
+
+export const emptyEnvironment = immutable.Map<string, LocalBind>();
+
+export function environmentFromLocal(local: Local): Environment {
+    const defaultLocal: {[key: string]: LocalBind} = {};
+    const binds = local.binds
+      .reduce(
+        (acc, bind) => {
+          acc[bind.variable.name] = bind;
+          return acc;
+        },
+        defaultLocal);
+    return immutable.Map(binds);
+}
+
+export function renderAsJson(node: Node): string {
+  return "```\n" + JSON.stringify(
+      node,
+      (k, v) => {
+          if (k === "parent") {
+              return (<Node>v).nodeType;
+          } else if (k === "env") {
+              // TODO: Calling `.has` on this causes us to claim that
+              // we can't find function. That's weird.
+              return `${Object.keys(v).join(", ")}`;
+          } else {
+              return v;
+          }
+      },
+      "  ") + "\n```";
+}
+
 export interface Node {
   nodeType: NodeTypes
-  parent: Node | null; // Filled in by the visitor.
+  parent: Node | null;     // Filled in by the visitor.
+  env: Environment | null; // Filled in by the visitor.
 };
 
 export class NodeBase implements Node {
-  parent: Node | null; // Filled in by the visitor.
+  parent: Node | null;     // Filled in by the visitor.
+  env: Environment | null; // Filled in by the visitor.
 
   nodeType: NodeTypes
   locationRange: LocationRange
@@ -66,7 +102,7 @@ export class Location {
 };
 
 export class LocationRange {
-  filename: string
+  fileName: string
   begin: Location
   end: Location
 };
