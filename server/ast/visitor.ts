@@ -63,15 +63,45 @@ export abstract class VisitorBase<T> implements Visitor<T> {
     case "IdentifierNode": return this.VisitIdentifier(<ast.Identifier>node);
     case "ImportNode": return this.VisitImport(<ast.Import>node);
     case "ImportStrNode": return this.VisitImportStr(<ast.ImportStr>node);
-    case "IndexNode": return this.VisitIndex(<ast.Index>node);
+    case "IndexNode": {
+      const castedNode = <ast.Index>node;
+      castedNode.id != null && this.Visit(castedNode.id);
+      castedNode.target != null && this.Visit(castedNode.target);
+      castedNode.index != null && this.Visit(castedNode.index);
+      return this.VisitIndex(castedNode);
+    }
     // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
-    case "LocalNode": return this.VisitLocal(<ast.Local>node);
+    case "LocalNode": {
+      const castedNode = <ast.Local>node;
+      castedNode.binds.forEach(bind => {
+        bind.body != null && this.Visit(bind.body);
+      });
+      castedNode.body != null && this.Visit(castedNode.body);
+      return this.VisitLocal(castedNode);
+    }
     // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
     // case "LiteralNullNode": return this.VisitLiteralNull(node);
     // case "LiteralNumberNode": return this.VisitLiteralNumber(node);
     // case "LiteralStringNode": return this.VisitLiteralString(node);
-    case "ObjectFieldNode": return this.VisitObjectField(<ast.ObjectField>node);
-    case "ObjectNode": return this.VisitObject(<ast.ObjectNode>node);
+    case "ObjectFieldNode": {
+      const castedNode = <ast.ObjectField>node;
+      castedNode.id != null && this.Visit(castedNode.id);
+      castedNode.expr1 != null && this.Visit(castedNode.expr1);
+      castedNode.expr2 != null && this.Visit(castedNode.expr2);
+      castedNode.expr3 != null && this.Visit(castedNode.expr3);
+      castedNode.headingComments != null &&
+        castedNode.headingComments.forEach(comment => {
+          this.Visit(comment);
+        });
+      return this.VisitObjectField(castedNode);
+    }
+    case "ObjectNode": {
+      const castedNode = <ast.ObjectNode>node;
+      castedNode.fields.forEach(field => {
+        this.Visit(field);
+      });
+      return this.VisitObject(castedNode);
+    }
     // case "DesugaredObjectFieldNode": return this.VisitDesugaredObjectField(node);
     // case "DesugaredObjectNode": return this.VisitDesugaredObject(node);
     // case "ObjectCompNode": return this.VisitObjectComp(node);
@@ -79,7 +109,11 @@ export abstract class VisitorBase<T> implements Visitor<T> {
     // case "SelfNode": return this.VisitSelf(node);
     // case "SuperIndexNode": return this.VisitSuperIndex(node);
     // case "UnaryNode": return this.VisitUnary(node);
-    case "VarNode": return this.VisitVar(<ast.Var>node);
+    case "VarNode": {
+      const castedNode = <ast.Var>node;
+      castedNode.id != null && this.Visit(castedNode.id);
+      return this.VisitVar(castedNode);
+    }
     default: throw new Error(
       `Visitor could not traverse tree; unknown node type '${node.nodeType}'`);
     }
@@ -137,10 +171,7 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   private tightestWrappingNode: ast.NodeBase;
   private position: {line: number, col: number};
 
-  public VisitComment(node: ast.Comment): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
+  public VisitComment(node: ast.Comment): ast.Node { return this.updateIfCursorInRange(node); }
   // public abstract VisitCompSpec(node: ast.CompSpec): T
   // public abstract VisitApply(node: ast.Apply): T
   // public abstract VisitApplyBrace(node: ast.ApplyBrace): T
@@ -153,65 +184,18 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitDollar(node: ast.Dollar): T
   // public abstract VisitError(node: ast.Error): T
   // public abstract VisitFunction(node: ast.Function): T
-  public VisitIdentifier(node: ast.Identifier): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
-  public VisitImport(node: ast.Import): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
-
-  public VisitImportStr(node: ast.ImportStr): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
-
-  public VisitIndex(node: ast.Index): ast.Node {
-    this.updateIfCursorInRange(node);
-    node.id != null && this.Visit(node.id);
-    node.target != null && this.Visit(node.target);
-    node.index != null && this.Visit(node.index);
-    return this.tightestWrappingNode;
-  }
-
+  public VisitIdentifier(node: ast.Identifier): ast.Node { return this.updateIfCursorInRange(node); }
+  public VisitImport(node: ast.Import): ast.Node { return this.updateIfCursorInRange(node); }
+  public VisitImportStr(node: ast.ImportStr): ast.Node { return this.updateIfCursorInRange(node); }
+  public VisitIndex(node: ast.Index): ast.Node { return this.updateIfCursorInRange(node); }
   // // public abstract VisitLocalBind(node: ast.LocalBind): T
-  public VisitLocal(node: ast.Local): ast.Node {
-    this.updateIfCursorInRange(node);
-    node.binds.forEach(bind => {
-      bind.body != null && this.Visit(bind.body);
-    });
-
-    node.body != null && this.Visit(node.body);
-
-    return this.tightestWrappingNode;
-  }
+  public VisitLocal(node: ast.Local): ast.Node { return this.updateIfCursorInRange(node); }
   // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): T
   // public abstract VisitLiteralNull(node: ast.LiteralNull): T
   // public abstract VisitLiteralNumber(node: ast.LiteralNumber): T
   // public abstract VisitLiteralString(node: ast.LiteralString): T
-  public VisitObjectField(node: ast.ObjectField): ast.Node {
-    this.updateIfCursorInRange(node);
-    node.id != null && this.Visit(node.id);
-    node.expr1 != null && this.Visit(node.expr1);
-    node.expr2 != null && this.Visit(node.expr2);
-    node.expr3 != null && this.Visit(node.expr3);
-
-    node.headingComments != null &&
-      node.headingComments.forEach(comment => {
-        this.Visit(comment);
-      });
-
-    return this.tightestWrappingNode;
-  }
-  public VisitObject(node: ast.ObjectNode): ast.Node {
-    this.updateIfCursorInRange(node);
-    node.fields.forEach(field => {
-      this.Visit(field);
-    });
-
-    return this.tightestWrappingNode;
-  }
+  public VisitObjectField(node: ast.ObjectField): ast.Node { return this.updateIfCursorInRange(node); }
+  public VisitObject(node: ast.ObjectNode): ast.Node { return this.updateIfCursorInRange(node); }
   // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): T
   // public abstract VisitDesugaredObject(node: ast.DesugaredObject): T
   // public abstract VisitObjectComp(node: ast.ObjectComp): T
@@ -219,12 +203,9 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
   // public abstract VisitSelf(node: ast.Self): T
   // public abstract VisitSuperIndex(node: ast.SuperIndex): T
   // public abstract VisitUnary(node: ast.Unary): T
-  public VisitVar(node: ast.Var): ast.Node {
-    node.id != null && this.Visit(node.id);
-    return this.tightestWrappingNode;
-  }
+  public VisitVar(node: ast.Var): ast.Node { return this.updateIfCursorInRange(node); }
 
-  private updateIfCursorInRange(node: ast.NodeBase): void {
+  private updateIfCursorInRange(node: ast.NodeBase): ast.Node {
     const locationRange = node.locationRange;
     const range = {
       beginLine: locationRange.begin.line,
@@ -238,6 +219,8 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
     ) {
       this.tightestWrappingNode = node;
     }
+
+    return this.tightestWrappingNode;
   }
 }
 
