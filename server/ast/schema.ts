@@ -43,32 +43,32 @@ export type Environment = immutable.Map<string, LocalBind>;
 export const emptyEnvironment = immutable.Map<string, LocalBind>();
 
 export function environmentFromLocal(local: Local): Environment {
-    const defaultLocal: {[key: string]: LocalBind} = {};
-    const binds = local.binds
-      .reduce(
-        (acc, bind) => {
-          acc[bind.variable.name] = bind;
-          return acc;
-        },
-        defaultLocal);
-    return immutable.Map(binds);
+  const defaultLocal: {[key: string]: LocalBind} = {};
+  const binds = local.binds
+  .reduce(
+  (acc, bind) => {
+    acc[bind.variable.name] = bind;
+    return acc;
+  },
+  defaultLocal);
+  return immutable.Map(binds);
 }
 
 export function renderAsJson(node: Node): string {
   return "```\n" + JSON.stringify(
-      node,
-      (k, v) => {
-          if (k === "parent") {
-              return (<Node>v).nodeType;
-          } else if (k === "env") {
-              // TODO: Calling `.has` on this causes us to claim that
-              // we can't find function. That's weird.
-              return `${Object.keys(v).join(", ")}`;
-          } else {
-              return v;
-          }
-      },
-      "  ") + "\n```";
+  node,
+  (k, v) => {
+    if (k === "parent") {
+      return (<Node>v).nodeType;
+    } else if (k === "env") {
+      // TODO: Calling `.has` on this causes us to claim that
+      // we can't find function. That's weird.
+      return `${Object.keys(v).join(", ")}`;
+    } else {
+      return v;
+    }
+  },
+  "  ") + "\n```";
 }
 
 export interface Node {
@@ -110,7 +110,7 @@ export class LocationRange {
 // ---------------------------------------------------------------------------
 
 type ObjectFieldKind = "ObjectAssert" | "ObjectFieldID" | "ObjectFieldExpr" |
-                       "ObjectFieldStr" |"ObjectLocal";
+"ObjectFieldStr" |"ObjectLocal";
 
 export class ObjectField extends NodeBase {
   kind:            ObjectFieldKind

@@ -6,8 +6,8 @@ import * as jsonnet from './jsonnet';
 // Create a connection for the server. The connection uses Node's IPC
 // as a transport
 const connection: server.IConnection = server.createConnection(
-    new server.IPCMessageReader(process),
-    new server.IPCMessageWriter(process));
+  new server.IPCMessageReader(process),
+  new server.IPCMessageWriter(process));
 
 // Create a simple text document manager. The text document manager
 // supports full document sync only

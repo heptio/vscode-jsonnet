@@ -53,91 +53,91 @@ export abstract class VisitorBase implements Visitor {
     node.env = currEnv;
 
     switch(node.nodeType) {
-    case "CommentNode": {
-      this.VisitComment(<ast.Comment>node);
-      return;
-    }
-    // case "CompSpecNode": return this.VisitCompSpec(node);
-    // case "ApplyNode": return this.VisitApply(node);
-    // case "ApplyBraceNode": return this.VisitApplyBrace(node);
-    // case "ArrayNode": return this.VisitArray(node);
-    // case "ArrayCompNode": return this.VisitArrayComp(node);
-    // case "AssertNode": return this.VisitAssert(node);
-    // case "BinaryNode": return this.VisitBinary(node);
-    // case "BuiltinNode": return this.VisitBuiltin(node);
-    // case "ConditionalNode": return this.VisitConditional(node);
-    // case "DollarNode": return this.VisitDollar(node);
-    // case "ErrorNode": return this.VisitError(node);
-    // case "FunctionNode": return this.VisitFunction(node);
-    case "IdentifierNode": { this.VisitIdentifier(<ast.Identifier>node); }
-    case "ImportNode": { this.VisitImport(<ast.Import>node); }
-    case "ImportStrNode": { this.VisitImportStr(<ast.ImportStr>node); }
-    case "IndexNode": {
-      const castedNode = <ast.Index>node;
-      this.VisitIndex(castedNode);
-      castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
-      castedNode.target != null && this.Visit(
+      case "CommentNode": {
+        this.VisitComment(<ast.Comment>node);
+        return;
+      }
+      // case "CompSpecNode": return this.VisitCompSpec(node);
+      // case "ApplyNode": return this.VisitApply(node);
+      // case "ApplyBraceNode": return this.VisitApplyBrace(node);
+      // case "ArrayNode": return this.VisitArray(node);
+      // case "ArrayCompNode": return this.VisitArrayComp(node);
+      // case "AssertNode": return this.VisitAssert(node);
+      // case "BinaryNode": return this.VisitBinary(node);
+      // case "BuiltinNode": return this.VisitBuiltin(node);
+      // case "ConditionalNode": return this.VisitConditional(node);
+      // case "DollarNode": return this.VisitDollar(node);
+      // case "ErrorNode": return this.VisitError(node);
+      // case "FunctionNode": return this.VisitFunction(node);
+      case "IdentifierNode": { this.VisitIdentifier(<ast.Identifier>node); }
+      case "ImportNode": { this.VisitImport(<ast.Import>node); }
+      case "ImportStrNode": { this.VisitImportStr(<ast.ImportStr>node); }
+      case "IndexNode": {
+        const castedNode = <ast.Index>node;
+        this.VisitIndex(castedNode);
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+        castedNode.target != null && this.Visit(
         castedNode.target, castedNode, currEnv);
-      castedNode.index != null && this.Visit(
+        castedNode.index != null && this.Visit(
         castedNode.index, castedNode, currEnv);
-      return;
-    }
-    // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
-    case "LocalNode": {
-      const castedNode = <ast.Local>node;
-      const newEnv = currEnv.merge(ast.environmentFromLocal(castedNode));
+        return;
+      }
+      // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
+      case "LocalNode": {
+        const castedNode = <ast.Local>node;
+        const newEnv = currEnv.merge(ast.environmentFromLocal(castedNode));
 
-      this.VisitLocal(castedNode);
-      castedNode.binds.forEach(bind => {
-        bind.body != null && this.Visit(bind.body, castedNode, newEnv);
-      });
-      castedNode.body != null && this.Visit(
+        this.VisitLocal(castedNode);
+        castedNode.binds.forEach(bind => {
+          bind.body != null && this.Visit(bind.body, castedNode, newEnv);
+        });
+        castedNode.body != null && this.Visit(
         castedNode.body, castedNode, newEnv);
-      // throw new Error(`${newEnv.get("fooModule")}`);
-      return;
-    }
-    // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
-    // case "LiteralNullNode": return this.VisitLiteralNull(node);
-    // case "LiteralNumberNode": return this.VisitLiteralNumber(node);
-    // case "LiteralStringNode": return this.VisitLiteralString(node);
-    case "ObjectFieldNode": {
-      const castedNode = <ast.ObjectField>node;
-      this.VisitObjectField(castedNode);
-      castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
-      castedNode.expr1 != null && this.Visit(
+        // throw new Error(`${newEnv.get("fooModule")}`);
+        return;
+      }
+      // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
+      // case "LiteralNullNode": return this.VisitLiteralNull(node);
+      // case "LiteralNumberNode": return this.VisitLiteralNumber(node);
+      // case "LiteralStringNode": return this.VisitLiteralString(node);
+      case "ObjectFieldNode": {
+        const castedNode = <ast.ObjectField>node;
+        this.VisitObjectField(castedNode);
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+        castedNode.expr1 != null && this.Visit(
         castedNode.expr1, castedNode, currEnv);
-      castedNode.expr2 != null && this.Visit(
+        castedNode.expr2 != null && this.Visit(
         castedNode.expr2, castedNode, currEnv);
-      castedNode.expr3 != null && this.Visit(
+        castedNode.expr3 != null && this.Visit(
         castedNode.expr3, castedNode, currEnv);
-      castedNode.headingComments != null &&
+        castedNode.headingComments != null &&
         castedNode.headingComments.forEach(comment => {
           this.Visit(comment, castedNode, currEnv);
         });
-      return;
-    }
-    case "ObjectNode": {
-      const castedNode = <ast.ObjectNode>node;
-      this.VisitObject(castedNode);
-      castedNode.fields.forEach(field => {
-        this.Visit(field, castedNode, currEnv);
-      });
-      return;
-    }
-    // case "DesugaredObjectFieldNode": return this.VisitDesugaredObjectField(node);
-    // case "DesugaredObjectNode": return this.VisitDesugaredObject(node);
-    // case "ObjectCompNode": return this.VisitObjectComp(node);
-    // case "ObjectComprehensionSimpleNode": return this.VisitObjectComprehensionSimple(node);
-    // case "SelfNode": return this.VisitSelf(node);
-    // case "SuperIndexNode": return this.VisitSuperIndex(node);
-    // case "UnaryNode": return this.VisitUnary(node);
-    case "VarNode": {
-      const castedNode = <ast.Var>node;
-      this.VisitVar(castedNode);
-      castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
-      return
-    }
-    default: throw new Error(
+        return;
+      }
+      case "ObjectNode": {
+        const castedNode = <ast.ObjectNode>node;
+        this.VisitObject(castedNode);
+        castedNode.fields.forEach(field => {
+          this.Visit(field, castedNode, currEnv);
+        });
+        return;
+      }
+      // case "DesugaredObjectFieldNode": return this.VisitDesugaredObjectField(node);
+      // case "DesugaredObjectNode": return this.VisitDesugaredObject(node);
+      // case "ObjectCompNode": return this.VisitObjectComp(node);
+      // case "ObjectComprehensionSimpleNode": return this.VisitObjectComprehensionSimple(node);
+      // case "SelfNode": return this.VisitSelf(node);
+      // case "SuperIndexNode": return this.VisitSuperIndex(node);
+      // case "UnaryNode": return this.VisitUnary(node);
+      case "VarNode": {
+        const castedNode = <ast.Var>node;
+        this.VisitVar(castedNode);
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+        return
+      }
+      default: throw new Error(
       `Visitor could not traverse tree; unknown node type '${node.nodeType}'`);
     }
   }
@@ -181,8 +181,7 @@ export abstract class VisitorBase implements Visitor {
 // `position`.
 export class CursorVisitor extends VisitorBase {
   constructor(
-    private document: server.TextDocument,
-    position: server.Position,
+    private document: server.TextDocument, position: server.Position,
   ) {
     super();
     this.position = {
@@ -251,7 +250,9 @@ export class CursorVisitor extends VisitorBase {
   }
 }
 
-function nodeRangeIsTighter(thisNode: ast.NodeBase, thatNode: ast.NodeBase): boolean {
+function nodeRangeIsTighter(
+  thisNode: ast.NodeBase, thatNode: ast.NodeBase
+): boolean {
   if (thatNode == null) {
     return true;
   }
@@ -271,7 +272,7 @@ function nodeRangeIsTighter(thisNode: ast.NodeBase, thatNode: ast.NodeBase): boo
     endCol: thatNode.locationRange.end.column,
   };
   return cursorInLocationRange(thisNodeBegin, thatNodeRange) &&
-    cursorInLocationRange(thisNodeEnd, thatNodeRange);
+  cursorInLocationRange(thisNodeEnd, thatNodeRange);
 }
 
 function cursorInLocationRange(
@@ -280,17 +281,17 @@ function cursorInLocationRange(
 ): boolean {
 
   if (range.beginLine == cursor.line && cursor.line == range.endLine &&
-    range.beginCol <= cursor.col && cursor.col <= range.endCol
+  range.beginCol <= cursor.col && cursor.col <= range.endCol
   ) {
     return true;
   } else if (range.beginLine < cursor.line && cursor.line == range.endLine &&
-    cursor.col <= range.endCol
+  cursor.col <= range.endCol
   ) {
     return true;
   } else if (range.beginLine == cursor.line && cursor.line < range.endLine &&
-    cursor.col >= range.beginCol
+  cursor.col >= range.beginCol
   ) {
-      return true;
+    return true;
   } else if (range.beginLine < cursor.line && cursor.line < range.endLine) {
     return true;
   } else {

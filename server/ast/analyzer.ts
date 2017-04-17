@@ -11,7 +11,7 @@ export class Analyzer {
   public command: string | null;
 
   public resolveSymbolAtPosition = (
-  doc: server.TextDocument, pos: server.Position,
+    doc: server.TextDocument, pos: server.Position,
   ): ast.Node | null => {
     const nodeAtPos = this.getNodeAtPosition(doc, pos);
 
@@ -119,7 +119,7 @@ export class Analyzer {
   }
 
   public getNodeAtPosition = (
-  doc: server.TextDocument, pos: server.Position,
+    doc: server.TextDocument, pos: server.Position,
   ): ast.Node => {
     const filePath = url.parse(doc.uri).path;
     if (filePath == null) {
