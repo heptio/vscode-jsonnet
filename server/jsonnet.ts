@@ -7,10 +7,10 @@ import * as ast from './ast/schema';
 
 const analyzer = new analyze.Analyzer();
 
-export function initializer(
+export const initializer = (
   documents: server.TextDocuments,
   params: server.InitializeParams,
-): server.InitializeResult {
+): server.InitializeResult => {
   let workspaceRoot = params.rootPath;
   return {
     capabilities: {
@@ -26,9 +26,9 @@ export function initializer(
   }
 }
 
-export function configUpdateProvider(
+export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
-): void {
+): void => {
   if ("server" in change.settings.jsonnet) {
     analyzer.command = change.settings.jsonnet["server"];
   }
@@ -36,9 +36,9 @@ export function configUpdateProvider(
   console.log(analyzer.command);
 }
 
-export function completionProvider(
+export const completionProvider = (
   position: server.TextDocumentPositionParams
-): Promise<server.CompletionItem[]> {
+): Promise<server.CompletionItem[]> => {
   const completion =
   (label, kind, data): server.CompletionItem => <server.CompletionItem>{
     label: label,
@@ -58,10 +58,10 @@ export function completionProvider(
   ])
 };
 
-export function hoverProvider(
+export const hoverProvider = (
   documents: server.TextDocuments,
   posParams: server.TextDocumentPositionParams,
-): Promise<server.Hover> {
+): Promise<server.Hover> => {
   if (analyzer.command == null) {
     return Promise.resolve().then(() => <server.Hover>{});
   }

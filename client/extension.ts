@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as yaml from "js-yaml";
 import * as client from 'vscode-languageclient';
 
-export function activate(context: vs.ExtensionContext) {
+export const activate = (context: vs.ExtensionContext) => {
   // The server is implemented in node
   let languageClient = jsonnet.languageClient(
   context.asAbsolutePath(path.join('out', 'server', 'server.js')));
@@ -40,11 +40,10 @@ export function activate(context: vs.ExtensionContext) {
   }));
 }
 
-export function deactivate() {
-}
+export const deactivate = () => { }
 
 namespace workspace {
-  export function extStrs(): string {
+  export const extStrs = (): string => {
     const extStrsObj =
     vs.workspace.getConfiguration('jsonnet')["extStrs"];
     return extStrsObj == null
@@ -54,11 +53,11 @@ namespace workspace {
     .join(" ");
   }
 
-  export function outputFormat(): "json" | "yaml" {
+  export const outputFormat = (): "json" | "yaml" => {
     return vs.workspace.getConfiguration('jsonnet')["outputFormat"];
   }
 
-  export function configure(config: vs.WorkspaceConfiguration): boolean {
+  export const configure = (config: vs.WorkspaceConfiguration): boolean => {
     if (os.type() === "Windows_NT") {
       return configureWindows(config);
     } else {
@@ -66,7 +65,7 @@ namespace workspace {
     }
   }
 
-  function configureUnix(config: vs.WorkspaceConfiguration): boolean {
+  const configureUnix = (config: vs.WorkspaceConfiguration): boolean => {
     if (config["executablePath"] != null) {
       jsonnet.executable = config["executablePath"];
     } else {
@@ -86,7 +85,7 @@ namespace workspace {
     return true;
   }
 
-  function configureWindows(config: vs.WorkspaceConfiguration): boolean {
+  const configureWindows = (config: vs.WorkspaceConfiguration): boolean => {
     if (config["executablePath"] == null) {
       alert.jsonnetCommandIsNull();
       return false;
@@ -100,41 +99,43 @@ namespace workspace {
 namespace alert {
   const alert = vs.window.showErrorMessage;
 
-  export function noActiveWindow() {
+  export const noActiveWindow = () => {
     alert("Can't open Jsonnet preview because there is no active window");
   }
 
-  export function documentNotJsonnet(languageId) {
+  export const documentNotJsonnet = (languageId) => {
     alert(`Can't generate Jsonnet document preview for document with language id '${languageId}'`);
   }
 
-  export function couldNotRenderJsonnet(reason) {
+  export const couldNotRenderJsonnet = (reason) => {
     alert(`Error: Could not render Jsonnet; ${reason}`);
   }
 
-  export function jsonnetCommandNotOnPath() {
+  export const jsonnetCommandNotOnPath = () => {
     alert(`Error: could not find 'jsonnet' command on path`);
   }
 
-  export function jsonnetCommandIsNull() {
+  export const jsonnetCommandIsNull = () => {
     alert(`Error: 'jsonnet.executablePath' must be set in vscode settings`);
   }
 }
 
 namespace html {
-  export function body(body: string): string {
+  export const body = (body: string): string => {
     return `<html><body>${body}</body></html>`
   }
 
-  export function codeLiteral(code: string): string {
+  export const codeLiteral = (code: string): string => {
     return `<pre><code>${code}</code></pre>`
   }
 
-  export function errorMessage(message: string): string {
+  export const errorMessage = (message: string): string => {
     return `<i><pre>${message}</pre></i>`;
   }
 
-  export function prettyPrintObject(json: string, outputFormat: "json" | "yaml"): string {
+  export const prettyPrintObject = (
+    json: string, outputFormat: "json" | "yaml"
+  ): string => {
     if (outputFormat == "yaml") {
       return codeLiteral(yaml.safeDump(JSON.parse(json)));
     } else {
@@ -151,7 +152,7 @@ namespace jsonnet {
     scheme: 'file'
   };
 
-  export function languageClient(serverModule: string) {
+  export const languageClient = (serverModule: string) => {
     // The debug options for the server
     let debugOptions = { execArgv: ["--nolazy", "--debug=6009"] };
 
@@ -191,7 +192,7 @@ namespace jsonnet {
     clientOptions);
   }
 
-  export function canonicalPreviewUri(fileUri: vs.Uri) {
+  export const canonicalPreviewUri = (fileUri: vs.Uri) => {
     return fileUri.with({
       scheme: jsonnet.PREVIEW_SCHEME,
       path: `${fileUri.path}.rendered`,
@@ -200,11 +201,10 @@ namespace jsonnet {
   }
 
   export class DocumentProvider implements vs.TextDocumentContentProvider {
-    public provideTextDocumentContent =
-    (uri: vs.Uri): Thenable<string> => {
+    public provideTextDocumentContent = (uri: vs.Uri): Thenable<string> => {
       const sourceUri = vs.Uri.parse(uri.query);
       return vs.workspace.openTextDocument(sourceUri)
-      .then(this.renderDocument);
+        .then(this.renderDocument);
     }
 
     //
@@ -215,7 +215,7 @@ namespace jsonnet {
       return this._onDidChange.event;
     }
 
-    public update(uri: vs.Uri) {
+    public update = (uri: vs.Uri) => {
       this._onDidChange.fire(uri);
     }
 
@@ -223,7 +223,7 @@ namespace jsonnet {
     // Private members.
     //
 
-    private renderDocument(document: vs.TextDocument): string {
+    private renderDocument = (document: vs.TextDocument): string => {
       try {
         const extStrs = workspace.extStrs();
         const outputFormat = workspace.outputFormat();
@@ -242,7 +242,7 @@ namespace jsonnet {
 }
 
 namespace display {
-  export function previewJsonnet(sideBySide: boolean) {
+  export const previewJsonnet = (sideBySide: boolean) => {
     const editor = vs.window.activeTextEditor;
     if (editor == null) {
       alert.noActiveWindow();
@@ -265,7 +265,9 @@ namespace display {
     });
   }
 
-  function getViewColumn(sideBySide: boolean): vs.ViewColumn | undefined {
+  export const getViewColumn = (
+    sideBySide: boolean
+  ): vs.ViewColumn | undefined => {
     const active = vs.window.activeTextEditor;
     if (!active) {
       return vs.ViewColumn.One;

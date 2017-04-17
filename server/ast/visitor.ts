@@ -142,7 +142,7 @@ export abstract class VisitorBase implements Visitor {
     }
   }
 
-  public abstract VisitComment(node: ast.Comment): void
+  public abstract VisitComment = (node: ast.Comment): void => {}
   // public abstract VisitCompSpec(node: ast.CompSpec): void
   // public abstract VisitApply(node: ast.Apply): void
   // public abstract VisitApplyBrace(node: ast.ApplyBrace): void
@@ -155,18 +155,18 @@ export abstract class VisitorBase implements Visitor {
   // public abstract VisitDollar(node: ast.Dollar): void
   // public abstract VisitError(node: ast.Error): void
   // public abstract VisitFunction(node: ast.Function): void
-  public abstract VisitIdentifier(node: ast.Identifier): void
-  public abstract VisitImport(node: ast.Import): void
-  public abstract VisitImportStr(node: ast.ImportStr): void
-  public abstract VisitIndex(node: ast.Index): void
+  public abstract VisitIdentifier = (node: ast.Identifier): void => {}
+  public abstract VisitImport = (node: ast.Import): void => {}
+  public abstract VisitImportStr = (node: ast.ImportStr): void => {}
+  public abstract VisitIndex = (node: ast.Index): void => {}
   // // public abstract VisitLocalBind(node: ast.LocalBind): void
-  public abstract VisitLocal(node: ast.Local): void
+  public abstract VisitLocal = (node: ast.Local): void => {}
   // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
   // public abstract VisitLiteralNull(node: ast.LiteralNull): void
   // public abstract VisitLiteralNumber(node: ast.LiteralNumber): void
   // public abstract VisitLiteralString(node: ast.LiteralString): void
-  public abstract VisitObjectField(node: ast.ObjectField): void
-  public abstract VisitObject(node: ast.ObjectNode): void
+  public abstract VisitObjectField = (node: ast.ObjectField): void => {}
+  public abstract VisitObject = (node: ast.ObjectNode): void => {}
   // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
   // public abstract VisitDesugaredObject(node: ast.DesugaredObject): void
   // public abstract VisitObjectComp(node: ast.ObjectComp): void
@@ -174,7 +174,7 @@ export abstract class VisitorBase implements Visitor {
   // public abstract VisitSelf(node: ast.Self): void
   // public abstract VisitSuperIndex(node: ast.SuperIndex): void
   // public abstract VisitUnary(node: ast.Unary): void
-  public abstract VisitVar(node: ast.Var): void
+  public abstract VisitVar = (node: ast.Var): void => {}
 }
 
 // Finds the tightest-binding node that wraps the location denoted by
@@ -195,7 +195,7 @@ export class CursorVisitor extends VisitorBase {
   private tightestWrappingNode: ast.NodeBase;
   private position: {line: number, col: number};
 
-  public VisitComment(node: ast.Comment): void {
+  public VisitComment = (node: ast.Comment): void => {
     this.updateIfCursorInRange(node);
   }
   // public abstract VisitCompSpec(node: ast.CompSpec): void
@@ -210,18 +210,18 @@ export class CursorVisitor extends VisitorBase {
   // public abstract VisitDollar(node: ast.Dollar): void
   // public abstract VisitError(node: ast.Error): void
   // public abstract VisitFunction(node: ast.Function): void
-  public VisitIdentifier(node: ast.Identifier): void { this.updateIfCursorInRange(node); }
-  public VisitImport(node: ast.Import): void { this.updateIfCursorInRange(node); }
-  public VisitImportStr(node: ast.ImportStr): void { this.updateIfCursorInRange(node); }
-  public VisitIndex(node: ast.Index): void { this.updateIfCursorInRange(node); }
+  public VisitIdentifier = (node: ast.Identifier): void => { this.updateIfCursorInRange(node); }
+  public VisitImport = (node: ast.Import): void => { this.updateIfCursorInRange(node); }
+  public VisitImportStr = (node: ast.ImportStr): void => { this.updateIfCursorInRange(node); }
+  public VisitIndex = (node: ast.Index): void => { this.updateIfCursorInRange(node); }
   // // public abstract VisitLocalBind(node: ast.LocalBind): void
-  public VisitLocal(node: ast.Local): void { this.updateIfCursorInRange(node); }
+  public VisitLocal = (node: ast.Local): void => { this.updateIfCursorInRange(node); }
   // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
   // public abstract VisitLiteralNull(node: ast.LiteralNull): void
   // public abstract VisitLiteralNumber(node: ast.LiteralNumber): void
   // public abstract VisitLiteralString(node: ast.LiteralString): void
-  public VisitObjectField(node: ast.ObjectField): void { this.updateIfCursorInRange(node); }
-  public VisitObject(node: ast.ObjectNode): void { this.updateIfCursorInRange(node); }
+  public VisitObjectField = (node: ast.ObjectField): void => { this.updateIfCursorInRange(node); }
+  public VisitObject = (node: ast.ObjectNode): void => { this.updateIfCursorInRange(node); }
   // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
   // public abstract VisitDesugaredObject(node: ast.DesugaredObject): void
   // public abstract VisitObjectComp(node: ast.ObjectComp): void
@@ -229,9 +229,9 @@ export class CursorVisitor extends VisitorBase {
   // public abstract VisitSelf(node: ast.Self): void
   // public abstract VisitSuperIndex(node: ast.SuperIndex): void
   // public abstract VisitUnary(node: ast.Unary): void
-  public VisitVar(node: ast.Var): void { this.updateIfCursorInRange(node); }
+  public VisitVar = (node: ast.Var): void => { this.updateIfCursorInRange(node); }
 
-  private updateIfCursorInRange(node: ast.NodeBase): ast.Node {
+  private updateIfCursorInRange = (node: ast.NodeBase): ast.Node => {
     const locationRange = node.locationRange;
     const range = {
       beginLine: locationRange.begin.line,
@@ -250,9 +250,9 @@ export class CursorVisitor extends VisitorBase {
   }
 }
 
-function nodeRangeIsTighter(
+const nodeRangeIsTighter = (
   thisNode: ast.NodeBase, thatNode: ast.NodeBase
-): boolean {
+): boolean => {
   if (thatNode == null) {
     return true;
   }
@@ -275,10 +275,10 @@ function nodeRangeIsTighter(
   cursorInLocationRange(thisNodeEnd, thatNodeRange);
 }
 
-function cursorInLocationRange(
+const cursorInLocationRange = (
   cursor: {line: number, col: number},
   range: {beginLine: number, endLine: number, beginCol: number, endCol: number},
-): boolean {
+): boolean => {
 
   if (range.beginLine == cursor.line && cursor.line == range.endLine &&
   range.beginCol <= cursor.col && cursor.col <= range.endCol

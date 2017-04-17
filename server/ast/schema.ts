@@ -42,7 +42,7 @@ export type Environment = immutable.Map<string, LocalBind>;
 
 export const emptyEnvironment = immutable.Map<string, LocalBind>();
 
-export function environmentFromLocal(local: Local): Environment {
+export const environmentFromLocal = (local: Local): Environment => {
   const defaultLocal: {[key: string]: LocalBind} = {};
   const binds = local.binds
   .reduce(
@@ -54,7 +54,7 @@ export function environmentFromLocal(local: Local): Environment {
   return immutable.Map(binds);
 }
 
-export function renderAsJson(node: Node): string {
+export const renderAsJson = (node: Node): string => {
   return "```\n" + JSON.stringify(
   node,
   (k, v) => {
