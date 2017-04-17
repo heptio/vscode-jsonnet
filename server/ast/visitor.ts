@@ -180,20 +180,11 @@ export abstract class VisitorBase implements Visitor {
 // Finds the tightest-binding node that wraps the location denoted by
 // `position`.
 export class CursorVisitor extends VisitorBase {
-  constructor(
-    private document: server.TextDocument, position: server.Position,
-  ) {
-    super();
-    this.position = {
-      line: position.line + 1,
-      col: position.character + 1,
-    };
-  }
+  constructor(private position: ast.Location) { super(); }
 
   get NodeAtPosition(): ast.NodeBase { return this.tightestWrappingNode; }
 
   private tightestWrappingNode: ast.NodeBase;
-  private position: {line: number, col: number};
 
   public VisitComment = (node: ast.Comment): void => {
     this.updateIfCursorInRange(node);
@@ -259,11 +250,11 @@ const nodeRangeIsTighter = (
 
   const thisNodeBegin = {
     line: thisNode.locationRange.begin.line,
-    col: thisNode.locationRange.begin.column
+    column: thisNode.locationRange.begin.column
   };
   const thisNodeEnd = {
     line: thisNode.locationRange.end.line,
-    col: thisNode.locationRange.end.column
+    column: thisNode.locationRange.end.column
   };
   const thatNodeRange = {
     beginLine: thatNode.locationRange.begin.line,
@@ -276,20 +267,20 @@ const nodeRangeIsTighter = (
 }
 
 const cursorInLocationRange = (
-  cursor: {line: number, col: number},
+  cursor: ast.Location,
   range: {beginLine: number, endLine: number, beginCol: number, endCol: number},
 ): boolean => {
 
   if (range.beginLine == cursor.line && cursor.line == range.endLine &&
-  range.beginCol <= cursor.col && cursor.col <= range.endCol
+  range.beginCol <= cursor.column && cursor.column <= range.endCol
   ) {
     return true;
   } else if (range.beginLine < cursor.line && cursor.line == range.endLine &&
-  cursor.col <= range.endCol
+  cursor.column <= range.endCol
   ) {
     return true;
   } else if (range.beginLine == cursor.line && cursor.line < range.endLine &&
-  cursor.col >= range.beginCol
+  cursor.column >= range.beginCol
   ) {
     return true;
   } else if (range.beginLine < cursor.line && cursor.line < range.endLine) {

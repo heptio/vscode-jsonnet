@@ -1,8 +1,6 @@
 'use strict';
 import * as proc from 'child_process';
 import * as path from 'path';
-import * as url from 'url';
-import * as server from 'vscode-languageserver';
 
 import * as ast from './schema';
 import * as astVisitor from './visitor';
@@ -11,9 +9,9 @@ export class Analyzer {
   public command: string | null;
 
   public resolveSymbolAtPosition = (
-    doc: server.TextDocument, pos: server.Position,
+    filePath: string, pos: ast.Location,
   ): ast.Node | null => {
-    const nodeAtPos = this.getNodeAtPosition(doc, pos);
+    const nodeAtPos = this.getNodeAtPosition(filePath, pos);
 
     if (nodeAtPos.parent == null ) {
       return null;
@@ -119,15 +117,10 @@ export class Analyzer {
   }
 
   public getNodeAtPosition = (
-    doc: server.TextDocument, pos: server.Position,
+    filePath: string, pos: ast.Location,
   ): ast.Node => {
-    const filePath = url.parse(doc.uri).path;
-    if (filePath == null) {
-      throw Error(`Failed to parse doc URI '${doc.uri}'`)
-    }
-
     const rootNode = this.parseJsonnetFile(filePath);
-    const visitor = new astVisitor.CursorVisitor(doc, pos);
+    const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);
     return visitor.NodeAtPosition;
   }

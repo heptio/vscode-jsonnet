@@ -1,6 +1,7 @@
 'use strict';
-import * as server from 'vscode-languageserver';
 import * as os from 'os';
+import * as server from 'vscode-languageserver';
+import * as url from 'url';
 
 import * as analyze from './ast/analyzer';
 import * as ast from './ast/schema';
@@ -69,8 +70,15 @@ export const hoverProvider = (
   const doc = documents.get(posParams.textDocument.uri);
   let line = doc.getText().split(os.EOL)[posParams.position.line].trim();
 
+  // Parse the file path out of the doc uri.
+  const filePath = url.parse(doc.uri).path;
+  if (filePath == null) {
+    throw Error(`Failed to parse doc URI '${doc.uri}'`)
+  }
+
   // Get symbol we're hovering over.
-  const resolved = analyzer.resolveSymbolAtPosition(doc, posParams.position);
+  const location = positionToLocation(posParams);
+  const resolved = analyzer.resolveSymbolAtPosition(filePath, location);
 
   let commentText: string | null = null;
   if (resolved != null) {
@@ -105,3 +113,12 @@ export const hoverProvider = (
     ]
   });
 };
+
+const positionToLocation = (
+  posParams: server.TextDocumentPositionParams
+): ast.Location => {
+  return {
+    line: posParams.position.line + 1,
+    column: posParams.position.character + 1,
+  };
+}
