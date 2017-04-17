@@ -3,6 +3,23 @@ import * as immutable from 'immutable';
 
 // TODO: Consider grouping these by `node.*`, `object.*`, and so on.
 
+//
+// NOTE: As a design point we implement the AST as a collection of
+// interfaces rather than classes. The reason is primarily because
+// deserializing JSON object and converting its runtime type to be a
+// TypeScript class (`NodeBase`, say) is non-trivial, and this causes
+// unexpected behavior when you try to call a method that exists on a
+// class.
+//
+// In particular, annotating a JSON object with a type, (as in
+// `<ast.NodeBase>someObj`) will silence the compiler warning, but
+// won't change the runtime type. So when you go to call a method on
+// this new "casted" value, the method will be missing.
+//
+// Until we implement deserialization that changes the runtime types,
+// these types should all remain interfaces.
+//
+
 export type NodeTypes =
   "CommentNode" |
   "CompSpecNode" |
@@ -77,7 +94,7 @@ export interface Node {
   env: Environment | null; // Filled in by the visitor.
 };
 
-export class NodeBase implements Node {
+export interface NodeBase extends Node {
   parent: Node | null;     // Filled in by the visitor.
   env: Environment | null; // Filled in by the visitor.
 
@@ -88,7 +105,7 @@ export class NodeBase implements Node {
 
 // ---------------------------------------------------------------------------
 
-export class Identifier extends NodeBase {
+export interface Identifier extends NodeBase {
 	name: IdentifierName
 }
 
@@ -96,12 +113,12 @@ type IdentifierName = string;
 
 // ---------------------------------------------------------------------------
 
-export class Location {
+export interface Location {
   line: number
   column: number
 };
 
-export class LocationRange {
+export interface LocationRange {
   fileName: string
   begin: Location
   end: Location
@@ -112,7 +129,7 @@ export class LocationRange {
 type ObjectFieldKind = "ObjectAssert" | "ObjectFieldID" | "ObjectFieldExpr" |
 "ObjectFieldStr" |"ObjectLocal";
 
-export class ObjectField extends NodeBase {
+export interface ObjectField extends NodeBase {
   kind:            ObjectFieldKind
   // hide             ObjectFieldHide // (ignore if kind != astObjectField*)
   superSugar:      boolean          // +:  (ignore if kind != astObjectField*)
@@ -126,7 +143,7 @@ export class ObjectField extends NodeBase {
   headingComments: Comment[] | null
 };
 
-export class ObjectNode extends NodeBase {
+export interface ObjectNode extends NodeBase {
   fields:          ObjectField[]
   trailingComma:   boolean
   headingComments: Comment[]
@@ -136,7 +153,7 @@ export class ObjectNode extends NodeBase {
 
 export type CommentKind = "CppStyle" | "CStyle" | "HashStyle";
 
-export class Comment extends NodeBase {
+export interface Comment extends NodeBase {
   kind: CommentKind
   text: string
 };
@@ -144,7 +161,7 @@ export class Comment extends NodeBase {
 // ---------------------------------------------------------------------------
 
 // LocalBind is a helper struct for Local
-export class LocalBind {
+export interface LocalBind {
   variable:      Identifier
   body:          Node | null
   functionSugar: boolean
@@ -153,7 +170,7 @@ export class LocalBind {
 }
 
 // Local represents local x = e; e.  After desugaring, functionSugar is false.
-export class Local extends NodeBase {
+export interface Local extends NodeBase {
   binds: LocalBind[]
   body:  Node | null
 }
@@ -161,12 +178,12 @@ export class Local extends NodeBase {
 // ---------------------------------------------------------------------------
 
 // Import represents import "file".
-export class Import extends NodeBase {
+export interface Import extends NodeBase {
   file: string
 }
 
 // ImportStr represents importstr "file".
-export class ImportStr extends NodeBase {
+export interface ImportStr extends NodeBase {
   file: string
 }
 
@@ -176,7 +193,7 @@ export class ImportStr extends NodeBase {
 //
 // One of index and id will be nil before desugaring.  After desugaring id
 // will be nil.
-export class Index extends NodeBase {
+export interface Index extends NodeBase {
   target: Node | null
   index:  Node | null
   id:     Identifier | null
@@ -185,6 +202,6 @@ export class Index extends NodeBase {
 // ---------------------------------------------------------------------------
 
 // Var represents variables.
-export class Var extends NodeBase {
+export interface Var extends NodeBase {
 	id: Identifier
 }
