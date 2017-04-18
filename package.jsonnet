@@ -68,6 +68,7 @@ package.contributes.DefaultConfiguration(
   scripts: {
     "vscode:prepublish": "tsc -p ./",
     compile: "tsc -watch -p ./",
+    "compile-once": "tsc -p ./",
     postinstall: "node ./node_modules/vscode/bin/install",
     test: "node ./node_modules/vscode/bin/test"
   },
@@ -81,6 +82,8 @@ package.contributes.DefaultConfiguration(
     typescript: "^2.0.3",
     vscode: "^1.0.0",
     mocha: "^2.3.3",
+    chai: "^3.5.0",
+    "@types/chai": "^3.5.0",
     "@types/node": "^6.0.40",
     "@types/mocha": "^2.2.32",
   }
