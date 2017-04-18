@@ -23,18 +23,14 @@ const assertLocationRange = (
   assert.equal(lr.end.column, endCol);
 }
 
-describe("Analyzer tests", () => {
-  it("Searching for a node by position", () => {
-    const analyzer = new analyze.Analyzer();
-    analyzer.command = jsonnetServer;
+describe("Searching an AST by position", () => {
+  const analyzer = new analyze.Analyzer();
+  analyzer.command = jsonnetServer;
 
-    const rootNode = analyzer.parseJsonnetFile(
-      `${dataDir}/simple-nodes.jsonnet`);
+  const rootNode = analyzer.parseJsonnetFile(
+    `${dataDir}/simple-nodes.jsonnet`);
 
-    //
-    // First property.
-    //
-
+  it("Object field assigned value of `local` symbol", () => {
     // Property.
     {
       const property1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
@@ -50,7 +46,7 @@ describe("Analyzer tests", () => {
       assertLocationRange(property1Parent.locationRange, 2, 3, 2, 17);
     }
 
-    // Value.
+    // Target.
     {
       const target1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 14));
@@ -69,31 +65,26 @@ describe("Analyzer tests", () => {
       assert.equal(target1Grandparent.kind, "ObjectFieldID");
       assertLocationRange(target1Grandparent.locationRange, 2, 3, 2, 17);
     }
+  });
 
-    //
-    // Second property.
-    //
-
+  it("Object field assigned literal number", () => {
     // Target.
-    {
-      const target2Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
-        rootNode, makeLocation(3, 15));
-      assert.equal(target2Id.nodeType, "LiteralNumberNode");
-      assert.equal(target2Id.originalString, "2");
-      assert.equal(target2Id.value, 2);
-      assert.isNotNull(target2Id.parent);
-      assertLocationRange(target2Id.locationRange, 3, 14, 3, 15);
 
-      const target2Parent = <ast.ObjectField>target2Id.parent;
-      assert.equal(target2Parent.nodeType, "ObjectFieldNode");
-      assert.equal(target2Parent.kind, "ObjectFieldID");
-      assertLocationRange(target2Parent.locationRange, 3, 3, 3, 15);
-    }
+    const target2Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
+      rootNode, makeLocation(3, 15));
+    assert.equal(target2Id.nodeType, "LiteralNumberNode");
+    assert.equal(target2Id.originalString, "2");
+    assert.equal(target2Id.value, 2);
+    assert.isNotNull(target2Id.parent);
+    assertLocationRange(target2Id.locationRange, 3, 14, 3, 15);
 
-    //
-    // Third property.
-    //
+    const target2Parent = <ast.ObjectField>target2Id.parent;
+    assert.equal(target2Parent.nodeType, "ObjectFieldNode");
+    assert.equal(target2Parent.kind, "ObjectFieldID");
+    assertLocationRange(target2Parent.locationRange, 3, 3, 3, 15);
+  });
 
+  it("`local` object field assigned value", () => {
     // Property.
     {
       const property3Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
@@ -103,10 +94,10 @@ describe("Analyzer tests", () => {
       assert.isNotNull(property3Id.parent);
       assertLocationRange(property3Id.locationRange, 4, 9, 4, 12);
 
-      const target3Parent = <ast.ObjectField>property3Id.parent;
-      assert.equal(target3Parent.nodeType, "ObjectFieldNode");
-      assert.equal(target3Parent.kind, "ObjectLocal");
-      assertLocationRange(target3Parent.locationRange, 4, 3, 4, 16);
+      const property3Parent = <ast.ObjectField>property3Id.parent;
+      assert.equal(property3Parent.nodeType, "ObjectFieldNode");
+      assert.equal(property3Parent.kind, "ObjectLocal");
+      assertLocationRange(property3Parent.locationRange, 4, 3, 4, 16);
     }
 
     // Target.
