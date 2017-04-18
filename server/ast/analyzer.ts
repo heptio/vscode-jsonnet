@@ -12,17 +12,27 @@ export class Analyzer {
     filePath: string, pos: ast.Location,
   ): ast.Node | null => {
     const nodeAtPos = this.getNodeAtPosition(filePath, pos);
+    return this.resolveSymbol(nodeAtPos);
+  }
 
-    if (nodeAtPos.parent == null ) {
+  public resolveSymbolAtPositionFromAst = (
+    rootNode: ast.Node, pos: ast.Location,
+  ): ast.Node | null => {
+    const nodeAtPos = this.getNodeAtPositionFromAst(rootNode, pos);
+    return this.resolveSymbol(nodeAtPos);
+  }
+
+  private resolveSymbol = (node: ast.Node): ast.Node | null => {
+    if (node == null ) {
       return null;
     }
 
-    switch(nodeAtPos.nodeType) {
+    switch(node.nodeType) {
       case "IdentifierNode": {
-        return this.resolveIdentifier(<ast.Identifier>nodeAtPos);
+        return this.resolveIdentifier(<ast.Identifier>node);
       }
       // TODO: This case should be null.
-      default: { return nodeAtPos; }
+      default: { return node; }
     }
   }
 
@@ -70,9 +80,16 @@ export class Analyzer {
       case "ObjectNode": {
         const objectNode = <ast.ObjectNode>resolvedVar;
         for (let field of objectNode.fields) {
+          // We're looking for either a field with the id
           if (field.id != null && field.id.name == index.id.name) {
-            return field;
+            return field.expr2;
+          } else if (field.expr1 == null) {
+            // Object field must be identified by an `Identifier` or a
+            // string. If those aren't present, skip.
+            continue;
           }
+
+          throw new Error(`Object field is identified by string, but we don't support that yet`);
         }
 
         return null;
@@ -103,7 +120,7 @@ export class Analyzer {
         let fileToImport = importNode.file;
         if (!path.isAbsolute(fileToImport)) {
           const absDir = path.dirname(
-          path.resolve(importNode.locationRange.fileName));
+            path.resolve(importNode.locationRange.fileName));
           fileToImport = path.join(absDir, importNode.file);
         }
 

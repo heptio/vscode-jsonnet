@@ -74,7 +74,6 @@ describe("Searching an AST by position", () => {
       rootNode, makeLocation(3, 15));
     assert.equal(target2Id.nodeType, "LiteralNumberNode");
     assert.equal(target2Id.originalString, "2");
-    assert.equal(target2Id.value, 2);
     assert.isNotNull(target2Id.parent);
     assertLocationRange(target2Id.locationRange, 3, 14, 3, 15);
 
@@ -106,7 +105,6 @@ describe("Searching an AST by position", () => {
         rootNode, makeLocation(4, 15));
       assert.equal(target3Id.nodeType, "LiteralNumberNode");
       assert.equal(target3Id.originalString, "3");
-      assert.equal(target3Id.value, 3);
       assert.isNotNull(target3Id.parent);
       assertLocationRange(target3Id.locationRange, 4, 15, 4, 16);
 
@@ -115,5 +113,37 @@ describe("Searching an AST by position", () => {
       assert.equal(target3Parent.kind, "ObjectLocal");
       assertLocationRange(target3Parent.locationRange, 4, 3, 4, 16);
     }
+  });
+});
+
+describe("Imported symbol resolution", () => {
+  const analyzer = new analyze.Analyzer();
+  analyzer.command = jsonnetServer;
+
+  const rootNode = analyzer.parseJsonnetFile(
+    `${dataDir}/simple-import.jsonnet`);
+
+  it("Can dereference the object that is imported", () => {
+    const importedSymbol =
+      <ast.ObjectNode>analyzer.resolveSymbolAtPositionFromAst(
+        rootNode, makeLocation(4, 8));
+    assert.equal(importedSymbol.nodeType, "ObjectNode");
+    assert.isUndefined(importedSymbol.parent);
+    assert.equal(importedSymbol.headingComments.length, 0);
+    assertLocationRange(importedSymbol.locationRange, 1, 1, 4, 2);
+  });
+
+  it("Can dereference fields from an imported module", () => {
+    // This location points at the `foo` symbol in the expression
+    // `fooModule.foo`. This tests that we correctly resolve the
+    // `fooModule` symbol as an import, then load the relevant file,
+    // then resolve the `foo` symbol.
+
+    const valueOfFooObjectField =
+      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
+        rootNode, makeLocation(5, 19));
+    assert.equal(valueOfFooObjectField.nodeType, "LiteralNumberNode");
+    assert.equal(valueOfFooObjectField.originalString, "99");
+    assertLocationRange(valueOfFooObjectField.locationRange, 3, 8, 3, 10);
   });
 });

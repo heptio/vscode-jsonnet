@@ -80,39 +80,62 @@ export const hoverProvider = (
   const location = positionToLocation(posParams);
   const resolved = analyzer.resolveSymbolAtPosition(filePath, location);
 
-  let commentText: string | null = null;
-  if (resolved != null) {
-    switch (resolved.nodeType) {
+  const commentText: string | null = resolveComments(resolved);
+  return Promise.resolve().then(
+    () => <server.Hover> {
+      contents: <server.MarkedString[]> [
+        {language: 'jsonnet', value: line},
+        commentText
+      ]
+    });
+};
+
+// resolveComments takes a node as argument, and attempts to find the
+// comments that correspond to that node. For example, if the node
+// passed in exists inside an object field, we will explore the parent
+// nodes until we find the object field, and return the comments
+// associated with that (if any).
+const resolveComments = (node: ast.Node | null): string | null => {
+  while(true) {
+    if (node == null) { return null; }
+
+    switch (node.nodeType) {
       case "ObjectFieldNode": {
-        const field = (<ast.ObjectField>resolved);
-        if (field.id != null && field.expr2 != null) {
-          line = `${field.id.name}:\n\n${ast.renderAsJson(field.expr2)}`;
+        // Only retrieve comments for.
+        const field = <ast.ObjectField>node;
+        if (field.kind != "ObjectFieldID" && field.kind == "ObjectFieldStr") {
+          return null;
         }
-        if (field.headingComments != null) {
-          commentText = field.headingComments
+
+        // Convert to field object, pull comments out.
+        const comments = field.headingComments;
+        if (comments == null || comments.length == 0) {
+          return null;
+        }
+
+        return comments
           .reduce((acc: string[], curr) => {
             acc.push(curr.text);
             return acc;
           }, [])
           .join("\n");
-        }
-        break;
       }
-      default: {
-        // throw new Error(`Resolved symbol must be of type object field to get docs, but was:\n${ast.renderAsJson(resolved)}`);
+      case "IdentifierNode": {
+        node = node.parent;
+        continue;
       }
+      case "IndexNode": {
+        node = node.parent;
+        continue;
+      }
+      case "VarNode": {
+        node = node.parent;
+        continue;
+      }
+      default: { return null; }
     }
   }
-
-  return Promise.resolve().then(
-  () => <server.Hover> {
-    contents: <server.MarkedString[]> [
-      {language: 'jsonnet', value: line},
-      commentText
-      // `${JSON.stringify(posParams.position)}\n\n${json}`
-    ]
-  });
-};
+}
 
 const positionToLocation = (
   posParams: server.TextDocumentPositionParams
