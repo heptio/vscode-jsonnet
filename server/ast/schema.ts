@@ -106,7 +106,7 @@ export interface NodeBase extends Node {
 // ---------------------------------------------------------------------------
 
 export interface Identifier extends NodeBase {
-	name: IdentifierName
+  name: IdentifierName
 }
 
 type IdentifierName = string;
@@ -203,5 +203,13 @@ export interface Index extends NodeBase {
 
 // Var represents variables.
 export interface Var extends NodeBase {
-	id: Identifier
+  id: Identifier
+}
+
+// ---------------------------------------------------------------------------
+
+// LiteralNumber represents a JSON number
+export interface LiteralNumber extends NodeBase {
+  value:          number
+  originalString: string
 }

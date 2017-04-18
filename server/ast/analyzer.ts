@@ -120,6 +120,12 @@ export class Analyzer {
     filePath: string, pos: ast.Location,
   ): ast.Node => {
     const rootNode = this.parseJsonnetFile(filePath);
+    return this.getNodeAtPositionFromAst(rootNode, pos);
+  }
+
+  public getNodeAtPositionFromAst = (
+    rootNode: ast.Node, pos: ast.Location
+  ): ast.Node => {
     const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);
     return visitor.NodeAtPosition;

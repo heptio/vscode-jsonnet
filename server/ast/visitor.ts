@@ -27,7 +27,7 @@ export interface Visitor {
   VisitLocal(node: ast.Local): void
   // VisitLiteralBoolean(node: ast.LiteralBoolean): void
   // VisitLiteralNull(node: ast.LiteralNull): void
-  // VisitLiteralNumber(node: ast.LiteralNumber): void
+  VisitLiteralNumber(node: ast.LiteralNumber): void
   // VisitLiteralString(node: ast.LiteralString): void
   VisitObjectField(node: ast.ObjectField): void
   VisitObject(node: ast.ObjectNode): void
@@ -92,13 +92,13 @@ export abstract class VisitorBase implements Visitor {
           bind.body != null && this.Visit(bind.body, castedNode, newEnv);
         });
         castedNode.body != null && this.Visit(
-        castedNode.body, castedNode, newEnv);
+          castedNode.body, castedNode, newEnv);
         // throw new Error(`${newEnv.get("fooModule")}`);
         return;
       }
       // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
       // case "LiteralNullNode": return this.VisitLiteralNull(node);
-      // case "LiteralNumberNode": return this.VisitLiteralNumber(node);
+      case "LiteralNumberNode": { return this.VisitLiteralNumber(<ast.LiteralNumber>node); }
       // case "LiteralStringNode": return this.VisitLiteralString(node);
       case "ObjectFieldNode": {
         const castedNode = <ast.ObjectField>node;
@@ -163,7 +163,7 @@ export abstract class VisitorBase implements Visitor {
   public abstract VisitLocal = (node: ast.Local): void => {}
   // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
   // public abstract VisitLiteralNull(node: ast.LiteralNull): void
-  // public abstract VisitLiteralNumber(node: ast.LiteralNumber): void
+  public abstract VisitLiteralNumber = (node: ast.LiteralNumber): void => {}
   // public abstract VisitLiteralString(node: ast.LiteralString): void
   public abstract VisitObjectField = (node: ast.ObjectField): void => {}
   public abstract VisitObject = (node: ast.ObjectNode): void => {}
@@ -209,7 +209,7 @@ export class CursorVisitor extends VisitorBase {
   public VisitLocal = (node: ast.Local): void => { this.updateIfCursorInRange(node); }
   // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
   // public abstract VisitLiteralNull(node: ast.LiteralNull): void
-  // public abstract VisitLiteralNumber(node: ast.LiteralNumber): void
+  public VisitLiteralNumber = (node: ast.LiteralNumber): void => { this.updateIfCursorInRange(node); }
   // public abstract VisitLiteralString(node: ast.LiteralString): void
   public VisitObjectField = (node: ast.ObjectField): void => { this.updateIfCursorInRange(node); }
   public VisitObject = (node: ast.ObjectNode): void => { this.updateIfCursorInRange(node); }
