@@ -12,6 +12,8 @@
     },
     "exclude": [
         "node_modules",
+        "package.jsonnet",
+        "package.libsonnet",
         ".vscode-test"
     ]
 }

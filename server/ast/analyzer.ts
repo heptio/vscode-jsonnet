@@ -126,6 +126,9 @@ export class Analyzer {
   }
 
   public parseJsonnetFile = (filePath: string): ast.ObjectNode => {
+    if (this.command == null) {
+      throw new Error("Can't parse Jsonnet file if command is not specified");
+    }
     const result = proc.execSync(`${this.command} ast ${filePath}`);
 
     return <ast.ObjectNode>JSON.parse(result.toString());
