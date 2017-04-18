@@ -77,9 +77,9 @@ export abstract class VisitorBase implements Visitor {
         this.VisitIndex(castedNode);
         castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
         castedNode.target != null && this.Visit(
-        castedNode.target, castedNode, currEnv);
+          castedNode.target, castedNode, currEnv);
         castedNode.index != null && this.Visit(
-        castedNode.index, castedNode, currEnv);
+          castedNode.index, castedNode, currEnv);
         return;
       }
       // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
@@ -105,15 +105,15 @@ export abstract class VisitorBase implements Visitor {
         this.VisitObjectField(castedNode);
         castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
         castedNode.expr1 != null && this.Visit(
-        castedNode.expr1, castedNode, currEnv);
+          castedNode.expr1, castedNode, currEnv);
         castedNode.expr2 != null && this.Visit(
-        castedNode.expr2, castedNode, currEnv);
+          castedNode.expr2, castedNode, currEnv);
         castedNode.expr3 != null && this.Visit(
-        castedNode.expr3, castedNode, currEnv);
+          castedNode.expr3, castedNode, currEnv);
         castedNode.headingComments != null &&
-        castedNode.headingComments.forEach(comment => {
-          this.Visit(comment, castedNode, currEnv);
-        });
+          castedNode.headingComments.forEach(comment => {
+            this.Visit(comment, castedNode, currEnv);
+          });
         return;
       }
       case "ObjectNode": {
