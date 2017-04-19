@@ -1,206 +1,263 @@
 'use strict';
 import * as server from 'vscode-languageserver';
+import * as immutable from 'immutable';
 
 import * as ast from './schema';
 
-export interface Visitor<T> {
-  Visit(node: ast.Node): T
-  VisitComment(node: ast.Comment): T
-  // VisitCompSpec(node: ast.CompSpec): T
-  // VisitApply(node: ast.Apply): T
-  // VisitApplyBrace(node: ast.ApplyBrace): T
-  // VisitArray(node: ast.Array): T
-  // VisitArrayComp(node: ast.ArrayComp): T
-  // VisitAssert(node: ast.Assert): T
-  // VisitBinary(node: ast.Binary): T
-  // VisitBuiltin(node: ast.Builtin): T
-  // VisitConditional(node: ast.Conditional): T
-  // VisitDollar(node: ast.Dollar): T
-  // VisitError(node: ast.Error): T
-  // VisitFunction(node: ast.Function): T
-  VisitImport(node: ast.Import): T
-  VisitImportStr(node: ast.ImportStr): T
-  VisitIndex(node: ast.Index): T
-  // // VisitLocalBind(node: ast.LocalBind): T
-  VisitLocal(node: ast.Local): T
-  // VisitLiteralBoolean(node: ast.LiteralBoolean): T
-  // VisitLiteralNull(node: ast.LiteralNull): T
-  // VisitLiteralNumber(node: ast.LiteralNumber): T
-  // VisitLiteralString(node: ast.LiteralString): T
-  // // VisitObjectField(node: ast.ObjectField): T
-  VisitObject(node: ast.ObjectNode): T
-  // VisitDesugaredObjectField(node: ast.DesugaredObjectField): T
-  // VisitDesugaredObject(node: ast.DesugaredObject): T
-  // VisitObjectComp(node: ast.ObjectComp): T
-  // VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): T
-  // VisitSelf(node: ast.Self): T
-  // VisitSuperIndex(node: ast.SuperIndex): T
-  // VisitUnary(node: ast.Unary): T
-  VisitVar(node: ast.Var): T
+export interface Visitor {
+  Visit(node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment): void
+  VisitComment(node: ast.Comment): void
+  // VisitCompSpec(node: ast.CompSpec): void
+  // VisitApply(node: ast.Apply): void
+  // VisitApplyBrace(node: ast.ApplyBrace): void
+  // VisitArray(node: ast.Array): void
+  // VisitArrayComp(node: ast.ArrayComp): void
+  // VisitAssert(node: ast.Assert): void
+  // VisitBinary(node: ast.Binary): void
+  // VisitBuiltin(node: ast.Builtin): void
+  // VisitConditional(node: ast.Conditional): void
+  // VisitDollar(node: ast.Dollar): void
+  // VisitError(node: ast.Error): void
+  // VisitFunction(node: ast.Function): void
+  VisitIdentifier(node: ast.Identifier): void
+  VisitImport(node: ast.Import): void
+  VisitImportStr(node: ast.ImportStr): void
+  VisitIndex(node: ast.Index): void
+  // // VisitLocalBind(node: ast.LocalBind): void
+  VisitLocal(node: ast.Local): void
+  // VisitLiteralBoolean(node: ast.LiteralBoolean): void
+  // VisitLiteralNull(node: ast.LiteralNull): void
+  VisitLiteralNumber(node: ast.LiteralNumber): void
+  // VisitLiteralString(node: ast.LiteralString): void
+  VisitObjectField(node: ast.ObjectField): void
+  VisitObject(node: ast.ObjectNode): void
+  // VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
+  // VisitDesugaredObject(node: ast.DesugaredObject): void
+  // VisitObjectComp(node: ast.ObjectComp): void
+  // VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): void
+  // VisitSelf(node: ast.Self): void
+  // VisitSuperIndex(node: ast.SuperIndex): void
+  // VisitUnary(node: ast.Unary): void
+  VisitVar(node: ast.Var): void
 }
 
-export abstract class VisitorBase<T> implements Visitor<T> {
-  public Visit = (node: ast.Node): T => {
+export abstract class VisitorBase implements Visitor {
+  public Visit = (
+    node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
+  ): void => {
     if (node == null) {
-      return;
+      throw Error("Can't visit a null node");
     }
 
+    node.parent = parent;
+    node.env = currEnv;
+
     switch(node.nodeType) {
-    case "CommentNode": return this.VisitComment(<ast.Comment>node);
-    // case "CompSpecNode": return this.VisitCompSpec(node);
-    // case "ApplyNode": return this.VisitApply(node);
-    // case "ApplyBraceNode": return this.VisitApplyBrace(node);
-    // case "ArrayNode": return this.VisitArray(node);
-    // case "ArrayCompNode": return this.VisitArrayComp(node);
-    // case "AssertNode": return this.VisitAssert(node);
-    // case "BinaryNode": return this.VisitBinary(node);
-    // case "BuiltinNode": return this.VisitBuiltin(node);
-    // case "ConditionalNode": return this.VisitConditional(node);
-    // case "DollarNode": return this.VisitDollar(node);
-    // case "ErrorNode": return this.VisitError(node);
-    // case "FunctionNode": return this.VisitFunction(node);
-    case "ImportNode": return this.VisitImport(<ast.Import>node);
-    case "ImportStrNode": return this.VisitImportStr(<ast.ImportStr>node);
-    case "IndexNode": return this.VisitIndex(<ast.Index>node);
-    // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
-    case "LocalNode": return this.VisitLocal(<ast.Local>node);
-    // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
-    // case "LiteralNullNode": return this.VisitLiteralNull(node);
-    // case "LiteralNumberNode": return this.VisitLiteralNumber(node);
-    // case "LiteralStringNode": return this.VisitLiteralString(node);
-    // // case "ObjectFieldNode": return this.VisitObjectField(<ast.ObjectField>node);
-    case "ObjectNode": return this.VisitObject(<ast.ObjectNode>node);
-    // case "DesugaredObjectFieldNode": return this.VisitDesugaredObjectField(node);
-    // case "DesugaredObjectNode": return this.VisitDesugaredObject(node);
-    // case "ObjectCompNode": return this.VisitObjectComp(node);
-    // case "ObjectComprehensionSimpleNode": return this.VisitObjectComprehensionSimple(node);
-    // case "SelfNode": return this.VisitSelf(node);
-    // case "SuperIndexNode": return this.VisitSuperIndex(node);
-    // case "UnaryNode": return this.VisitUnary(node);
-    case "VarNode": return this.VisitVar(<ast.Var>node);
-    default: throw new Error(
+      case "CommentNode": {
+        this.VisitComment(<ast.Comment>node);
+        return;
+      }
+      // case "CompSpecNode": return this.VisitCompSpec(node);
+      // case "ApplyNode": return this.VisitApply(node);
+      // case "ApplyBraceNode": return this.VisitApplyBrace(node);
+      // case "ArrayNode": return this.VisitArray(node);
+      // case "ArrayCompNode": return this.VisitArrayComp(node);
+      // case "AssertNode": return this.VisitAssert(node);
+      // case "BinaryNode": return this.VisitBinary(node);
+      // case "BuiltinNode": return this.VisitBuiltin(node);
+      // case "ConditionalNode": return this.VisitConditional(node);
+      // case "DollarNode": return this.VisitDollar(node);
+      // case "ErrorNode": return this.VisitError(node);
+      // case "FunctionNode": return this.VisitFunction(node);
+      case "IdentifierNode": { this.VisitIdentifier(<ast.Identifier>node); }
+      case "ImportNode": { this.VisitImport(<ast.Import>node); }
+      case "ImportStrNode": { this.VisitImportStr(<ast.ImportStr>node); }
+      case "IndexNode": {
+        const castedNode = <ast.Index>node;
+        this.VisitIndex(castedNode);
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+        castedNode.target != null && this.Visit(
+          castedNode.target, castedNode, currEnv);
+        castedNode.index != null && this.Visit(
+          castedNode.index, castedNode, currEnv);
+        return;
+      }
+      // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
+      case "LocalNode": {
+        const castedNode = <ast.Local>node;
+        const newEnv = currEnv.merge(ast.environmentFromLocal(castedNode));
+
+        this.VisitLocal(castedNode);
+        castedNode.binds.forEach(bind => {
+          bind.body != null && this.Visit(bind.body, castedNode, newEnv);
+        });
+        castedNode.body != null && this.Visit(
+          castedNode.body, castedNode, newEnv);
+        // throw new Error(`${newEnv.get("fooModule")}`);
+        return;
+      }
+      // case "LiteralBooleanNode": return this.VisitLiteralBoolean(node);
+      // case "LiteralNullNode": return this.VisitLiteralNull(node);
+      case "LiteralNumberNode": { return this.VisitLiteralNumber(<ast.LiteralNumber>node); }
+      // case "LiteralStringNode": return this.VisitLiteralString(node);
+      case "ObjectFieldNode": {
+        const castedNode = <ast.ObjectField>node;
+        this.VisitObjectField(castedNode);
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+        castedNode.expr1 != null && this.Visit(
+          castedNode.expr1, castedNode, currEnv);
+        castedNode.expr2 != null && this.Visit(
+          castedNode.expr2, castedNode, currEnv);
+        castedNode.expr3 != null && this.Visit(
+          castedNode.expr3, castedNode, currEnv);
+        castedNode.headingComments != null &&
+          castedNode.headingComments.forEach(comment => {
+            this.Visit(comment, castedNode, currEnv);
+          });
+        return;
+      }
+      case "ObjectNode": {
+        const castedNode = <ast.ObjectNode>node;
+        this.VisitObject(castedNode);
+        castedNode.fields.forEach(field => {
+          this.Visit(field, castedNode, currEnv);
+        });
+        return;
+      }
+      // case "DesugaredObjectFieldNode": return this.VisitDesugaredObjectField(node);
+      // case "DesugaredObjectNode": return this.VisitDesugaredObject(node);
+      // case "ObjectCompNode": return this.VisitObjectComp(node);
+      // case "ObjectComprehensionSimpleNode": return this.VisitObjectComprehensionSimple(node);
+      // case "SelfNode": return this.VisitSelf(node);
+      // case "SuperIndexNode": return this.VisitSuperIndex(node);
+      // case "UnaryNode": return this.VisitUnary(node);
+      case "VarNode": {
+        const castedNode = <ast.Var>node;
+        this.VisitVar(castedNode);
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+        return
+      }
+      default: throw new Error(
       `Visitor could not traverse tree; unknown node type '${node.nodeType}'`);
     }
   }
 
-  public abstract VisitComment(node: ast.Comment): T
-  // public abstract VisitCompSpec(node: ast.CompSpec): T
-  // public abstract VisitApply(node: ast.Apply): T
-  // public abstract VisitApplyBrace(node: ast.ApplyBrace): T
-  // public abstract VisitArray(node: ast.Array): T
-  // public abstract VisitArrayComp(node: ast.ArrayComp): T
-  // public abstract VisitAssert(node: ast.Assert): T
-  // public abstract VisitBinary(node: ast.Binary): T
-  // public abstract VisitBuiltin(node: ast.Builtin): T
-  // public abstract VisitConditional(node: ast.Conditional): T
-  // public abstract VisitDollar(node: ast.Dollar): T
-  // public abstract VisitError(node: ast.Error): T
-  // public abstract VisitFunction(node: ast.Function): T
-  public abstract VisitImport(node: ast.Import): T
-  public abstract VisitImportStr(node: ast.ImportStr): T
-  public abstract VisitIndex(node: ast.Index): T
-  // // public abstract VisitLocalBind(node: ast.LocalBind): T
-  public abstract VisitLocal(node: ast.Local): T
-  // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): T
-  // public abstract VisitLiteralNull(node: ast.LiteralNull): T
-  // public abstract VisitLiteralNumber(node: ast.LiteralNumber): T
-  // public abstract VisitLiteralString(node: ast.LiteralString): T
-  // // public abstract VisitObjectField(node: ast.ObjectField): T
-  public abstract VisitObject(node: ast.ObjectNode): T
-  // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): T
-  // public abstract VisitDesugaredObject(node: ast.DesugaredObject): T
-  // public abstract VisitObjectComp(node: ast.ObjectComp): T
-  // public abstract VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): T
-  // public abstract VisitSelf(node: ast.Self): T
-  // public abstract VisitSuperIndex(node: ast.SuperIndex): T
-  // public abstract VisitUnary(node: ast.Unary): T
-  public abstract VisitVar(node: ast.Var): T
+  public abstract VisitComment = (node: ast.Comment): void => {}
+  // public abstract VisitCompSpec(node: ast.CompSpec): void
+  // public abstract VisitApply(node: ast.Apply): void
+  // public abstract VisitApplyBrace(node: ast.ApplyBrace): void
+  // public abstract VisitArray(node: ast.Array): void
+  // public abstract VisitArrayComp(node: ast.ArrayComp): void
+  // public abstract VisitAssert(node: ast.Assert): void
+  // public abstract VisitBinary(node: ast.Binary): void
+  // public abstract VisitBuiltin(node: ast.Builtin): void
+  // public abstract VisitConditional(node: ast.Conditional): void
+  // public abstract VisitDollar(node: ast.Dollar): void
+  // public abstract VisitError(node: ast.Error): void
+  // public abstract VisitFunction(node: ast.Function): void
+  public abstract VisitIdentifier = (node: ast.Identifier): void => {}
+  public abstract VisitImport = (node: ast.Import): void => {}
+  public abstract VisitImportStr = (node: ast.ImportStr): void => {}
+  public abstract VisitIndex = (node: ast.Index): void => {}
+  // // public abstract VisitLocalBind(node: ast.LocalBind): void
+  public abstract VisitLocal = (node: ast.Local): void => {}
+  // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
+  // public abstract VisitLiteralNull(node: ast.LiteralNull): void
+  public abstract VisitLiteralNumber = (node: ast.LiteralNumber): void => {}
+  // public abstract VisitLiteralString(node: ast.LiteralString): void
+  public abstract VisitObjectField = (node: ast.ObjectField): void => {}
+  public abstract VisitObject = (node: ast.ObjectNode): void => {}
+  // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
+  // public abstract VisitDesugaredObject(node: ast.DesugaredObject): void
+  // public abstract VisitObjectComp(node: ast.ObjectComp): void
+  // public abstract VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): void
+  // public abstract VisitSelf(node: ast.Self): void
+  // public abstract VisitSuperIndex(node: ast.SuperIndex): void
+  // public abstract VisitUnary(node: ast.Unary): void
+  public abstract VisitVar = (node: ast.Var): void => {}
+}
+
+export class DeserializingVisitor extends VisitorBase {
+  public VisitComment = (node: ast.Comment): void => {}
+  // public abstract VisitCompSpec(node: ast.CompSpec): void
+  // public abstract VisitApply(node: ast.Apply): void
+  // public abstract VisitApplyBrace(node: ast.ApplyBrace): void
+  // public abstract VisitArray(node: ast.Array): void
+  // public abstract VisitArrayComp(node: ast.ArrayComp): void
+  // public abstract VisitAssert(node: ast.Assert): void
+  // public abstract VisitBinary(node: ast.Binary): void
+  // public abstract VisitBuiltin(node: ast.Builtin): void
+  // public abstract VisitConditional(node: ast.Conditional): void
+  // public abstract VisitDollar(node: ast.Dollar): void
+  // public abstract VisitError(node: ast.Error): void
+  // public abstract VisitFunction(node: ast.Function): void
+  public VisitIdentifier = (node: ast.Identifier): void => {}
+  public VisitImport = (node: ast.Import): void => {}
+  public VisitImportStr = (node: ast.ImportStr): void => {}
+  public VisitIndex = (node: ast.Index): void => {}
+  // // public abstract VisitLocalBind(node: ast.LocalBind): void
+  public VisitLocal = (node: ast.Local): void => {}
+  // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
+  // public abstract VisitLiteralNull(node: ast.LiteralNull): void
+  public VisitLiteralNumber = (node: ast.LiteralNumber): void => {}
+  // public abstract VisitLiteralString(node: ast.LiteralString): void
+  public VisitObjectField = (node: ast.ObjectField): void => {}
+  public VisitObject = (node: ast.ObjectNode): void => {}
+  // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
+  // public abstract VisitDesugaredObject(node: ast.DesugaredObject): void
+  // public abstract VisitObjectComp(node: ast.ObjectComp): void
+  // public abstract VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): void
+  // public abstract VisitSelf(node: ast.Self): void
+  // public abstract VisitSuperIndex(node: ast.SuperIndex): void
+  // public abstract VisitUnary(node: ast.Unary): void
+  public VisitVar = (node: ast.Var): void => {}
+
 }
 
 // Finds the tightest-binding node that wraps the location denoted by
 // `position`.
-export class CursorVisitor extends VisitorBase<ast.Node> {
-  constructor(
-    private document: server.TextDocument,
-    private position: server.Position
-  ) {
-    super();
-  }
+export class CursorVisitor extends VisitorBase {
+  constructor(private position: ast.Location) { super(); }
+
+  get NodeAtPosition(): ast.NodeBase { return this.tightestWrappingNode; }
 
   private tightestWrappingNode: ast.NodeBase;
 
-  public VisitComment(node: ast.Comment): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
-  // public abstract VisitCompSpec(node: ast.CompSpec): T
-  // public abstract VisitApply(node: ast.Apply): T
-  // public abstract VisitApplyBrace(node: ast.ApplyBrace): T
-  // public abstract VisitArray(node: ast.Array): T
-  // public abstract VisitArrayComp(node: ast.ArrayComp): T
-  // public abstract VisitAssert(node: ast.Assert): T
-  // public abstract VisitBinary(node: ast.Binary): T
-  // public abstract VisitBuiltin(node: ast.Builtin): T
-  // public abstract VisitConditional(node: ast.Conditional): T
-  // public abstract VisitDollar(node: ast.Dollar): T
-  // public abstract VisitError(node: ast.Error): T
-  // public abstract VisitFunction(node: ast.Function): T
-  public VisitImport(node: ast.Import): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
+  public VisitComment = (node: ast.Comment): void => { this.updateIfCursorInRange(node); }
+  // public abstract VisitCompSpec(node: ast.CompSpec): void
+  // public abstract VisitApply(node: ast.Apply): void
+  // public abstract VisitApplyBrace(node: ast.ApplyBrace): void
+  // public abstract VisitArray(node: ast.Array): void
+  // public abstract VisitArrayComp(node: ast.ArrayComp): void
+  // public abstract VisitAssert(node: ast.Assert): void
+  // public abstract VisitBinary(node: ast.Binary): void
+  // public abstract VisitBuiltin(node: ast.Builtin): void
+  // public abstract VisitConditional(node: ast.Conditional): void
+  // public abstract VisitDollar(node: ast.Dollar): void
+  // public abstract VisitError(node: ast.Error): void
+  // public abstract VisitFunction(node: ast.Function): void
+  public VisitIdentifier = (node: ast.Identifier): void => { this.updateIfCursorInRange(node); }
+  public VisitImport = (node: ast.Import): void => { this.updateIfCursorInRange(node); }
+  public VisitImportStr = (node: ast.ImportStr): void => { this.updateIfCursorInRange(node); }
+  public VisitIndex = (node: ast.Index): void => { this.updateIfCursorInRange(node); }
+  // // public abstract VisitLocalBind(node: ast.LocalBind): void
+  public VisitLocal = (node: ast.Local): void => { this.updateIfCursorInRange(node); }
+  // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
+  // public abstract VisitLiteralNull(node: ast.LiteralNull): void
+  public VisitLiteralNumber = (node: ast.LiteralNumber): void => { this.updateIfCursorInRange(node); }
+  // public abstract VisitLiteralString(node: ast.LiteralString): void
+  public VisitObjectField = (node: ast.ObjectField): void => { this.updateIfCursorInRange(node); }
+  public VisitObject = (node: ast.ObjectNode): void => { this.updateIfCursorInRange(node); }
+  // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
+  // public abstract VisitDesugaredObject(node: ast.DesugaredObject): void
+  // public abstract VisitObjectComp(node: ast.ObjectComp): void
+  // public abstract VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): void
+  // public abstract VisitSelf(node: ast.Self): void
+  // public abstract VisitSuperIndex(node: ast.SuperIndex): void
+  // public abstract VisitUnary(node: ast.Unary): void
+  public VisitVar = (node: ast.Var): void => { this.updateIfCursorInRange(node); }
 
-  public VisitImportStr(node: ast.ImportStr): ast.Node {
-    this.updateIfCursorInRange(node);
-    return this.tightestWrappingNode;
-  }
-
-  public VisitIndex(node: ast.Index): ast.Node {
-    this.updateIfCursorInRange(node);
-    this.Visit(node.target);
-    this.Visit(node.index);
-    return this.tightestWrappingNode;
-  }
-
-  // // public abstract VisitLocalBind(node: ast.LocalBind): T
-  public VisitLocal(node: ast.Local): ast.Node {
-    this.updateIfCursorInRange(node);
-
-    node.binds.forEach(bind => {
-      this.Visit(bind.body);
-    });
-
-    this.Visit(node.body);
-
-    return this.tightestWrappingNode;
-  }
-  // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): T
-  // public abstract VisitLiteralNull(node: ast.LiteralNull): T
-  // public abstract VisitLiteralNumber(node: ast.LiteralNumber): T
-  // public abstract VisitLiteralString(node: ast.LiteralString): T
-  // // public abstract VisitObjectField(node: ast.ObjectField): T
-  public VisitObject(node: ast.ObjectNode): ast.Node {
-    this.updateIfCursorInRange(node);
-    node.fields.forEach(field => {
-      this.Visit(field.expr1);
-      this.Visit(field.expr2);
-      this.Visit(field.expr3);
-    });
-
-    return this.tightestWrappingNode;
-  }
-  // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): T
-  // public abstract VisitDesugaredObject(node: ast.DesugaredObject): T
-  // public abstract VisitObjectComp(node: ast.ObjectComp): T
-  // public abstract VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): T
-  // public abstract VisitSelf(node: ast.Self): T
-  // public abstract VisitSuperIndex(node: ast.SuperIndex): T
-  // public abstract VisitUnary(node: ast.Unary): T
-  public VisitVar(node: ast.Var): ast.Node {
-    return this.tightestWrappingNode;
-  }
-
-  private updateIfCursorInRange(node: ast.NodeBase): void {
+  private updateIfCursorInRange = (node: ast.NodeBase): ast.Node => {
     const locationRange = node.locationRange;
     const range = {
       beginLine: locationRange.begin.line,
@@ -208,31 +265,31 @@ export class CursorVisitor extends VisitorBase<ast.Node> {
       beginCol: locationRange.begin.column,
       endCol: locationRange.end.column,
     };
-    const cursor = {
-      line: this.position.line,
-      col: this.position.character,
-    };
 
-    if (cursorInLocationRange(cursor, range) &&
+    if (cursorInLocationRange(this.position, range) &&
       nodeRangeIsTighter(node, this.tightestWrappingNode)
     ) {
       this.tightestWrappingNode = node;
     }
+
+    return this.tightestWrappingNode;
   }
 }
 
-function nodeRangeIsTighter(thisNode: ast.NodeBase, thatNode: ast.NodeBase): boolean {
+const nodeRangeIsTighter = (
+  thisNode: ast.NodeBase, thatNode: ast.NodeBase
+): boolean => {
   if (thatNode == null) {
     return true;
   }
 
   const thisNodeBegin = {
     line: thisNode.locationRange.begin.line,
-    col: thisNode.locationRange.begin.column
+    column: thisNode.locationRange.begin.column
   };
   const thisNodeEnd = {
     line: thisNode.locationRange.end.line,
-    col: thisNode.locationRange.end.column
+    column: thisNode.locationRange.end.column
   };
   const thatNodeRange = {
     beginLine: thatNode.locationRange.begin.line,
@@ -241,26 +298,26 @@ function nodeRangeIsTighter(thisNode: ast.NodeBase, thatNode: ast.NodeBase): boo
     endCol: thatNode.locationRange.end.column,
   };
   return cursorInLocationRange(thisNodeBegin, thatNodeRange) &&
-    cursorInLocationRange(thisNodeEnd, thatNodeRange);
+  cursorInLocationRange(thisNodeEnd, thatNodeRange);
 }
 
-function cursorInLocationRange(
-  cursor: {line: number, col: number},
+const cursorInLocationRange = (
+  cursor: ast.Location,
   range: {beginLine: number, endLine: number, beginCol: number, endCol: number},
-): boolean {
+): boolean => {
 
   if (range.beginLine == cursor.line && cursor.line == range.endLine &&
-    range.beginCol <= cursor.col && cursor.col <= range.endCol
+  range.beginCol <= cursor.column && cursor.column <= range.endCol
   ) {
     return true;
   } else if (range.beginLine < cursor.line && cursor.line == range.endLine &&
-    cursor.col <= range.endCol
+  cursor.column <= range.endCol
   ) {
     return true;
   } else if (range.beginLine == cursor.line && cursor.line < range.endLine &&
-    cursor.col >= range.beginCol
+  cursor.column >= range.beginCol
   ) {
-      return true;
+    return true;
   } else if (range.beginLine < cursor.line && cursor.line < range.endLine) {
     return true;
   } else {
