@@ -41,11 +41,11 @@ export const completionProvider = (
   position: server.TextDocumentPositionParams
 ): Promise<server.CompletionItem[]> => {
   const completion =
-  (label, kind, data): server.CompletionItem => <server.CompletionItem>{
-    label: label,
-    kind: kind,
-    data: data,
-  };
+    (label, kind, data): server.CompletionItem => <server.CompletionItem>{
+      label: label,
+      kind: kind,
+      data: data,
+    };
 
   // The pass parameter contains the position of the text
   // document in which code complete got requested. For the

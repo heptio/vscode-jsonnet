@@ -167,7 +167,7 @@ export class Analyzer {
       }
       default: {
         throw new Error(
-        `Bind currently requires an import node as body ${bind}`);
+          `Bind currently requires an import node as body ${bind}`);
       }
     }
   }

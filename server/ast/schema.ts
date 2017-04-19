@@ -62,12 +62,12 @@ export const emptyEnvironment = immutable.Map<string, LocalBind>();
 export const environmentFromLocal = (local: Local): Environment => {
   const defaultLocal: {[key: string]: LocalBind} = {};
   const binds = local.binds
-  .reduce(
-  (acc, bind) => {
-    acc[bind.variable.name] = bind;
-    return acc;
-  },
-  defaultLocal);
+    .reduce(
+      (acc, bind) => {
+        acc[bind.variable.name] = bind;
+        return acc;
+      },
+      defaultLocal);
   return immutable.Map(binds);
 }
 
