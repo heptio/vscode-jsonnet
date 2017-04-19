@@ -177,6 +177,43 @@ export abstract class VisitorBase implements Visitor {
   public abstract VisitVar = (node: ast.Var): void => {}
 }
 
+export class DeserializingVisitor extends VisitorBase {
+  public VisitComment = (node: ast.Comment): void => {}
+  // public abstract VisitCompSpec(node: ast.CompSpec): void
+  // public abstract VisitApply(node: ast.Apply): void
+  // public abstract VisitApplyBrace(node: ast.ApplyBrace): void
+  // public abstract VisitArray(node: ast.Array): void
+  // public abstract VisitArrayComp(node: ast.ArrayComp): void
+  // public abstract VisitAssert(node: ast.Assert): void
+  // public abstract VisitBinary(node: ast.Binary): void
+  // public abstract VisitBuiltin(node: ast.Builtin): void
+  // public abstract VisitConditional(node: ast.Conditional): void
+  // public abstract VisitDollar(node: ast.Dollar): void
+  // public abstract VisitError(node: ast.Error): void
+  // public abstract VisitFunction(node: ast.Function): void
+  public VisitIdentifier = (node: ast.Identifier): void => {}
+  public VisitImport = (node: ast.Import): void => {}
+  public VisitImportStr = (node: ast.ImportStr): void => {}
+  public VisitIndex = (node: ast.Index): void => {}
+  // // public abstract VisitLocalBind(node: ast.LocalBind): void
+  public VisitLocal = (node: ast.Local): void => {}
+  // public abstract VisitLiteralBoolean(node: ast.LiteralBoolean): void
+  // public abstract VisitLiteralNull(node: ast.LiteralNull): void
+  public VisitLiteralNumber = (node: ast.LiteralNumber): void => {}
+  // public abstract VisitLiteralString(node: ast.LiteralString): void
+  public VisitObjectField = (node: ast.ObjectField): void => {}
+  public VisitObject = (node: ast.ObjectNode): void => {}
+  // public abstract VisitDesugaredObjectField(node: ast.DesugaredObjectField): void
+  // public abstract VisitDesugaredObject(node: ast.DesugaredObject): void
+  // public abstract VisitObjectComp(node: ast.ObjectComp): void
+  // public abstract VisitObjectComprehensionSimple(node: ast.ObjectComprehensionSimple): void
+  // public abstract VisitSelf(node: ast.Self): void
+  // public abstract VisitSuperIndex(node: ast.SuperIndex): void
+  // public abstract VisitUnary(node: ast.Unary): void
+  public VisitVar = (node: ast.Var): void => {}
+
+}
+
 // Finds the tightest-binding node that wraps the location denoted by
 // `position`.
 export class CursorVisitor extends VisitorBase {
@@ -186,9 +223,7 @@ export class CursorVisitor extends VisitorBase {
 
   private tightestWrappingNode: ast.NodeBase;
 
-  public VisitComment = (node: ast.Comment): void => {
-    this.updateIfCursorInRange(node);
-  }
+  public VisitComment = (node: ast.Comment): void => { this.updateIfCursorInRange(node); }
   // public abstract VisitCompSpec(node: ast.CompSpec): void
   // public abstract VisitApply(node: ast.Apply): void
   // public abstract VisitApplyBrace(node: ast.ApplyBrace): void

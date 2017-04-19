@@ -52,19 +52,10 @@ export class Analyzer {
             }, [])
             .join("\n");
         }
-        case "IdentifierNode": {
+        default: {
           node = node.parent;
           continue;
         }
-        case "IndexNode": {
-          node = node.parent;
-          continue;
-        }
-        case "VarNode": {
-          node = node.parent;
-          continue;
-        }
-        default: { return null; }
       }
     }
   }
@@ -196,12 +187,14 @@ export class Analyzer {
     return visitor.NodeAtPosition;
   }
 
-  public parseJsonnetFile = (filePath: string): ast.ObjectNode => {
+  public parseJsonnetFile = (filePath: string): ast.Node => {
     if (this.command == null) {
       throw new Error("Can't parse Jsonnet file if command is not specified");
     }
     const result = proc.execSync(`${this.command} ast ${filePath}`);
-
-    return <ast.ObjectNode>JSON.parse(result.toString());
+    const rootNode = <ast.Node>JSON.parse(result.toString());
+    new astVisitor.DeserializingVisitor()
+      .Visit(rootNode, null, ast.emptyEnvironment);
+    return rootNode;
   }
 }
