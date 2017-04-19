@@ -80,7 +80,7 @@ export const hoverProvider = (
   const location = positionToLocation(posParams);
   const resolved = analyzer.resolveSymbolAtPosition(filePath, location);
 
-  const commentText: string | null = resolveComments(resolved);
+  const commentText: string | null = analyzer.resolveComments(resolved);
   return Promise.resolve().then(
     () => <server.Hover> {
       contents: <server.MarkedString[]> [
@@ -89,53 +89,6 @@ export const hoverProvider = (
       ]
     });
 };
-
-// resolveComments takes a node as argument, and attempts to find the
-// comments that correspond to that node. For example, if the node
-// passed in exists inside an object field, we will explore the parent
-// nodes until we find the object field, and return the comments
-// associated with that (if any).
-const resolveComments = (node: ast.Node | null): string | null => {
-  while(true) {
-    if (node == null) { return null; }
-
-    switch (node.nodeType) {
-      case "ObjectFieldNode": {
-        // Only retrieve comments for.
-        const field = <ast.ObjectField>node;
-        if (field.kind != "ObjectFieldID" && field.kind == "ObjectFieldStr") {
-          return null;
-        }
-
-        // Convert to field object, pull comments out.
-        const comments = field.headingComments;
-        if (comments == null || comments.length == 0) {
-          return null;
-        }
-
-        return comments
-          .reduce((acc: string[], curr) => {
-            acc.push(curr.text);
-            return acc;
-          }, [])
-          .join("\n");
-      }
-      case "IdentifierNode": {
-        node = node.parent;
-        continue;
-      }
-      case "IndexNode": {
-        node = node.parent;
-        continue;
-      }
-      case "VarNode": {
-        node = node.parent;
-        continue;
-      }
-      default: { return null; }
-    }
-  }
-}
 
 const positionToLocation = (
   posParams: server.TextDocumentPositionParams
