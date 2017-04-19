@@ -128,9 +128,9 @@ describe("Imported symbol resolution", () => {
       <ast.ObjectNode>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(4, 8));
     assert.equal(importedSymbol.nodeType, "ObjectNode");
-    assert.isUndefined(importedSymbol.parent);
+    assert.isNull(importedSymbol.parent);
     assert.equal(importedSymbol.headingComments.length, 0);
-    assertLocationRange(importedSymbol.locationRange, 1, 1, 4, 2);
+    assertLocationRange(importedSymbol.locationRange, 1, 1, 7, 2);
   });
 
   it("Can dereference fields from an imported module", () => {
@@ -138,12 +138,39 @@ describe("Imported symbol resolution", () => {
     // `fooModule.foo`. This tests that we correctly resolve the
     // `fooModule` symbol as an import, then load the relevant file,
     // then resolve the `foo` symbol.
-
-    const valueOfFooObjectField =
+    const valueofObjectField =
       <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(5, 19));
-    assert.equal(valueOfFooObjectField.nodeType, "LiteralNumberNode");
-    assert.equal(valueOfFooObjectField.originalString, "99");
-    assertLocationRange(valueOfFooObjectField.locationRange, 3, 8, 3, 10);
+    assert.equal(valueofObjectField.nodeType, "LiteralNumberNode");
+    assert.equal(valueofObjectField.originalString, "99");
+    assertLocationRange(valueofObjectField.locationRange, 3, 8, 3, 10);
+  });
+
+  it("Can find comments for a field in an imported module", () => {
+    // This location points at the `foo` symbol in the expression
+    // `fooModule.foo`, where `fooModule` is an imported module. This
+    // tests that we can correctly obtain the documentation for this
+    // symbol.
+    const valueOfObjectField =
+      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
+        rootNode, makeLocation(5, 19));
+    assert.isNotNull(valueOfObjectField);
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(
+      comments, " `foo` is a property that has very useful data.");
+  });
+
+  it("Cannot find comments for `local` field in an imported module", () => {
+    // This location points at the `bar` symbol in the expression
+    // `fooModule.bar`, where `fooModule` is an imported module. This
+    // tests that we do not report documentation for this symbol, as
+    // it is a `local` field.
+    const valueOfObjectField =
+      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
+        rootNode, makeLocation(6, 10));
+    assert.isNotNull(valueOfObjectField);
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNull(comments);
   });
 });
