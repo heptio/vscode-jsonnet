@@ -19,7 +19,10 @@ documents.listen(connection);
 
 connection.onInitialize((params) => jsonnet.initializer(documents, params));
 connection.onDidChangeConfiguration(jsonnet.configUpdateProvider);
-connection.onCompletion(jsonnet.completionProvider);
+connection.onCompletion(position => {
+  const documentText = documents.get(position.textDocument.uri).getText();
+  return jsonnet.completionProvider(documentText, position);
+});
 connection.onHover((position) => jsonnet.hoverProvider(documents, position));
 
 // Listen on the connection

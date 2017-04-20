@@ -62,10 +62,23 @@ type TokenKind =
 
 // ---------------------------------------------------------------------------
 
+type FodderKind =
+  "FodderWhitespace" |
+  "FodderCommentC" |
+  "FodderCommentCpp" |
+  "FodderCommentHash";
+
+export interface FodderElement {
+  kind: FodderKind
+  data: string
+}
+
+// ---------------------------------------------------------------------------
+
 export interface Token {
-  kind:   TokenKind  // The type of the token
-  // fodder: Fodder     // Any fodder the occurs before this token
-  data:   string     // Content of the token if it is not a keyword
+  kind:   TokenKind              // The type of the token
+  fodder: FodderElement[] | null // Any fodder the occurs before this token
+  data:   string                 // Content of the token if it is not a keyword
 
   // Extra info for when kind == tokenStringBlock
   // StringBlockIndent     string // The sequence of whitespace that indented the block.
