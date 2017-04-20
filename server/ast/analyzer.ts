@@ -2,6 +2,8 @@
 import * as proc from 'child_process';
 import * as path from 'path';
 
+import * as immutable from 'immutable';
+
 import * as ast from './node';
 import * as token from './token';
 import * as astVisitor from './visitor';
@@ -186,6 +188,41 @@ export class Analyzer {
     const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);
     return visitor.NodeAtPosition;
+  }
+
+  public lexJsonnetFile = (
+    filePath: string, range?: token.Location
+  ): immutable.List<token.Token> => {
+    if (this.command == null) {
+      throw new Error("Can't lex Jsonnet file if command is not specified");
+    }
+
+    const result = range
+      ? proc.execSync(
+        `${this.command} lex -to ${range.line},${range.column} ${filePath}`)
+      : proc.execSync(`${this.command} lex ${filePath}`);
+    return immutable.List<token.Token>(
+      <token.Token[]>JSON.parse(result.toString()));
+  }
+
+  public lexJsonnetText = (
+    documentText: string, range?: token.Location
+  ): immutable.List<token.Token> => {
+    if (this.command == null) {
+      throw new Error("Can't lex Jsonnet text if command is not specified");
+    }
+
+    // Pass document text into jsonnet language server from stdin.
+    const lexInputOpts = {
+      input: documentText
+    };
+    const result = range
+      ? proc.execSync(
+          `${this.command} lex -to ${range.line},${range.column} -stdin`,
+          lexInputOpts)
+      : proc.execSync(`${this.command} lex -stdin`, lexInputOpts);
+    return immutable.List<token.Token>(
+      <token.Token[]>JSON.parse(result.toString()));
   }
 
   public parseJsonnetFile = (filePath: string): ast.Node => {
