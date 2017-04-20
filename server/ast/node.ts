@@ -1,6 +1,8 @@
 'use strict';
 import * as immutable from 'immutable';
 
+import * as token from './token';
+
 // TODO: Consider grouping these by `node.*`, `object.*`, and so on.
 
 //
@@ -99,7 +101,7 @@ export interface NodeBase extends Node {
   env: Environment | null; // Filled in by the visitor.
 
   nodeType: NodeTypes
-  locationRange: LocationRange
+  locationRange: token.LocationRange
   freeVariables: IdentifierName[]
 };
 
@@ -110,19 +112,6 @@ export interface Identifier extends NodeBase {
 }
 
 type IdentifierName = string;
-
-// ---------------------------------------------------------------------------
-
-export interface Location {
-  line: number
-  column: number
-};
-
-export interface LocationRange {
-  fileName: string
-  begin: Location
-  end: Location
-};
 
 // ---------------------------------------------------------------------------
 

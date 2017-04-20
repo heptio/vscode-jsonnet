@@ -2,21 +2,22 @@
 import * as proc from 'child_process';
 import * as path from 'path';
 
-import * as ast from './schema';
+import * as ast from './node';
+import * as token from './token';
 import * as astVisitor from './visitor';
 
 export class Analyzer {
   public command: string | null;
 
   public resolveSymbolAtPosition = (
-    filePath: string, pos: ast.Location,
+    filePath: string, pos: token.Location,
   ): ast.Node | null => {
     const nodeAtPos = this.getNodeAtPosition(filePath, pos);
     return this.resolveSymbol(nodeAtPos);
   }
 
   public resolveSymbolAtPositionFromAst = (
-    rootNode: ast.Node, pos: ast.Location,
+    rootNode: ast.Node, pos: token.Location,
   ): ast.Node | null => {
     const nodeAtPos = this.getNodeAtPositionFromAst(rootNode, pos);
     return this.resolveSymbol(nodeAtPos);
@@ -173,14 +174,14 @@ export class Analyzer {
   }
 
   public getNodeAtPosition = (
-    filePath: string, pos: ast.Location,
+    filePath: string, pos: token.Location,
   ): ast.Node => {
     const rootNode = this.parseJsonnetFile(filePath);
     return this.getNodeAtPositionFromAst(rootNode, pos);
   }
 
   public getNodeAtPositionFromAst = (
-    rootNode: ast.Node, pos: ast.Location
+    rootNode: ast.Node, pos: token.Location
   ): ast.Node => {
     const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);

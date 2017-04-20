@@ -4,7 +4,8 @@ import * as server from 'vscode-languageserver';
 import * as url from 'url';
 
 import * as analyze from './ast/analyzer';
-import * as ast from './ast/schema';
+import * as token from './ast/token';
+import * as ast from './ast/node';
 
 const analyzer = new analyze.Analyzer();
 
@@ -92,7 +93,7 @@ export const hoverProvider = (
 
 const positionToLocation = (
   posParams: server.TextDocumentPositionParams
-): ast.Location => {
+): token.Location => {
   return {
     line: posParams.position.line + 1,
     column: posParams.position.character + 1,

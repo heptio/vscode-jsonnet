@@ -4,18 +4,20 @@ import * as mocha from 'mocha';
 import * as os from 'os';
 
 import * as analyze from '../../server/ast/analyzer';
-import * as ast from '../../server/ast/schema';
+import * as token from '../../server/ast/token';
+import * as ast from '../../server/ast/node';
 
 const dataDir = `${__dirname}/../../../test/data`;
-const jsonnetServer = "/Users/alex/src/go/src/github.com/google/go-jsonnet/main";
+const jsonnetServer =
+  "/Users/alex/src/go/src/github.com/google/go-jsonnet/jsonnet";
 
-const makeLocation = (line: number, column: number): ast.Location => {
+const makeLocation = (line: number, column: number): token.Location => {
   return { line: line, column: column };
 }
 
 const assertLocationRange = (
-  lr: ast.LocationRange, startLine: number, startCol: number, endLine: number,
-  endCol: number
+  lr: token.LocationRange, startLine: number, startCol: number,
+  endLine: number, endCol: number
 ): void => {
   assert.equal(lr.begin.line, startLine);
   assert.equal(lr.begin.column, startCol);

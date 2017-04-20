@@ -2,7 +2,8 @@
 import * as server from 'vscode-languageserver';
 import * as immutable from 'immutable';
 
-import * as ast from './schema';
+import * as token from './token';
+import * as ast from './node';
 
 export interface Visitor {
   Visit(node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment): void
@@ -217,7 +218,7 @@ export class DeserializingVisitor extends VisitorBase {
 // Finds the tightest-binding node that wraps the location denoted by
 // `position`.
 export class CursorVisitor extends VisitorBase {
-  constructor(private position: ast.Location) { super(); }
+  constructor(private position: token.Location) { super(); }
 
   get NodeAtPosition(): ast.NodeBase { return this.tightestWrappingNode; }
 
@@ -302,7 +303,7 @@ const nodeRangeIsTighter = (
 }
 
 const cursorInLocationRange = (
-  cursor: ast.Location,
+  cursor: token.Location,
   range: {beginLine: number, endLine: number, beginCol: number, endCol: number},
 ): boolean => {
 
