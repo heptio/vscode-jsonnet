@@ -191,7 +191,23 @@ export class Analyzer {
     if (this.command == null) {
       throw new Error("Can't parse Jsonnet file if command is not specified");
     }
-    const result = proc.execSync(`${this.command} ast ${filePath}`);
+    const result = proc.execSync(`${this.command} parse ${filePath}`);
+    const rootNode = <ast.Node>JSON.parse(result.toString());
+    new astVisitor.DeserializingVisitor()
+      .Visit(rootNode, null, ast.emptyEnvironment);
+    return rootNode;
+  }
+
+  public parseJsonnetText = (documentText: string): ast.Node => {
+    if (this.command == null) {
+      throw new Error("Can't parse Jsonnet text if command is not specified");
+    }
+
+    // Pass document text into jsonnet language server from stdin.
+    const result = proc.execSync(`${this.command} parse -stdin`, {
+      input: documentText
+    });
+
     const rootNode = <ast.Node>JSON.parse(result.toString());
     new astVisitor.DeserializingVisitor()
       .Visit(rootNode, null, ast.emptyEnvironment);
