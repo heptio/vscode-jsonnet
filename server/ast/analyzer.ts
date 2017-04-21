@@ -8,8 +8,70 @@ import * as ast from './node';
 import * as token from './token';
 import * as astVisitor from './visitor';
 
-export class Analyzer {
+export interface CachedDocument {
+  text: string | null
+  parse: ast.Node | null
+  version: number
+};
+
+export interface WorkspaceEventListener {
+  onDocumentOpen: (uri: string, text: string, version: number) => void
+  onDocumentSave: (uri: string, text: string, version: number) => void
+  onDocumentClose: (uri: string) => void
+};
+
+export interface AnalysisEventListener {
+  // OnHover, OnComplete, etc.
+}
+
+export interface Compiler {
+  // Lex, Parse, etc.
+  Parse(fileId: string, )
+}
+
+// TODO: Rename this to `EventedAnalyzer`.
+export class Analyzer implements WorkspaceEventListener {
   public command: string | null;
+  private docCache = immutable.Map<string, CachedDocument>();
+
+  //
+  // WorkspaceEventListener implementation.
+  //
+
+  private cacheDocument = (
+    uri: string, text: string, version: number
+  ): void => {
+    let parse: ast.Node | null;
+    try {
+      parse = this.parseJsonnetText(text);
+    } catch (err) {
+      parse = null;
+    }
+
+    const cache = <CachedDocument>{
+      text: text,
+      parse: parse,
+      version: version,
+    };
+
+    this.docCache = this.docCache.set(uri, cache);
+  }
+
+  public onDocumentOpen = this.cacheDocument;
+  public onDocumentSave = this.cacheDocument;
+  public onDocumentClose = (uri: string): void => {
+    this.docCache = this.docCache.delete(uri);
+  }
+
+  //
+  // The rest.
+  //
+
+  public getFromCache(docUri: string): CachedDocument | null {
+    return this.docCache.has(docUri)
+      ? this.docCache.get(docUri)
+      : null;
+  }
 
   public resolveSymbolAtPosition = (
     filePath: string, pos: token.Location,
@@ -150,7 +212,17 @@ export class Analyzer {
       return null;
     }
 
-    const bind = varNode.env.get(varNode.id.name);
+    return this.resolveFromEnv(varNode.id.name, varNode.env);
+  }
+
+  public resolveFromEnv = (
+    idName: string, env: ast.Environment
+  ): ast.Node | null => {
+    const bind = env.get(idName);
+    if (bind == null) {
+      return null;
+    }
+
     if (bind.body == null) {
       throw new Error(`Bind can't have null body:\n${bind}`);
     }
@@ -161,8 +233,8 @@ export class Analyzer {
 
         let fileToImport = importNode.file;
         if (!path.isAbsolute(fileToImport)) {
-          const absDir = path.dirname(
-            path.resolve(importNode.locationRange.fileName));
+          const resolved = path.resolve(importNode.locationRange.fileName);
+          const absDir = path.dirname(resolved);
           fileToImport = path.join(absDir, importNode.file);
         }
 
