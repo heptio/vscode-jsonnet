@@ -10,6 +10,7 @@ import * as ast from './node';
 import * as astVisitor from './visitor';
 import * as token from './token';
 import * as workspace from './workspace';
+import * as service from './service';
 
 //
 // Interfaces.
@@ -21,35 +22,9 @@ interface CachedDocument {
   version: number
 };
 
-export interface AnalysisEventListener {
-  // Allows us to mock vscode events, e.g., OnHover, OnComplete, etc.
-
-  onHover: (fileUri: string, cursorLoc: token.Location) => Promise<HoverInfo>
-  onComplete: (
-    fileUri: string, docText: string, cursorLoc: token.Location
-  ) => Promise<CompletionInfo[]>
-}
-
 export interface CompilerService {
   // Allows us to mock or remote a compiler. Stuff like Lex, Parse,
   // etc., either locally or over the network.
-}
-
-export interface LanguageString {
-  language: string
-  value: string
-}
-
-export interface HoverInfo {
-  contents: LanguageString | LanguageString[]
-}
-
-export type CompletionType = "Field" | "Variable";
-
-export interface CompletionInfo {
-  label: string
-  kind: CompletionType
-  documentation?: string
 }
 
 //
@@ -57,7 +32,7 @@ export interface CompletionInfo {
 //
 
 export interface EventedAnalyzer extends workspace.DocumentEventListener,
-AnalysisEventListener { }
+service.UiEventListener { }
 
 // TODO: Rename this to `EventedAnalyzer`.
 export class Analyzer implements EventedAnalyzer {
@@ -101,7 +76,7 @@ export class Analyzer implements EventedAnalyzer {
 
   public onHover = (
     fileUri: string, cursorLoc: token.Location
-  ): Promise<HoverInfo> => {
+  ): Promise<service.HoverInfo> => {
     // TODO: Move this out to the compiler service.
     if (this.command == null) {
       return Promise.reject("Tried to process `onHover` event, but Jsonnet language server command was null");
@@ -121,8 +96,8 @@ export class Analyzer implements EventedAnalyzer {
 
     const commentText: string | null = this.resolveComments(resolved);
     return Promise.resolve().then(
-      () => <HoverInfo> {
-        contents: <LanguageString[]> [
+      () => <service.HoverInfo> {
+        contents: <service.LanguageString[]> [
           {language: 'jsonnet', value: line},
           commentText
         ]
@@ -131,7 +106,7 @@ export class Analyzer implements EventedAnalyzer {
 
   public onComplete = (
     fileUri: string, docText: string, cursorLoc: token.Location
-  ): Promise<CompletionInfo[]> => {
+  ): Promise<service.CompletionInfo[]> => {
     const tokens = this.lexJsonnetText(docText, cursorLoc);
 
     // The pass parameter contains the position of the text
@@ -176,9 +151,9 @@ export class Analyzer implements EventedAnalyzer {
   private completeTokens = (
     tokens: immutable.List<token.Token>,
     env: ast.Environment,
-  ): CompletionInfo[] => {
+  ): service.CompletionInfo[] => {
     const completion =
-      (label, kind, data): CompletionInfo => <CompletionInfo>{
+      (label, kind, data): service.CompletionInfo => <service.CompletionInfo>{
         label: label,
         kind: kind,
         data: data,
@@ -561,7 +536,7 @@ const findCompletionTokens = (
   }
 };
 
-const getCompletableFields = (node: ast.Node): CompletionInfo[] => {
+const getCompletableFields = (node: ast.Node): service.CompletionInfo[] => {
   if (node.nodeType != "ObjectNode") {
     return []
   }
@@ -577,7 +552,7 @@ const getCompletableFields = (node: ast.Node): CompletionInfo[] => {
     const docs = field.headingComments == null
       ? null
       : field.headingComments.map(comment => comment.text).join("\n\n");
-    return <CompletionInfo>{
+    return <service.CompletionInfo>{
       label: id,
       kind: "Field",
       documentation: docs,
@@ -585,12 +560,12 @@ const getCompletableFields = (node: ast.Node): CompletionInfo[] => {
   });
 }
 
-const envToSuggestions = (env: ast.Environment): CompletionInfo[] => {
+const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
     return env.map((value, key) => {
       if (value == null) {
         throw new Error(`INTERNAL ERROR: Value in environment is null`);
       }
-      return <CompletionInfo>{
+      return <service.CompletionInfo>{
         label: key,
         kind: "Variable",
         // TODO: Fill in documentaiton later.

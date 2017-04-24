@@ -6,6 +6,7 @@ import * as url from 'url';
 import * as immutable from 'immutable';
 
 import * as analyze from './ast/analyzer';
+import * as service from './ast/service';
 import * as token from './ast/token';
 import * as ast from './ast/node';
 
@@ -128,7 +129,7 @@ const positionToLocation = (
 }
 
 const completionInfoToCompletionItem = (
-  completionInfo: analyze.CompletionInfo
+  completionInfo: service.CompletionInfo
 ): server.CompletionItem => {
     let kindMapping: server.CompletionItemKind;
     switch (completionInfo.kind) {
