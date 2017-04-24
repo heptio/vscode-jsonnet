@@ -4,8 +4,9 @@ import * as mocha from 'mocha';
 import * as os from 'os';
 
 import * as analyze from '../../server/ast/analyzer';
-import * as token from '../../server/ast/token';
 import * as ast from '../../server/ast/node';
+import * as token from '../../server/ast/token';
+import * as workspace from '../../server/ast/workspace';
 
 const dataDir = `${__dirname}/../../../test/data`;
 const jsonnetServer =
@@ -15,7 +16,7 @@ const makeLocation = (line: number, column: number): token.Location => {
   return { line: line, column: column };
 }
 
-class MockDocumentManager implements analyze.DocumentManager {
+class MockDocumentManager implements workspace.DocumentManager {
   public get = (fileUri: string) => {
     throw new Error("Invoked `get` method on `MockDocumentManager`");
   }

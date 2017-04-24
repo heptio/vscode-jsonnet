@@ -36,6 +36,9 @@ const analyzer = new analyze.Analyzer(new VsDocumentManager(docs));
 // TODO: We should find a way to move these hooks to a "init doc
 // manager" method, or something.
 //
+// TODO: We should abstract over these hooks with
+// `workspace.DocumentManager`.
+//
 
 docs.onDidOpen(openEvent => {
   const doc = openEvent.document;

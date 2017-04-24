@@ -7,23 +7,18 @@ import * as url from 'url';
 import * as immutable from 'immutable';
 
 import * as ast from './node';
-import * as token from './token';
 import * as astVisitor from './visitor';
+import * as token from './token';
+import * as workspace from './workspace';
 
 //
 // Interfaces.
 //
 
-export interface CachedDocument {
+interface CachedDocument {
   text: string | null
   parse: ast.Node | null
   version: number
-};
-
-export interface WorkspaceEventListener {
-  onDocumentOpen: (uri: string, text: string, version: number) => void
-  onDocumentSave: (uri: string, text: string, version: number) => void
-  onDocumentClose: (uri: string) => void
 };
 
 export interface AnalysisEventListener {
@@ -33,12 +28,6 @@ export interface AnalysisEventListener {
   onComplete: (
     fileUri: string, docText: string, cursorLoc: token.Location
   ) => Promise<CompletionInfo[]>
-}
-
-export interface DocumentManager {
-  // Allows us to mock the vscode `server.TextDocuments` collection.
-
-  get: (fileUri: string) => {text: string, version: number}
 }
 
 export interface CompilerService {
@@ -67,13 +56,15 @@ export interface CompletionInfo {
 // Analyzer.
 //
 
+export interface EventedAnalyzer extends workspace.DocumentEventListener,
+AnalysisEventListener { }
+
 // TODO: Rename this to `EventedAnalyzer`.
-export class Analyzer implements WorkspaceEventListener,
-AnalysisEventListener {
+export class Analyzer implements EventedAnalyzer {
   public command: string | null;
   private docCache = immutable.Map<string, CachedDocument>();
 
-  constructor(private documents: DocumentManager) { }
+  constructor(private documents: workspace.DocumentManager) { }
 
   //
   // WorkspaceEventListener implementation.
