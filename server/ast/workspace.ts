@@ -27,6 +27,13 @@ export interface DocumentEventListener {
 //   important, as it allows users to (e.g.) update parse caches,
 //   which allows the client to provide efficient support for
 //   features like autocomplete.
+//
+//   IMPORTANT NOTE: Right now, this behavior is completely implicit.
+//   This interface does not currently contain functions that express
+//   hook registration (e.g., as `TextDocuments#onDidSave` does in
+//   the case of vscode). This means that it is incumbent on the user
+//   to actually implement this functionality and hook it up
+//   correctly to the `DocumentEventListener`.
 export interface DocumentManager {
   get: (fileUri: string) => {text: string, version: number}
 

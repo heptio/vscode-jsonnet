@@ -42,7 +42,9 @@ const analyzer = new analyze.Analyzer(new VsDocumentManager(docs));
 
 docs.onDidOpen(openEvent => {
   const doc = openEvent.document;
-  analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
+  if (doc.languageId === "jsonnet") {
+    return analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
+  }
 });
 docs.onDidSave(saveEvent => {
   // TODO: relay once we can get the "last good" parse, we can check
@@ -50,13 +52,17 @@ docs.onDidSave(saveEvent => {
   // splice it into the tree. We can perhaps split changes into those
   // that are single-line, and those that are multi-line.
   const doc = saveEvent.document;
-  analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
+  if (doc.languageId === "jsonnet") {
+    return analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
+  }
 });
 docs.onDidClose(closeEvent => {
   // TODO: This is a bit simplistic. We'll need to have a graph of
   // files, eventually, so that we can reload any previews whose
   // dependencies we save.
-  analyzer.onDocumentClose(closeEvent.document.uri);
+  if (closeEvent.document.languageId === "jsonnet") {
+    return analyzer.onDocumentClose(closeEvent.document.uri);
+  }
 });
 
 // Make the text document manager listen on the connection
