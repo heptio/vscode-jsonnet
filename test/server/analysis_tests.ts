@@ -15,6 +15,12 @@ const makeLocation = (line: number, column: number): token.Location => {
   return { line: line, column: column };
 }
 
+class MockDocumentManager implements analyze.DocumentManager {
+  public get = (fileUri: string) => {
+    throw new Error("Invoked `get` method on `MockDocumentManager`");
+  }
+}
+
 const assertLocationRange = (
   lr: token.LocationRange, startLine: number, startCol: number,
   endLine: number, endCol: number
@@ -26,7 +32,7 @@ const assertLocationRange = (
 }
 
 describe("Searching an AST by position", () => {
-  const analyzer = new analyze.Analyzer();
+  const analyzer = new analyze.Analyzer(new MockDocumentManager());
   analyzer.command = jsonnetServer;
 
   const rootNode = analyzer.parseJsonnetFile(
@@ -119,7 +125,7 @@ describe("Searching an AST by position", () => {
 });
 
 describe("Imported symbol resolution", () => {
-  const analyzer = new analyze.Analyzer();
+  const analyzer = new analyze.Analyzer(new MockDocumentManager());
   analyzer.command = jsonnetServer;
 
   const rootNode = analyzer.parseJsonnetFile(

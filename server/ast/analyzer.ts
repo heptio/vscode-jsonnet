@@ -1,6 +1,8 @@
 'use strict';
-import * as proc from 'child_process';
+import * as os from 'os';
 import * as path from 'path';
+import * as proc from 'child_process';
+import * as url from 'url';
 
 import * as immutable from 'immutable';
 
@@ -21,18 +23,38 @@ export interface WorkspaceEventListener {
 };
 
 export interface AnalysisEventListener {
-  // OnHover, OnComplete, etc.
+  // Allows us to mock vscode events, e.g., OnHover, OnComplete, etc.
+
+  onHover: (fileUri: string, cursorLoc: token.Location) => void
 }
 
-export interface Compiler {
-  // Lex, Parse, etc.
-  Parse(fileId: string, )
+export interface DocumentManager {
+  // Allows us to mock the vscode `server.TextDocuments` collection.
+
+  get: (fileUri: string) => {text: string, version: number}
+}
+
+export interface CompilerService {
+  // Allows us to mock or remote a compiler. Stuff like Lex, Parse,
+  // etc., either locally or over the network.
+}
+
+export interface LanguageString {
+  language: string
+  value: string
+}
+
+export interface HoverInfo {
+  contents: LanguageString | LanguageString[]
 }
 
 // TODO: Rename this to `EventedAnalyzer`.
-export class Analyzer implements WorkspaceEventListener {
+export class Analyzer implements WorkspaceEventListener,
+AnalysisEventListener {
   public command: string | null;
   private docCache = immutable.Map<string, CachedDocument>();
+
+  constructor(private documents: DocumentManager) { }
 
   //
   // WorkspaceEventListener implementation.
@@ -61,6 +83,40 @@ export class Analyzer implements WorkspaceEventListener {
   public onDocumentSave = this.cacheDocument;
   public onDocumentClose = (uri: string): void => {
     this.docCache = this.docCache.delete(uri);
+  }
+
+  //
+  // AnalysisEventListener implementation.
+  //
+
+  public onHover = (
+    fileUri: string, cursorLoc: token.Location
+  ): Promise<HoverInfo> => {
+    // TODO: Move this out to the compiler service.
+    if (this.command == null) {
+      return Promise.reject("Tried to process `onHover` event, but Jsonnet language server command was null");
+    }
+
+    const doc = this.documents.get(fileUri);
+    let line = doc.text.split(os.EOL)[cursorLoc.line - 1].trim();
+
+    // Parse the file path out of the doc uri.
+    const filePath = url.parse(fileUri).path;
+    if (filePath == null) {
+      throw Error(`Failed to parse doc URI '${fileUri}'`)
+    }
+
+    // Get symbol we're hovering over.
+    const resolved = this.resolveSymbolAtPosition(filePath, cursorLoc);
+
+    const commentText: string | null = this.resolveComments(resolved);
+    return Promise.resolve().then(
+      () => <HoverInfo> {
+        contents: <LanguageString[]> [
+          {language: 'jsonnet', value: line},
+          commentText
+        ]
+      });
   }
 
   //

@@ -9,7 +9,16 @@ import * as analyze from './ast/analyzer';
 import * as token from './ast/token';
 import * as ast from './ast/node';
 
-const analyzer = new analyze.Analyzer();
+class VsDocumentManager {
+  constructor(private documents: server.TextDocuments) { }
+  get = (fileUri: string): {text: string, version: number} => {
+    const doc = this.documents.get(fileUri);
+    return {
+      text: doc.getText(),
+      version: doc.version,
+    }
+  }
+}
 
 // Create a connection for the server. The connection uses Node's IPC
 // as a transport
@@ -20,6 +29,13 @@ const connection: server.IConnection = server.createConnection(
 // Create a simple text document manager. The text document manager
 // supports full document sync only
 const docs = new server.TextDocuments();
+
+const analyzer = new analyze.Analyzer(new VsDocumentManager(docs));
+
+//
+// TODO: We should find a way to move these hooks to a "init doc
+// manager" method, or something.
+//
 
 docs.onDidOpen(openEvent => {
   const doc = openEvent.document;
@@ -50,7 +66,10 @@ connection.onCompletion(position => {
   const documentText = docs.get(position.textDocument.uri).getText();
   return completionProvider(documentText, position);
 });
-connection.onHover((position) => hoverProvider(docs, position));
+connection.onHover(position => {
+  const fileUri = position.textDocument.uri;
+  return analyzer.onHover(fileUri, positionToLocation(position));
+});
 
 // Listen on the connection
 connection.listen();
@@ -90,11 +109,6 @@ export const completionProvider = (
   position: server.TextDocumentPositionParams,
 ): Promise<server.CompletionItem[]> => {
 
-  //
-  // TODO: You need to transition this use of `savedDocs` from here to
-  // the analyzer.
-  //
-
   const docLocation = positionToLocation(position);
   const tokens = analyzer.lexJsonnetText(documentText, docLocation);
 
@@ -129,37 +143,6 @@ export const completionProvider = (
 
       if (nodeAtPos == null || nodeAtPos.env == null) { return []; }
       return completeTokens(tokens, nodeAtPos.env);
-    });
-};
-
-export const hoverProvider = (
-  documents: server.TextDocuments,
-  posParams: server.TextDocumentPositionParams,
-): Promise<server.Hover> => {
-  if (analyzer.command == null) {
-    return Promise.resolve().then(() => <server.Hover>{});
-  }
-
-  const doc = documents.get(posParams.textDocument.uri);
-  let line = doc.getText().split(os.EOL)[posParams.position.line].trim();
-
-  // Parse the file path out of the doc uri.
-  const filePath = url.parse(doc.uri).path;
-  if (filePath == null) {
-    throw Error(`Failed to parse doc URI '${doc.uri}'`)
-  }
-
-  // Get symbol we're hovering over.
-  const location = positionToLocation(posParams);
-  const resolved = analyzer.resolveSymbolAtPosition(filePath, location);
-
-  const commentText: string | null = analyzer.resolveComments(resolved);
-  return Promise.resolve().then(
-    () => <server.Hover> {
-      contents: <server.MarkedString[]> [
-        {language: 'jsonnet', value: line},
-        commentText
-      ]
     });
 };
 
