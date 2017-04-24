@@ -6,20 +6,10 @@ import * as url from 'url';
 import * as immutable from 'immutable';
 
 import * as analyze from './ast/analyzer';
+import * as ast from './ast/node';
+import * as local from './local';
 import * as service from './ast/service';
 import * as token from './ast/token';
-import * as ast from './ast/node';
-
-class VsDocumentManager {
-  constructor(private documents: server.TextDocuments) { }
-  get = (fileUri: string): {text: string, version: number} => {
-    const doc = this.documents.get(fileUri);
-    return {
-      text: doc.getText(),
-      version: doc.version,
-    }
-  }
-}
 
 // Create a connection for the server. The connection uses Node's IPC
 // as a transport
@@ -31,7 +21,11 @@ const connection: server.IConnection = server.createConnection(
 // supports full document sync only
 const docs = new server.TextDocuments();
 
-const analyzer = new analyze.Analyzer(new VsDocumentManager(docs));
+const compiler = new local.VsCompilerService();
+
+const analyzer = new analyze.Analyzer(
+  new local.VsDocumentManager(docs),
+  compiler);
 
 //
 // TODO: We should find a way to move these hooks to a "init doc
@@ -74,10 +68,7 @@ connection.onInitialize((params) => initializer(docs, params));
 connection.onDidChangeConfiguration(params => configUpdateProvider(params));
 connection.onCompletion(position => {
   return analyzer
-    .onComplete(
-      position.textDocument.uri,
-      docs.get(position.textDocument.uri).getText(),
-      positionToLocation(position))
+    .onComplete(position.textDocument.uri, positionToLocation(position))
     .then<server.CompletionItem[]>(
       completions => completions.map(completionInfoToCompletionItem));
 });
@@ -113,10 +104,10 @@ export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
   if ("server" in change.settings.jsonnet) {
-    analyzer.command = change.settings.jsonnet["server"];
+    compiler.command = change.settings.jsonnet["server"];
   }
   console.log(JSON.stringify(change.settings.jsonnet));
-  console.log(analyzer.command);
+  console.log(compiler.command);
 }
 
 const positionToLocation = (

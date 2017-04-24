@@ -1,10 +1,14 @@
 'use strict';
 import { expect, assert } from 'chai';
+import * as fs from 'fs';
 import * as mocha from 'mocha';
 import * as os from 'os';
+import * as url from 'url';
 
 import * as analyze from '../../server/ast/analyzer';
 import * as ast from '../../server/ast/node';
+import * as compiler from "../../server/ast/compiler";
+import * as local from '../../server/local';
 import * as token from '../../server/ast/token';
 import * as workspace from '../../server/ast/workspace';
 
@@ -16,9 +20,15 @@ const makeLocation = (line: number, column: number): token.Location => {
   return { line: line, column: column };
 }
 
-class MockDocumentManager implements workspace.DocumentManager {
+class FsDocumentManager implements workspace.DocumentManager {
   public get = (fileUri: string) => {
-    throw new Error("Invoked `get` method on `MockDocumentManager`");
+      const parsed = url.parse(fileUri);
+      if (parsed && parsed.path) {
+        // TODO: Perhaps make this a promise?
+        return {text: fs.readFileSync(parsed.path).toString(), version: -1};
+      }
+
+      throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
   }
 }
 
@@ -33,11 +43,13 @@ const assertLocationRange = (
 }
 
 describe("Searching an AST by position", () => {
-  const analyzer = new analyze.Analyzer(new MockDocumentManager());
-  analyzer.command = jsonnetServer;
+  const compilerService = new local.VsCompilerService();
+  const analyzer = new analyze.Analyzer(
+    new FsDocumentManager(), compilerService);
+  compilerService.command = jsonnetServer;
 
-  const rootNode = analyzer.parseJsonnetFile(
-    `${dataDir}/simple-nodes.jsonnet`);
+  const rootNode = compiler.shell.parseJsonnetFile(
+    compilerService.command, `${dataDir}/simple-nodes.jsonnet`);
 
   it("Object field assigned value of `local` symbol", () => {
     // Property.
@@ -126,11 +138,13 @@ describe("Searching an AST by position", () => {
 });
 
 describe("Imported symbol resolution", () => {
-  const analyzer = new analyze.Analyzer(new MockDocumentManager());
-  analyzer.command = jsonnetServer;
+  const compilerService = new local.VsCompilerService();
+  const analyzer = new analyze.Analyzer(
+    new FsDocumentManager(), compilerService);
+  compilerService.command = jsonnetServer;
 
-  const rootNode = analyzer.parseJsonnetFile(
-    `${dataDir}/simple-import.jsonnet`);
+  const rootNode = compiler.shell.parseJsonnetFile(
+    compilerService.command, `${dataDir}/simple-import.jsonnet`);
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =

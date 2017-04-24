@@ -1,74 +1,39 @@
 'use strict';
 import * as os from 'os';
 import * as path from 'path';
-import * as proc from 'child_process';
-import * as url from 'url';
 
 import * as immutable from 'immutable';
 
 import * as ast from './node';
 import * as astVisitor from './visitor';
+import * as compiler from './compiler';
 import * as token from './token';
 import * as workspace from './workspace';
 import * as service from './service';
 
 //
-// Interfaces.
-//
-
-interface CachedDocument {
-  text: string | null
-  parse: ast.Node | null
-  version: number
-};
-
-export interface CompilerService {
-  // Allows us to mock or remote a compiler. Stuff like Lex, Parse,
-  // etc., either locally or over the network.
-}
-
-//
 // Analyzer.
 //
 
-export interface EventedAnalyzer extends workspace.DocumentEventListener,
-service.UiEventListener { }
+export interface EventedAnalyzer
+  extends workspace.DocumentEventListener, service.UiEventListener { }
 
 // TODO: Rename this to `EventedAnalyzer`.
 export class Analyzer implements EventedAnalyzer {
-  public command: string | null;
-  private docCache = immutable.Map<string, CachedDocument>();
-
-  constructor(private documents: workspace.DocumentManager) { }
+  constructor(
+    private documents: workspace.DocumentManager,
+    private compilerService: compiler.CompilerService,
+  ) { }
 
   //
   // WorkspaceEventListener implementation.
   //
 
-  private cacheDocument = (
-    uri: string, text: string, version: number
-  ): void => {
-    let parse: ast.Node | null;
-    try {
-      parse = this.parseJsonnetText(text);
-    } catch (err) {
-      parse = null;
-    }
+  public onDocumentOpen = this.compilerService.cache;
 
-    const cache = <CachedDocument>{
-      text: text,
-      parse: parse,
-      version: version,
-    };
+  public onDocumentSave = this.compilerService.cache;
 
-    this.docCache = this.docCache.set(uri, cache);
-  }
-
-  public onDocumentOpen = this.cacheDocument;
-  public onDocumentSave = this.cacheDocument;
-  public onDocumentClose = (uri: string): void => {
-    this.docCache = this.docCache.delete(uri);
-  }
+  public onDocumentClose = this.compilerService.delete;
 
   //
   // AnalysisEventListener implementation.
@@ -77,22 +42,11 @@ export class Analyzer implements EventedAnalyzer {
   public onHover = (
     fileUri: string, cursorLoc: token.Location
   ): Promise<service.HoverInfo> => {
-    // TODO: Move this out to the compiler service.
-    if (this.command == null) {
-      return Promise.reject("Tried to process `onHover` event, but Jsonnet language server command was null");
-    }
-
     const doc = this.documents.get(fileUri);
     let line = doc.text.split(os.EOL)[cursorLoc.line - 1].trim();
 
-    // Parse the file path out of the doc uri.
-    const filePath = url.parse(fileUri).path;
-    if (filePath == null) {
-      throw Error(`Failed to parse doc URI '${fileUri}'`)
-    }
-
     // Get symbol we're hovering over.
-    const resolved = this.resolveSymbolAtPosition(filePath, cursorLoc);
+    const resolved = this.resolveSymbolAtPosition(fileUri, cursorLoc);
 
     const commentText: string | null = this.resolveComments(resolved);
     return Promise.resolve().then(
@@ -105,29 +59,24 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   public onComplete = (
-    fileUri: string, docText: string, cursorLoc: token.Location
+    fileUri: string, cursorLoc: token.Location
   ): Promise<service.CompletionInfo[]> => {
-    const tokens = this.lexJsonnetText(docText, cursorLoc);
+    const doc = this.documents.get(fileUri);
 
-    // The pass parameter contains the position of the text
-    // document in which code complete got requested. For the
-    // example we ignore this info and always provide the same
-    // completion items.
     return new Promise<immutable.List<token.Token>>(
       (resolve, reject) => {
-        try {
-          const tokens = this.lexJsonnetText(docText, cursorLoc);
-          resolve(findCompletionTokens(tokens, cursorLoc));
-        } catch (err) {
-          reject(err);
+        const partialParse = this.compilerService.parseUntil(
+          fileUri, doc.text, cursorLoc, doc.version);
+        if (partialParse == null) {
+          reject(`Failed to do a partial parse document at '${fileUri}'`);
+          return;
         }
+        resolve(findCompletionTokens(partialParse.lex, cursorLoc));
       })
       .then(tokens => {
+        const lastSavedDoc = this.compilerService.getLastSuccess(fileUri);
         const parseLastDocument = new Promise<ast.Node | null>(
           (resolve, reject) => {
-            const lastSavedDoc = this.docCache.has(fileUri)
-              ? this.docCache.get(fileUri)
-              : null
             resolve(lastSavedDoc && lastSavedDoc.parse || null);
           });
 
@@ -136,11 +85,11 @@ export class Analyzer implements EventedAnalyzer {
       .then(([tokens, lastDocumentRoot]) => {
         if (lastDocumentRoot == null) { return []; }
 
-        const nodeAtPos = this.getNodeAtPositionFromAst(
-          lastDocumentRoot, cursorLoc);
+        const nodeAtPos =
+          this.getNodeAtPositionFromAst(lastDocumentRoot, cursorLoc);
 
-        if (nodeAtPos == null || nodeAtPos.env == null) { return []; }
-        return this.completeTokens(tokens, nodeAtPos.env);
+        return (nodeAtPos && nodeAtPos.env &&
+          this.completeTokens(tokens, nodeAtPos.env)) || [];
       });
   }
 
@@ -214,9 +163,9 @@ export class Analyzer implements EventedAnalyzer {
   //
 
   public resolveSymbolAtPosition = (
-    filePath: string, pos: token.Location,
+    fileUri: string, pos: token.Location,
   ): ast.Node | null => {
-    const nodeAtPos = this.getNodeAtPosition(filePath, pos);
+    const nodeAtPos = this.getNodeAtPosition(fileUri, pos);
     return this.resolveSymbol(nodeAtPos);
   }
 
@@ -264,7 +213,6 @@ export class Analyzer implements EventedAnalyzer {
       }
     }
   }
-
 
   private resolveSymbol = (node: ast.Node): ast.Node | null => {
     if (node == null ) {
@@ -370,15 +318,14 @@ export class Analyzer implements EventedAnalyzer {
     switch(bind.body.nodeType) {
       case "ImportNode": {
         const importNode = <ast.Import>bind.body;
+        const fileToImport =
+          filePathToUri(importNode.file, importNode.locationRange.fileName);
+        const {text: docText, version: version} =
+          this.documents.get(fileToImport);
+        const cached =
+          this.compilerService.cache(fileToImport, docText, version);
 
-        let fileToImport = importNode.file;
-        if (!path.isAbsolute(fileToImport)) {
-          const resolved = path.resolve(importNode.locationRange.fileName);
-          const absDir = path.dirname(resolved);
-          fileToImport = path.join(absDir, importNode.file);
-        }
-
-        return this.parseJsonnetFile(fileToImport);
+        return cached && cached.parse;
       }
       default: {
         throw new Error(
@@ -388,10 +335,17 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   public getNodeAtPosition = (
-    filePath: string, pos: token.Location,
+    fileUri: string, pos: token.Location,
   ): ast.Node => {
-    const rootNode = this.parseJsonnetFile(filePath);
-    return this.getNodeAtPositionFromAst(rootNode, pos);
+    const {text: docText, version: version} = this.documents.get(fileUri);
+    const cached = this.compilerService.cache(fileUri, docText, version);
+    if (cached == null) {
+      // TODO: Handle this error without an exception.
+      throw new Error(
+        `INTERNAL ERROR: Could not cache analysis of file ${fileUri}`);
+    }
+
+    return this.getNodeAtPositionFromAst(cached.parse, pos);
   }
 
   public getNodeAtPositionFromAst = (
@@ -400,81 +354,6 @@ export class Analyzer implements EventedAnalyzer {
     const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);
     return visitor.NodeAtPosition;
-  }
-
-  public lexJsonnetFile = (
-    filePath: string, range?: token.Location
-  ): immutable.List<token.Token> => {
-    if (this.command == null) {
-      throw new Error("Can't lex Jsonnet file if command is not specified");
-    }
-
-    const result = range
-      ? proc.execSync(
-        `${this.command} lex -to ${range.line},${range.column} ${filePath}`)
-      : proc.execSync(`${this.command} lex ${filePath}`);
-    return immutable.List<token.Token>(
-      <token.Token[]>JSON.parse(result.toString()));
-  }
-
-  public lexJsonnetText = (
-    documentText: string, range?: token.Location
-  ): immutable.List<token.Token> => {
-    if (this.command == null) {
-      throw new Error("Can't lex Jsonnet text if command is not specified");
-    }
-
-    // Pass document text into jsonnet language server from stdin.
-    const lexInputOpts = {
-      input: documentText
-    };
-    const result = range
-      ? proc.execSync(
-          `${this.command} lex -to ${range.line},${range.column} -stdin`,
-          lexInputOpts)
-      : proc.execSync(`${this.command} lex -stdin`, lexInputOpts);
-    return immutable.List<token.Token>(
-      <token.Token[]>JSON.parse(result.toString()));
-  }
-
-  public parseJsonnetFile = (
-    filePath: string, tokenStream?: boolean
-  ): ast.Node => {
-    if (this.command == null) {
-      throw new Error("Can't parse Jsonnet file if command is not specified");
-    }
-
-    const command = tokenStream
-      ? `${this.command} parse -tokens ${filePath}`
-      : `${this.command} parse ${filePath}`;
-
-    const result = proc.execSync(command);
-    const rootNode = <ast.Node>JSON.parse(result.toString());
-    new astVisitor.DeserializingVisitor()
-      .Visit(rootNode, null, ast.emptyEnvironment);
-    return rootNode;
-  }
-
-  public parseJsonnetText = (
-    documentText: string, tokenStream?: boolean
-  ): ast.Node => {
-    if (this.command == null) {
-      throw new Error("Can't parse Jsonnet text if command is not specified");
-    }
-
-    const command = tokenStream
-      ? `${this.command} parse -tokens -stdin`
-      : `${this.command} parse -stdin`
-
-    // Pass document text into jsonnet language server from stdin.
-    const result = proc.execSync(command, {
-      input: documentText
-    });
-
-    const rootNode = <ast.Node>JSON.parse(result.toString());
-    new astVisitor.DeserializingVisitor()
-      .Visit(rootNode, null, ast.emptyEnvironment);
-    return rootNode;
   }
 }
 
@@ -574,3 +453,13 @@ const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
     .toArray();
 }
 
+// TODO: Replace this with some sort of URL provider.
+const filePathToUri = (filePath: string, currentPath: string): string => {
+  let resource = filePath;
+  if (!path.isAbsolute(resource)) {
+    const resolved = path.resolve(currentPath);
+    const absDir = path.dirname(resolved);
+    resource = path.join(absDir, filePath);
+  }
+  return `file://${resource}`;
+}

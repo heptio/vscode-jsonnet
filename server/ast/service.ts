@@ -10,7 +10,7 @@ import * as token from './token';
 export interface UiEventListener {
   onHover: (fileUri: string, cursorLoc: token.Location) => Promise<HoverInfo>
   onComplete: (
-    fileUri: string, docText: string, cursorLoc: token.Location
+    fileUri: string, cursorLoc: token.Location
   ) => Promise<CompletionInfo[]>
 }
 

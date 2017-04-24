@@ -7,8 +7,8 @@ import * as ast from './node';
 // would be fired by the `DocumentManager`, and subsequently processed
 // by a hook registered with the `DocumentEventListener`.
 export interface DocumentEventListener {
-  onDocumentOpen: (uri: string, text: string, version: number) => void
-  onDocumentSave: (uri: string, text: string, version: number) => void
+  onDocumentOpen: (uri: string, text: string, version?: number) => void
+  onDocumentSave: (uri: string, text: string, version?: number) => void
   onDocumentClose: (uri: string) => void
 };
 
@@ -35,7 +35,7 @@ export interface DocumentEventListener {
 //   to actually implement this functionality and hook it up
 //   correctly to the `DocumentEventListener`.
 export interface DocumentManager {
-  get: (fileUri: string) => {text: string, version: number}
+  get: (fileUri: string) => {text: string, version?: number}
 
   // TODO: Add interface hooks for things like `onDidSave`, etc.
 }
