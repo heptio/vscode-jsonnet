@@ -4,10 +4,11 @@ import * as path from 'path';
 
 import * as immutable from 'immutable';
 
-import * as ast from './node';
+import * as ast from '../parser/node';
 import * as astVisitor from './visitor';
 import * as compiler from './compiler';
-import * as token from './token';
+import * as error from '../lexer/static_error';
+import * as lexer from '../lexer/lexer';
 import * as workspace from './workspace';
 import * as service from './service';
 
@@ -40,7 +41,7 @@ export class Analyzer implements EventedAnalyzer {
   //
 
   public onHover = (
-    fileUri: string, cursorLoc: token.Location
+    fileUri: string, cursorLoc: error.Location
   ): Promise<service.HoverInfo> => {
     const doc = this.documents.get(fileUri);
     let line = doc.text.split(os.EOL)[cursorLoc.line - 1].trim();
@@ -59,11 +60,11 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   public onComplete = (
-    fileUri: string, cursorLoc: token.Location
+    fileUri: string, cursorLoc: error.Location
   ): Promise<service.CompletionInfo[]> => {
     const doc = this.documents.get(fileUri);
 
-    return new Promise<immutable.List<token.Token>>(
+    return new Promise<immutable.List<lexer.Token>>(
       (resolve, reject) => {
         const partialParse = this.compilerService.parseUntil(
           fileUri, doc.text, cursorLoc, doc.version);
@@ -98,7 +99,7 @@ export class Analyzer implements EventedAnalyzer {
   //
 
   private completeTokens = (
-    tokens: immutable.List<token.Token>,
+    tokens: immutable.List<lexer.Token>,
     env: ast.Environment,
   ): service.CompletionInfo[] => {
     const completion =
@@ -163,14 +164,14 @@ export class Analyzer implements EventedAnalyzer {
   //
 
   public resolveSymbolAtPosition = (
-    fileUri: string, pos: token.Location,
+    fileUri: string, pos: error.Location,
   ): ast.Node | null => {
     const nodeAtPos = this.getNodeAtPosition(fileUri, pos);
     return this.resolveSymbol(nodeAtPos);
   }
 
   public resolveSymbolAtPositionFromAst = (
-    rootNode: ast.Node, pos: token.Location,
+    rootNode: ast.Node, pos: error.Location,
   ): ast.Node | null => {
     const nodeAtPos = this.getNodeAtPositionFromAst(rootNode, pos);
     return this.resolveSymbol(nodeAtPos);
@@ -185,7 +186,7 @@ export class Analyzer implements EventedAnalyzer {
     while(true) {
       if (node == null) { return null; }
 
-      switch (node.nodeType) {
+      switch (node.type) {
         case "ObjectFieldNode": {
           // Only retrieve comments for.
           const field = <ast.ObjectField>node;
@@ -195,12 +196,15 @@ export class Analyzer implements EventedAnalyzer {
 
           // Convert to field object, pull comments out.
           const comments = field.headingComments;
-          if (comments == null || comments.length == 0) {
+          if (comments == null || comments.count() == 0) {
             return null;
           }
 
           return comments
             .reduce((acc: string[], curr) => {
+              if (curr == undefined) {
+                throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
+              }
               acc.push(curr.text);
               return acc;
             }, [])
@@ -219,7 +223,7 @@ export class Analyzer implements EventedAnalyzer {
       return null;
     }
 
-    switch(node.nodeType) {
+    switch(node.type) {
       case "IdentifierNode": {
         return this.resolveIdentifier(<ast.Identifier>node);
       }
@@ -234,7 +238,7 @@ export class Analyzer implements EventedAnalyzer {
       return null;
     }
 
-    switch (id.parent.nodeType) {
+    switch (id.parent.type) {
       case "VarNode": { return this.resolveVar(<ast.Var>id.parent); }
       case "IndexNode": { return this.resolveIndex(<ast.Index>id.parent); }
       default: {
@@ -253,7 +257,7 @@ export class Analyzer implements EventedAnalyzer {
 
     // Find root target, look up in environment.
     let resolvedVar: ast.Node;
-    switch (index.target.nodeType) {
+    switch (index.target.type) {
       case "VarNode": {
         const nullableResolved = this.resolveVar(<ast.Var>index.target);
         if (nullableResolved == null) {
@@ -264,14 +268,14 @@ export class Analyzer implements EventedAnalyzer {
         break;
       }
       default: {
-        throw new Error(`Index node can't have node target of type '${index.target.nodeType}':\n${index.target}`);
+        throw new Error(`Index node can't have node target of type '${index.target.type}':\n${index.target}`);
       }
     }
 
-    switch (resolvedVar.nodeType) {
+    switch (resolvedVar.type) {
       case "ObjectNode": {
         const objectNode = <ast.ObjectNode>resolvedVar;
-        for (let field of objectNode.fields) {
+        for (let field of objectNode.fields.toArray()) {
           // We're looking for either a field with the id
           if (field.id != null && field.id.name == index.id.name) {
             return field.expr2;
@@ -287,7 +291,7 @@ export class Analyzer implements EventedAnalyzer {
         return null;
       }
       default: {
-        throw new Error(`Index node currently requires resolved var to be an object type, but was'${resolvedVar.nodeType}':\n${resolvedVar}`);
+        throw new Error(`Index node currently requires resolved var to be an object type, but was'${resolvedVar.type}':\n${resolvedVar}`);
       }
     }
   }
@@ -315,11 +319,11 @@ export class Analyzer implements EventedAnalyzer {
       throw new Error(`Bind can't have null body:\n${bind}`);
     }
 
-    switch(bind.body.nodeType) {
+    switch(bind.body.type) {
       case "ImportNode": {
         const importNode = <ast.Import>bind.body;
         const fileToImport =
-          filePathToUri(importNode.file, importNode.locationRange.fileName);
+          filePathToUri(importNode.file, importNode.loc.fileName);
         const {text: docText, version: version} =
           this.documents.get(fileToImport);
         const cached =
@@ -335,7 +339,7 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   public getNodeAtPosition = (
-    fileUri: string, pos: token.Location,
+    fileUri: string, pos: error.Location,
   ): ast.Node => {
     const {text: docText, version: version} = this.documents.get(fileUri);
     const cached = this.compilerService.cache(fileUri, docText, version);
@@ -349,7 +353,7 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   public getNodeAtPositionFromAst = (
-    rootNode: ast.Node, pos: token.Location
+    rootNode: ast.Node, pos: error.Location
   ): ast.Node => {
     const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);
@@ -364,8 +368,8 @@ export class Analyzer implements EventedAnalyzer {
 // findCompletionTokens finds all "completable" tokens starting from
 // the end of the token stream.
 const findCompletionTokens = (
-  tokens: immutable.List<token.Token>, loc: token.Location
-): immutable.List<token.Token> => {
+  tokens: immutable.List<lexer.Token>, loc: error.Location
+): immutable.List<lexer.Token> => {
   let stop = false;
   const completionTokens = tokens
     .reverse()
@@ -399,16 +403,17 @@ const findCompletionTokens = (
   // the parser.
   const lastElement = completionTokens.last();
   if (lastElement == null || lastElement.kind != "TokenEndOfFile") {
-    const eofToken: token.Token = {
-      kind: "TokenEndOfFile",
-      data: ".",
-      fodder: null,
-      loc: {
-        fileName: "",
-        begin: {line: -1, column: -1},
-        end: {line: -1, column: -1},
-      },
-    };
+    const eofToken: lexer.Token = new lexer.Token(
+      "TokenEndOfFile",
+      null,
+      ".",
+      "",
+      "",
+      new error.LocationRange(
+        "",
+        new error.Location(-1, -1),
+        new error.Location(-1, -1)),
+    );
     return completionTokens.push(eofToken);
   } else {
     return completionTokens;
@@ -416,13 +421,16 @@ const findCompletionTokens = (
 };
 
 const getCompletableFields = (node: ast.Node): service.CompletionInfo[] => {
-  if (node.nodeType != "ObjectNode") {
+  if (node.type != "ObjectNode") {
     return []
   }
 
   const objNode = <ast.ObjectNode>node;
   return objNode.fields.map(field => {
     let id: string | null = null;
+    if (field == undefined) {
+      throw new Error(`INTERNAL ERROR: element was undefined during a map call`);
+    }
     if (field.id != null) {
       id = field.id.name;
     } else {
@@ -430,13 +438,18 @@ const getCompletableFields = (node: ast.Node): service.CompletionInfo[] => {
     }
     const docs = field.headingComments == null
       ? null
-      : field.headingComments.map(comment => comment.text).join("\n\n");
+      : field.headingComments.map(comment => {
+          if (comment == undefined) {
+            throw new Error(`INTERNAL ERROR: element was undefined during a map call`);
+          }
+          return comment.text;
+        }).join("\n\n");
     return <service.CompletionInfo>{
       label: id,
       kind: "Field",
       documentation: docs,
     };
-  });
+  }).toArray();
 }
 
 const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {

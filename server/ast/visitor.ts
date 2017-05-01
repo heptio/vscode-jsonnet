@@ -2,8 +2,9 @@
 import * as server from 'vscode-languageserver';
 import * as immutable from 'immutable';
 
-import * as token from './token';
-import * as ast from './node';
+import * as ast from '../parser/node';
+import * as error from '../lexer/static_error';
+import * as lexer from '../lexer/lexer';
 
 export interface Visitor {
   Visit(node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment): void
@@ -53,7 +54,7 @@ export abstract class VisitorBase implements Visitor {
     node.parent = parent;
     node.env = currEnv;
 
-    switch(node.nodeType) {
+    switch(node.type) {
       case "CommentNode": {
         this.VisitComment(<ast.Comment>node);
         return;
@@ -90,6 +91,9 @@ export abstract class VisitorBase implements Visitor {
 
         this.VisitLocal(castedNode);
         castedNode.binds.forEach(bind => {
+          if (bind == undefined) {
+            throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
+          }
           bind.body != null && this.Visit(bind.body, castedNode, newEnv);
         });
         castedNode.body != null && this.Visit(
@@ -113,6 +117,9 @@ export abstract class VisitorBase implements Visitor {
           castedNode.expr3, castedNode, currEnv);
         castedNode.headingComments != null &&
           castedNode.headingComments.forEach(comment => {
+            if (comment == undefined) {
+              throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
+            }
             this.Visit(comment, castedNode, currEnv);
           });
         return;
@@ -121,6 +128,9 @@ export abstract class VisitorBase implements Visitor {
         const castedNode = <ast.ObjectNode>node;
         this.VisitObject(castedNode);
         castedNode.fields.forEach(field => {
+          if (field == undefined) {
+            throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
+          }
           this.Visit(field, castedNode, currEnv);
         });
         return;
@@ -139,7 +149,7 @@ export abstract class VisitorBase implements Visitor {
         return
       }
       default: throw new Error(
-      `Visitor could not traverse tree; unknown node type '${node.nodeType}'`);
+      `Visitor could not traverse tree; unknown node type '${node.type}'`);
     }
   }
 
@@ -218,11 +228,11 @@ export class DeserializingVisitor extends VisitorBase {
 // Finds the tightest-binding node that wraps the location denoted by
 // `position`.
 export class CursorVisitor extends VisitorBase {
-  constructor(private position: token.Location) { super(); }
+  constructor(private position: error.Location) { super(); }
 
-  get NodeAtPosition(): ast.NodeBase { return this.tightestWrappingNode; }
+  get NodeAtPosition(): ast.Node { return this.tightestWrappingNode; }
 
-  private tightestWrappingNode: ast.NodeBase;
+  private tightestWrappingNode: ast.Node;
 
   public VisitComment = (node: ast.Comment): void => { this.updateIfCursorInRange(node); }
   // public abstract VisitCompSpec(node: ast.CompSpec): void
@@ -258,8 +268,8 @@ export class CursorVisitor extends VisitorBase {
   // public abstract VisitUnary(node: ast.Unary): void
   public VisitVar = (node: ast.Var): void => { this.updateIfCursorInRange(node); }
 
-  private updateIfCursorInRange = (node: ast.NodeBase): ast.Node => {
-    const locationRange = node.locationRange;
+  private updateIfCursorInRange = (node: ast.Node): ast.Node => {
+    const locationRange = node.loc;
     const range = {
       beginLine: locationRange.begin.line,
       endLine: locationRange.end.line,
@@ -278,32 +288,30 @@ export class CursorVisitor extends VisitorBase {
 }
 
 const nodeRangeIsTighter = (
-  thisNode: ast.NodeBase, thatNode: ast.NodeBase
+  thisNode: ast.Node, thatNode: ast.Node
 ): boolean => {
   if (thatNode == null) {
     return true;
   }
 
-  const thisNodeBegin = {
-    line: thisNode.locationRange.begin.line,
-    column: thisNode.locationRange.begin.column
-  };
-  const thisNodeEnd = {
-    line: thisNode.locationRange.end.line,
-    column: thisNode.locationRange.end.column
-  };
+  const thisNodeBegin = new error.Location(
+    thisNode.loc.begin.line,
+    thisNode.loc.begin.column);
+  const thisNodeEnd = new error.Location(
+    thisNode.loc.end.line,
+    thisNode.loc.end.column);
   const thatNodeRange = {
-    beginLine: thatNode.locationRange.begin.line,
-    endLine: thatNode.locationRange.end.line,
-    beginCol: thatNode.locationRange.begin.column,
-    endCol: thatNode.locationRange.end.column,
+    beginLine: thatNode.loc.begin.line,
+    endLine: thatNode.loc.end.line,
+    beginCol: thatNode.loc.begin.column,
+    endCol: thatNode.loc.end.column,
   };
   return cursorInLocationRange(thisNodeBegin, thatNodeRange) &&
   cursorInLocationRange(thisNodeEnd, thatNodeRange);
 }
 
 const cursorInLocationRange = (
-  cursor: token.Location,
+  cursor: error.Location,
   range: {beginLine: number, endLine: number, beginCol: number, endCol: number},
 ): boolean => {
 

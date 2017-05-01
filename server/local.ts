@@ -6,10 +6,12 @@ import * as url from 'url';
 import * as immutable from 'immutable';
 import * as server from 'vscode-languageserver';
 
-import * as ast from './ast/node';
+import * as ast from './parser/node';
 import * as astVisitor from './ast/visitor';
 import * as compiler from "./ast/compiler";
-import * as token from './ast/token';
+import * as error from './lexer/static_error';
+import * as lexer from './lexer/lexer';
+import * as parser from './parser/parser';
 import * as workspace from './ast/workspace';
 
 export class VsDocumentManager implements workspace.DocumentManager {
@@ -54,19 +56,23 @@ export class VsCompilerService implements compiler.CompilerService {
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
     }
 
-    let lex: immutable.List<token.Token>;
-    let parse: ast.Node;
-    try {
-      lex = compiler.shell.lexJsonnetText(command, parsed.path, text);
-      parse = compiler.shell.parseJsonnetText(command, parsed.path, text);
-    } catch (err) {
+    const lex = lexer.Lex(parsed.path, text);
+    if (error.isStaticError(lex)) {
       return null;
     }
+
+    const parse = parser.Parse(lex);
+    if (error.isStaticError(parse)) {
+      return null;
+    }
+    const rootNode = <ast.Node>parse;
+    new astVisitor.DeserializingVisitor()
+      .Visit(rootNode, null, ast.emptyEnvironment);
 
     const cache = <compiler.FullParsedDocument>{
       text: text,
       lex: lex,
-      parse: parse,
+      parse: rootNode,
       version: version,
     };
 
@@ -76,7 +82,7 @@ export class VsCompilerService implements compiler.CompilerService {
   }
 
   public parseUntil = (
-    fileUri: string, text: string, cursor: token.Location, version: number
+    fileUri: string, text: string, cursor: error.Location, version: number
   ): compiler.PartialParsedDocument | null => {
     const command = this.command;
     if (command == null) {
@@ -88,10 +94,8 @@ export class VsCompilerService implements compiler.CompilerService {
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
     }
 
-    let lex: immutable.List<token.Token>;
-    try {
-      lex = compiler.shell.lexJsonnetText(command, parsed.path, text, cursor);
-    } catch (err) {
+    const lex = lexer.LexRange(parsed.path, text, cursor);
+    if (error.isStaticError(lex)) {
       return null;
     }
 

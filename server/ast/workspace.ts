@@ -1,5 +1,5 @@
 'use strict';
-import * as ast from './node';
+import * as ast from '../parser/node';
 
 // DocumentEventListener listens to events emitted by a
 // `DocumentManager` in response to changes to documents that it

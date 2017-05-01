@@ -6,10 +6,11 @@ import * as url from 'url';
 import * as immutable from 'immutable';
 
 import * as analyze from './ast/analyzer';
-import * as ast from './ast/node';
+import * as ast from './parser/node';
+import * as error from './lexer/static_error';
+import * as lexer from './lexer/lexer';
 import * as local from './local';
 import * as service from './ast/service';
-import * as token from './ast/token';
 
 // Create a connection for the server. The connection uses Node's IPC
 // as a transport
@@ -23,7 +24,7 @@ const docs = new server.TextDocuments();
 
 const compiler = new local.VsCompilerService();
 
-const analyzer = new analyze.Analyzer(
+const analyzer: analyze.EventedAnalyzer = new analyze.Analyzer(
   new local.VsDocumentManager(docs),
   compiler);
 
@@ -112,11 +113,10 @@ export const configUpdateProvider = (
 
 const positionToLocation = (
   posParams: server.TextDocumentPositionParams
-): token.Location => {
-  return {
-    line: posParams.position.line + 1,
-    column: posParams.position.character + 1,
-  };
+): error.Location => {
+  return new error.Location(
+    posParams.position.line + 1,
+    posParams.position.character + 1);
 }
 
 const completionInfoToCompletionItem = (

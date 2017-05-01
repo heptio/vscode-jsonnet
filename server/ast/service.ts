@@ -1,5 +1,6 @@
 'use strict';
-import * as token from './token';
+import * as error from '../lexer/static_error';
+import * as lexer from '../lexer/lexer';
 
 // UiEventListener  listens to events emitted by the UI that a user
 // interacts with, and responds to those events with (e.g.) completion
@@ -8,9 +9,9 @@ import * as token from './token';
 // UiEventListener will dispatch that event to the hook registered
 // with `onHover`.
 export interface UiEventListener {
-  onHover: (fileUri: string, cursorLoc: token.Location) => Promise<HoverInfo>
+  onHover: (fileUri: string, cursorLoc: error.Location) => Promise<HoverInfo>
   onComplete: (
-    fileUri: string, cursorLoc: token.Location
+    fileUri: string, cursorLoc: error.Location
   ) => Promise<CompletionInfo[]>
 }
 
