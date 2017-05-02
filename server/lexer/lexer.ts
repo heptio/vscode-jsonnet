@@ -147,14 +147,13 @@ export class Token {
   ) {}
 
   public toString(): string {
-    const t = this;
-    const tokenKind = TokenKindStrings.get(t.kind);
-    if (t.data == "") {
+    const tokenKind = TokenKindStrings.get(this.kind);
+    if (this.data == "") {
       return tokenKind;
-    } else if (t.kind == "TokenOperator") {
-      return `"${t.data}"`;
+    } else if (this.kind == "TokenOperator") {
+      return `"${this.data}"`;
     } else {
-      return `(${tokenKind}, "${t.data}")`;
+      return `(${tokenKind}, "${this.data}")`;
     }
   }
 }
@@ -306,138 +305,127 @@ export class lexer {
   // next returns the next rune in the input.
   public next = (): rune => {
     // TODO: We should not use this pattern, but we use it everywhere.
-    const l = this;
-    if (l.pos >= l.input.count()) {
-      l.prevPos = l.pos;
+    if (this.pos >= this.input.count()) {
+      this.prevPos = this.pos;
       return LexEOF;
     }
 
     //
-    const r = runeFromCodePoints(l.input, l.pos);
+    const r = runeFromCodePoints(this.input, this.pos);
 
     // NOTE: Because `CodePoints` is essentially an array of distinct
     // code points, rather than an array of bytes. So unlike the Go
     // implementation of this code, `pos` only ever needs to be
     // advanced by 1 (rather than the number of bytes a code point
     // takes up).
-    l.prevPos = l.pos;
-    l.pos += 1
+    this.prevPos = this.pos;
+    this.pos += 1
     if (r.data === '\n') {
-      l.prevLineNumber = l.lineNumber
-      l.prevLineStart = l.lineStart
-      l.lineNumber++
-      l.lineStart = l.pos
+      this.prevLineNumber = this.lineNumber;
+      this.prevLineStart = this.lineStart;
+      this.lineNumber++;
+      this.lineStart = this.pos;
     }
 
     return r;
   };
 
   public acceptN = (n: number) => {
-    const l = this;
     for (let i = 0; i < n; i++) {
-      l.next()
+      this.next()
     }
   };
 
   // peek returns but does not consume the next rune in the input.
   public peek = (): rune => {
-    const l = this;
-    const r = l.next();
-    l.backup();
+    const r = this.next();
+    this.backup();
     return r;
   };
 
   // backup steps back one rune. Can only be called once per call of
   // next.
   public backup = () => {
-    const l = this;
-    if (l.prevPos === LexEOFPos) {
+    if (this.prevPos === LexEOFPos) {
       throw new Error("backup called with no valid previous rune");
     }
-    if ((l.prevPos - l.lineStart) < 0) {
-      l.lineNumber = l.prevLineNumber;
-      l.lineStart = l.prevLineStart;
+    if ((this.prevPos - this.lineStart) < 0) {
+      this.lineNumber = this.prevLineNumber;
+      this.lineStart = this.prevLineStart;
     }
-    l.pos = l.prevPos;
-    l.prevPos = LexEOFPos;
+    this.pos = this.prevPos;
+    this.prevPos = LexEOFPos;
   };
 
   public location = (): error.Location => {
-    const l = this;
-    return new error.Location(l.lineNumber, l.pos - l.lineStart + 1);
+    return new error.Location(this.lineNumber, this.pos - this.lineStart + 1);
   };
 
   public prevLocation = (): error.Location => {
-    const l = this;
-    if (l.prevPos == LexEOFPos) {
+    if (this.prevPos == LexEOFPos) {
       throw new Error("prevLocation called with no valid previous rune");
     }
     return new error.Location(
-      l.prevLineNumber, l.prevPos - l.prevLineStart + 1);
+      this.prevLineNumber, this.prevPos - this.prevLineStart + 1);
   };
 
   // Reset the current working token start to the current cursor
   // position.  This may throw away some characters.  This does not
   // throw away any accumulated fodder.
   public resetTokenStart = () => {
-    const l = this;
-    l.tokenStart = l.pos
-    l.tokenStartLoc = l.location()
+    this.tokenStart = this.pos
+    this.tokenStartLoc = this.location()
   };
 
   public emitFullToken = (
     kind: TokenKind, data: string, stringBlockIndent: string,
     stringBlockTermIndent: string
   ) => {
-    const l = this;
-    l.tokens = l.tokens.push(new Token(
+    this.tokens = this.tokens.push(new Token(
       kind,
-      l.fodder,
+      this.fodder,
       data,
       stringBlockIndent,
       stringBlockTermIndent,
-      error.MakeLocationRange(l.fileName, l.tokenStartLoc, l.location()),
+      error.MakeLocationRange(
+        this.fileName, this.tokenStartLoc, this.location()),
     ));
-    l.fodder = [];
+    this.fodder = [];
   };
 
   public emitToken = (kind: TokenKind) => {
-    const l = this;
-    l.emitFullToken(kind, stringSlice(l.input, l.tokenStart, l.pos), "", "");
-    l.resetTokenStart();
+    this.emitFullToken(
+      kind, stringSlice(this.input, this.tokenStart, this.pos), "", "");
+    this.resetTokenStart();
   };
 
   public addWhitespaceFodder = () => {
-    const l = this;
-    const fodderData = stringSlice(l.input, l.tokenStart, l.pos);
-    if (l.fodder.length == 0 || l.fodder[l.fodder.length-1].kind != "FodderWhitespace") {
-      l.fodder.push(<FodderElement>{
+    const fodderData = stringSlice(this.input, this.tokenStart, this.pos);
+    if (this.fodder.length == 0 || this.fodder[this.fodder.length-1].kind != "FodderWhitespace") {
+      this.fodder.push(<FodderElement>{
         kind: "FodderWhitespace",
         data: fodderData
       });
     } else {
-      l.fodder[l.fodder.length-1].data += fodderData;
+      this.fodder[this.fodder.length-1].data += fodderData;
     }
-    l.resetTokenStart();
+    this.resetTokenStart();
   };
 
   public addCommentFodder = (kind: FodderKind) => {
-    const l = this;
-    const fodderData = stringSlice(l.input, l.tokenStart,l.pos);
-    l.fodder.push(<FodderElement>{kind: kind, data: fodderData});
-    l.resetTokenStart()
+    const fodderData = stringSlice(this.input, this.tokenStart,this.pos);
+    this.fodder.push(<FodderElement>{kind: kind, data: fodderData});
+    this.resetTokenStart()
   };
 
   public addFodder = (kind: FodderKind, data: string) => {
-    const l = this;
-    l.fodder.push(<FodderElement>{kind: kind, data: data});
+    this.fodder.push(<FodderElement>{kind: kind, data: data});
   };
 
   // lexNumber will consume a number and emit a token.  It is assumed
   // that the next rune to be served by the lexer will be a leading
   // digit.
   public lexNumber = (): error.StaticError | null => {
-    const l = this;
     // This function should be understood with reference to the linked
     // image: http://www.json.org/number.gif
 
@@ -462,7 +450,7 @@ export class lexer {
 
   outerLoop:
     while (true) {
-      const r = l.next();
+      const r = this.next();
       switch (state) {
         case "numBegin": {
           if (r.data === '0') {
@@ -503,8 +491,8 @@ export class lexer {
           } else {
             return error.MakeStaticErrorPoint(
               `Couldn't lex number, junk after decimal point: '${r.data}'`,
-              l.fileName,
-              l.prevLocation());
+              this.fileName,
+              this.prevLocation());
           }
           break;
         }
@@ -526,8 +514,8 @@ export class lexer {
           } else {
             return error.MakeStaticErrorPoint(
               `Couldn't lex number, junk after 'E': '${r.data}'`,
-              l.fileName,
-              l.prevLocation());
+              this.fileName,
+              this.prevLocation());
           }
           break;
         }
@@ -537,8 +525,8 @@ export class lexer {
           } else {
             return error.MakeStaticErrorPoint(
               `Couldn't lex number, junk after exponent sign: '${r.data}'`,
-              l.fileName,
-              l.prevLocation());
+              this.fileName,
+              this.prevLocation());
           }
           break;
         }
@@ -553,8 +541,8 @@ export class lexer {
       }
     }
 
-    l.backup();
-    l.emitToken("TokenNumber");
+    this.backup();
+    this.emitToken("TokenNumber");
     return null;
   };
 
@@ -562,73 +550,72 @@ export class lexer {
   // assumed that the next rune to be served by the lexer will be a
   // leading digit. This may emit a keyword or an identifier.
   public lexIdentifier = () => {
-    const l = this;
-    let r = l.next();
+    let r = this.next();
     if (!isIdentifierFirst(r)) {
       throw new Error("Unexpected character in lexIdentifier");
     }
-    for (; r.codePoint != LexEOF.codePoint; r = l.next()) {
+    for (; r.codePoint != LexEOF.codePoint; r = this.next()) {
       if (!isIdentifier(r)) {
         break;
       }
     }
-    l.backup();
+    this.backup();
 
-    switch (stringSlice(l.input, l.tokenStart, l.pos)) {
+    switch (stringSlice(this.input, this.tokenStart, this.pos)) {
       case "assert":
-        l.emitToken("TokenAssert");
+        this.emitToken("TokenAssert");
         break;
       case "else":
-        l.emitToken("TokenElse");
+        this.emitToken("TokenElse");
         break;
       case "error":
-        l.emitToken("TokenError");
+        this.emitToken("TokenError");
         break;
       case "false":
-        l.emitToken("TokenFalse");
+        this.emitToken("TokenFalse");
         break;
       case "for":
-        l.emitToken("TokenFor");
+        this.emitToken("TokenFor");
         break;
       case "function":
-        l.emitToken("TokenFunction");
+        this.emitToken("TokenFunction");
         break;
       case "if":
-        l.emitToken("TokenIf");
+        this.emitToken("TokenIf");
         break;
       case "import":
-        l.emitToken("TokenImport");
+        this.emitToken("TokenImport");
         break;
       case "importstr":
-        l.emitToken("TokenImportStr");
+        this.emitToken("TokenImportStr");
         break;
       case "in":
-        l.emitToken("TokenIn");
+        this.emitToken("TokenIn");
         break;
       case "local":
-        l.emitToken("TokenLocal");
+        this.emitToken("TokenLocal");
         break;
       case "null":
-        l.emitToken("TokenNullLit");
+        this.emitToken("TokenNullLit");
         break;
       case "self":
-        l.emitToken("TokenSelf");
+        this.emitToken("TokenSelf");
         break;
       case "super":
-        l.emitToken("TokenSuper");
+        this.emitToken("TokenSuper");
         break;
       case "tailstrict":
-        l.emitToken("TokenTailStrict");
+        this.emitToken("TokenTailStrict");
         break;
       case "then":
-        l.emitToken("TokenThen");
+        this.emitToken("TokenThen");
         break;
       case "true":
-        l.emitToken("TokenTrue");
+        this.emitToken("TokenTrue");
         break;
       default:
         // Not a keyword, assume it is an identifier
-        l.emitToken("TokenIdentifier")
+        this.emitToken("TokenIdentifier")
         break;
     };
   };
@@ -638,61 +625,60 @@ export class lexer {
   // assumes that the next rune to be served by the lexer will be the
   // first rune of the new token.
   public lexSymbol(): error.StaticError | null {
-    const l = this;
-
-    let r = l.next();
+    let r = this.next();
 
     // Single line C++ style comment
-    if (r.data === '/' && l.peek().data === '/') {
-      l.next();
-      l.resetTokenStart(); // Throw out the leading //
-      for (r = l.next(); r.codePoint != LexEOF.codePoint && r.data !== '\n'; r = l.next()) {
+    if (r.data === '/' && this.peek().data === '/') {
+      this.next();
+      this.resetTokenStart(); // Throw out the leading //
+      for (r = this.next(); r.codePoint != LexEOF.codePoint && r.data !== '\n'; r = this.next()) {
       }
       // Leave the '\n' in the lexer to be fodder for the next round
-      l.backup();
-      l.emitToken("TokenCommentCpp");
+      this.backup();
+      this.emitToken("TokenCommentCpp");
       return null;
     }
 
-    if (r.data === '/' && l.peek().data === '*') {
-      const commentStartLoc = l.tokenStartLoc;
-      l.next();            // consume the '*'
-      l.resetTokenStart(); // Throw out the leading /*
-      for (r = l.next(); ; r = l.next()) {
+    if (r.data === '/' && this.peek().data === '*') {
+      const commentStartLoc = this.tokenStartLoc;
+      this.next();            // consume the '*'
+      this.resetTokenStart(); // Throw out the leading /*
+      for (r = this.next(); ; r = this.next()) {
         if (r.codePoint == LexEOF.codePoint) {
           return error.MakeStaticErrorPoint("Multi-line comment has no terminating */",
-            l.fileName, commentStartLoc)
+            this.fileName, commentStartLoc)
         }
-        if (r.data === '*' && l.peek().data === '/') {
+        if (r.data === '*' && this.peek().data === '/') {
           // Don't include trailing */
-          const commentData = stringSlice(l.input, l.tokenStart, l.pos-1)
-          l.addFodder("FodderCommentC", commentData);
-          l.next();            // Skip past '/'
-          l.resetTokenStart(); // Start next token at this point
+          const commentData = stringSlice(
+            this.input, this.tokenStart, this.pos-1)
+          this.addFodder("FodderCommentC", commentData);
+          this.next();            // Skip past '/'
+          this.resetTokenStart(); // Start next token at this point
           return null
         }
       }
     }
 
-    if (r.data === '|' && stringSlice(l.input, l.pos).startsWith("||\n")) {
-      const commentStartLoc = l.tokenStartLoc
-      l.acceptN(3) // Skip "||\n"
+    if (r.data === '|' && stringSlice(this.input, this.pos).startsWith("||\n")) {
+      const commentStartLoc = this.tokenStartLoc
+      this.acceptN(3) // Skip "||\n"
       var cb = im.List<rune>();
 
       // Skip leading blank lines
-      for (r = l.next(); r.data === '\n'; r = l.next()) {
+      for (r = this.next(); r.data === '\n'; r = this.next()) {
         cb = cb.push(r);
       }
-      l.backup();
+      this.backup();
       let numWhiteSpace = checkWhitespace(
-        stringSlice(l.input, l.pos),
-        stringSlice(l.input, l.pos));
+        stringSlice(this.input, this.pos),
+        stringSlice(this.input, this.pos));
       const stringBlockIndent =
-        stringSlice(l.input, l.pos, l.pos+numWhiteSpace);
+        stringSlice(this.input, this.pos, this.pos+numWhiteSpace);
       if (numWhiteSpace == 0) {
         return error.MakeStaticErrorPoint(
           "Text block's first line must start with whitespace",
-          l.fileName,
+          this.fileName,
           commentStartLoc);
       }
 
@@ -700,40 +686,40 @@ export class lexer {
         if (numWhiteSpace <= 0) {
           throw new Error("Unexpected value for numWhiteSpace");
         }
-        l.acceptN(numWhiteSpace);
-        for (r = l.next(); r.data !== '\n'; r = l.next()) {
+        this.acceptN(numWhiteSpace);
+        for (r = this.next(); r.data !== '\n'; r = this.next()) {
           if (r.codePoint == LexEOF.codePoint) {
             return error.MakeStaticErrorPoint("Unexpected EOF",
-              l.fileName, commentStartLoc);
+              this.fileName, commentStartLoc);
           }
           cb = cb.push(r);
         }
         cb = cb.push(runeFromString("\n", 0));
 
         // Skip any blank lines
-        for (r = l.next(); r.data === '\n'; r = l.next()) {
+        for (r = this.next(); r.data === '\n'; r = this.next()) {
           cb = cb.push(r);
         }
-        l.backup()
+        this.backup()
 
         // Look at the next line
         numWhiteSpace = checkWhitespace(
           stringBlockIndent,
-          stringSlice(l.input, l.pos));
+          stringSlice(this.input, this.pos));
         if (numWhiteSpace == 0) {
           // End of the text block
           let stringBlockTermIndent: string = "";
-          for (r = l.next(); r.data === ' ' || r.data === '\t'; r = l.next()) {
+          for (r = this.next(); r.data === ' ' || r.data === '\t'; r = this.next()) {
             stringBlockTermIndent = stringBlockIndent.concat(r.data);
           }
-          l.backup();
-          if (!stringSlice(l.input, l.pos).startsWith("|||")) {
+          this.backup();
+          if (!stringSlice(this.input, this.pos).startsWith("|||")) {
             return error.MakeStaticErrorPoint(
               "Text block not terminated with |||",
-              l.fileName,
+              this.fileName,
               commentStartLoc)
           }
-          l.acceptN(3) // Skip '|||'
+          this.acceptN(3) // Skip '|||'
           const tokenData = cb
             .map(rune => {
               if (rune === undefined) {
@@ -742,38 +728,38 @@ export class lexer {
               return rune.data;
             })
             .join("");
-          l.emitFullToken("TokenStringBlock", tokenData, stringBlockIndent,
+          this.emitFullToken("TokenStringBlock", tokenData, stringBlockIndent,
             stringBlockTermIndent);
-          l.resetTokenStart();
+          this.resetTokenStart();
           return null;
         }
       }
     }
 
     // Assume any string of symbols is a single operator.
-    for (r = l.next(); isSymbol(r); r = l.next()) {
+    for (r = this.next(); isSymbol(r); r = this.next()) {
       // Not allowed // in operators
-      if (r.data === '/' && stringSlice(l.input, l.pos).startsWith("/")) {
+      if (r.data === '/' && stringSlice(this.input, this.pos).startsWith("/")) {
         break;
       }
       // Not allowed /* in operators
-      if (r.data === '/' && stringSlice(l.input, l.pos).startsWith("*")) {
+      if (r.data === '/' && stringSlice(this.input, this.pos).startsWith("*")) {
         break;
       }
       // Not allowed ||| in operators
-      if (r.data === '|' && stringSlice(l.input, l.pos).startsWith("||")) {
+      if (r.data === '|' && stringSlice(this.input, this.pos).startsWith("||")) {
         break;
       }
     }
 
-    l.backup();
+    this.backup();
 
     // Operators are not allowed to end with + - ~ ! unless they are
     // one rune long. So, wind it back if we need to, but stop at the
     // first rune. This relies on the hack that all operator symbols
     // are ASCII and thus there is no need to treat this substring as
     // general UTF-8.
-    for (r = runeFromCodePoints(l.input, l.pos-1); l.pos > l.tokenStart+1; l.pos--) {
+    for (r = runeFromCodePoints(this.input, this.pos-1); this.pos > this.tokenStart+1; this.pos--) {
       switch (r.data) {
         case '+':
         case '-':
@@ -784,10 +770,10 @@ export class lexer {
       break;
     }
 
-    if (stringSlice(l.input, l.tokenStart, l.pos) == "$") {
-      l.emitToken("TokenDollar")
+    if (stringSlice(this.input, this.tokenStart, this.pos) == "$") {
+      this.emitToken("TokenDollar")
     } else {
-      l.emitToken("TokenOperator")
+      this.emitToken("TokenOperator")
     }
     return null;
   };
@@ -796,15 +782,14 @@ export class lexer {
   // `loc` exists before the range of coordinates of the last token
   // terminates.
   public locBeforeLastTokenRange = (loc: error.Location): boolean => {
-    const l = this;
-    const numTokens = l.tokens.count();
+    const numTokens = this.tokens.count();
     if (loc.line == -1 && loc.column == -1) {
       return false;
     } else if (numTokens == 0) {
       return false;
     }
 
-    const lastLocRange = l.tokens.get(numTokens-1).loc;
+    const lastLocRange = this.tokens.get(numTokens-1).loc;
     return loc.line < lastLocRange.begin.line ||
       (loc.line == lastLocRange.begin.line && loc.column < lastLocRange.begin.column)
   };
@@ -812,15 +797,14 @@ export class lexer {
   // locInLastTokenRange checks whether a location specified by `loc`
   // exists within the range of coordinates of the last token.
   public locInLastTokenRange = (loc: error.Location): boolean => {
-    const l = this;
-    const numTokens = l.tokens.count();
+    const numTokens = this.tokens.count();
     if (loc.line == -1 && loc.column == -1) {
       return false;
     } else if (numTokens == 0) {
       return false;
     }
 
-    const lastToken = l.tokens.get(numTokens-1);
+    const lastToken = this.tokens.get(numTokens-1);
     const lastLocRange = lastToken.loc;
 
     if ((lastLocRange.begin.line == loc.line) &&
@@ -850,12 +834,11 @@ export class lexer {
   // happens to occur in whitespace; in this case, we will truncate at
   // the last token that occurs before the whitespace begins.
   public checkTruncateTokenRange = (rangeMax: error.Location): boolean => {
-    const l = this;
     if (rangeMax.line == -1 && rangeMax.column == -1) {
       return false;
     }
 
-    const numTokens = l.tokens.count();
+    const numTokens = this.tokens.count();
 
     // Lex at least one token before returning.
     if (numTokens == 0) {
@@ -869,17 +852,17 @@ export class lexer {
       }
 
       // Return if location is in the range of the last token.
-      if (l.locInLastTokenRange(rangeMax)) {
+      if (this.locInLastTokenRange(rangeMax)) {
         return true
       }
 
       // If token range max occurs before the last token range starts,
       // truncate and return.
-      if (l.locBeforeLastTokenRange(rangeMax)) {
-        l.tokens = l.tokens.pop();
+      if (this.locBeforeLastTokenRange(rangeMax)) {
+        this.tokens = this.tokens.pop();
 
         // Stop truncating after the condition is no longer true.
-        if (!l.locBeforeLastTokenRange(rangeMax)) {
+        if (!this.locBeforeLastTokenRange(rangeMax)) {
           return true;
         }
         continue;
