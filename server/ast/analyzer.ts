@@ -250,9 +250,11 @@ export class Analyzer implements EventedAnalyzer {
 
   public resolveIndex = (index: ast.Index): ast.Node | null => {
     if (index.target == null) {
-      throw new Error(`Index node must have a target:\n${index}`);
+      throw new Error(
+        `INTERNAL ERROR: Index node must have a target:\n${index}`);
     } else if (index.id == null) {
-      throw new Error(`Index node must have a name:\n${index}`);
+      throw new Error(
+        `INTERNAL ERROR: Index node must have a name:\n${index}`);
     }
 
     // Find root target, look up in environment.
@@ -268,7 +270,8 @@ export class Analyzer implements EventedAnalyzer {
         break;
       }
       default: {
-        throw new Error(`Index node can't have node target of type '${index.target.type}':\n${index.target}`);
+        throw new Error(
+          `INTERNAL ERROR: Index node can't have node target of type '${index.target.type}':\n${index.target}`);
       }
     }
 
@@ -285,13 +288,15 @@ export class Analyzer implements EventedAnalyzer {
             continue;
           }
 
-          throw new Error(`Object field is identified by string, but we don't support that yet`);
+          throw new Error(
+            `INTERNAL ERROR: Object field is identified by string, but we don't support that yet`);
         }
 
         return null;
       }
       default: {
-        throw new Error(`Index node currently requires resolved var to be an object type, but was'${resolvedVar.type}':\n${resolvedVar}`);
+        throw new Error(
+          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedVar.type}':\n${resolvedVar}`);
       }
     }
   }
@@ -299,7 +304,8 @@ export class Analyzer implements EventedAnalyzer {
   public resolveVar = (varNode: ast.Var): ast.Node | null => {
     // Look up in the environment, get docs for that definition.
     if (varNode.env == null) {
-      throw new Error(`AST improperly set up, property 'env' can't be null:\n${ast.renderAsJson(varNode)}`);
+      throw new Error(
+        `INTERNAL ERROR: AST improperly set up, property 'env' can't be null:\n${ast.renderAsJson(varNode)}`);
     } else if (!varNode.env.has(varNode.id.name)) {
       return null;
     }
@@ -316,7 +322,7 @@ export class Analyzer implements EventedAnalyzer {
     }
 
     if (bind.body == null) {
-      throw new Error(`Bind can't have null body:\n${bind}`);
+      throw new Error(`INTERNAL ERROR: Bind can't have null body:\n${bind}`);
     }
 
     switch(bind.body.type) {
@@ -333,7 +339,7 @@ export class Analyzer implements EventedAnalyzer {
       }
       default: {
         throw new Error(
-          `Bind currently requires an import node as body ${bind}`);
+          `INTERNAL ERROR: Bind currently requires an import node as body ${bind}`);
       }
     }
   }
