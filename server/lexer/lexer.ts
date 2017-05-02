@@ -506,6 +506,7 @@ export class lexer {
               l.fileName,
               l.prevLocation());
           }
+          break;
         }
         case "numAfterDigit": {
           if (r.data === 'e' || r.data === 'E') {

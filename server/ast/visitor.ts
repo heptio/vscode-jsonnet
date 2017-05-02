@@ -71,9 +71,18 @@ export abstract class VisitorBase implements Visitor {
       // case "DollarNode": return this.VisitDollar(node);
       // case "ErrorNode": return this.VisitError(node);
       // case "FunctionNode": return this.VisitFunction(node);
-      case "IdentifierNode": { this.VisitIdentifier(<ast.Identifier>node); }
-      case "ImportNode": { this.VisitImport(<ast.Import>node); }
-      case "ImportStrNode": { this.VisitImportStr(<ast.ImportStr>node); }
+      case "IdentifierNode": {
+        this.VisitIdentifier(<ast.Identifier>node);
+        return;
+      }
+      case "ImportNode": {
+        this.VisitImport(<ast.Import>node);
+        return;
+      }
+      case "ImportStrNode": {
+        this.VisitImportStr(<ast.ImportStr>node);
+        return;
+      }
       case "IndexNode": {
         const castedNode = <ast.Index>node;
         this.VisitIndex(castedNode);
