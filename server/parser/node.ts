@@ -431,6 +431,10 @@ export interface LiteralString extends Node {
   readonly blockIndent: string
 }
 
+export const isLiteralString = (x: Node): x is LiteralString => {
+    return x.type === "LiteralStringNode";
+}
+
 // ---------------------------------------------------------------------------
 
 export type ObjectFieldKind =
@@ -583,6 +587,10 @@ export interface Unary extends Node {
 export interface Var extends Node {
   readonly type: "VarNode"
   readonly id: Identifier
+}
+
+export const isVar = (x: Node): x is Var => {
+    return x.type === "VarNode";
 }
 
 // ---------------------------------------------------------------------------

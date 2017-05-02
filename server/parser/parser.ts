@@ -521,12 +521,12 @@ class parser {
 
     let ids = im.List<ast.IdentifierName>();
     for (let n of result.exprs.toArray()) {
-      if (n.type != "VarNode") {
+      if (!ast.isVar(n)) {
         return error.MakeStaticError(
           `Expected simple identifier but got a complex expression.`,
           n.loc);
       }
-      ids = ids.push((<ast.Var>n).id.name);
+      ids = ids.push(n.id.name);
     }
     return {ids: ids, gotComma: result.gotComma};
   };
@@ -1430,9 +1430,8 @@ class parser {
         if (error.isStaticError(body)) {
           return body;
         }
-        if (body.type === "LiteralStringNode") {
-          const lit = <ast.LiteralString>body;
-          return makeImport(lit.value, locFromTokenAST(begin, body));
+        if (ast.isLiteralString(body)) {
+          return makeImport(body.value, locFromTokenAST(begin, body));
         }
         return error.MakeStaticError(
           "Computed imports are not allowed", body.loc);
@@ -1444,9 +1443,8 @@ class parser {
         if (error.isStaticError(body)) {
           return body;
         }
-        if (body.type === "LiteralStringNode") {
-          const lit = <ast.LiteralString>body;
-          return makeImportStr(lit.value, locFromTokenAST(begin, body));
+        if (ast.isLiteralString(body)) {
+          return makeImportStr(body.value, locFromTokenAST(begin, body));
         }
         return error.MakeStaticError(
           "Computed imports are not allowed", body.loc);
