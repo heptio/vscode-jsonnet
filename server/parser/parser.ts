@@ -7,358 +7,6 @@ import * as lexer from '../lexer/lexer';
 
 // ---------------------------------------------------------------------------
 
-const makeLiteralString = (
-  value: string, kind: ast.LiteralStringKind, loc: error.LocationRange, blockIndent: string
-): ast.LiteralString => {
-  return {
-    type:        "LiteralStringNode",
-    loc:         loc,
-    value:       value,
-    kind:        kind,
-    blockIndent: blockIndent,
-    freeVars:    im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
-
-const makeIdentifier = (
-  name: string, loc: error.LocationRange
-): ast.Identifier => {
-  return {
-    type:     "IdentifierNode",
-    loc:      loc,
-    name:     name,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeObject = (
-  fields: ast.ObjectFields, trailingComma: boolean,
-  headingComments: ast.Comments, loc: error.LocationRange,
-): ast.ObjectNode => {
-  return {
-    type: "ObjectNode",
-    loc: loc,
-    fields:          fields,
-    trailingComma:   trailingComma,
-    headingComments: headingComments,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeArray = (
-  elements: ast.Nodes, trailingComma: boolean, headingComment: ast.Comment | null,
-  trailingComment: ast.Comment | null, loc: error.LocationRange,
-): ast.Array => {
-  return {
-    type:            "ArrayNode",
-    loc:             loc,
-    elements:        elements,
-    trailingComma:   trailingComma,
-    headingComment:  headingComment,
-    trailingComment: trailingComment,
-    freeVars:        im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeArrayComp = (
-  body: ast.Node, trailingComma: boolean, specs: ast.CompSpecs,
-  loc: error.LocationRange,
-): ast.ArrayComp => {
-  return {
-    type:          "ArrayCompNode",
-    body:          body,
-    trailingComma: trailingComma,
-    specs:         specs,
-    loc:           loc,
-    freeVars:      im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeLiteralNumber = (
-  value: number, originalString: string, loc: error.LocationRange
-): ast.LiteralNumber => {
-  return {
-    type:           "LiteralNumberNode",
-    value:          value,
-    originalString: originalString,
-    loc: loc,
-    freeVars:      im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeLiteralBoolean = (
-  value: boolean, loc: error.LocationRange
-): ast.LiteralBoolean => {
-  return {
-    type:     "LiteralBooleanNode",
-    value:    value,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeLiteralNull = (loc: error.LocationRange): ast.LiteralNull => {
-  return {
-    type:     "LiteralNullNode",
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-}
-
-const makeDollar = (loc: error.LocationRange): ast.Dollar => {
-  return {
-    type:     "DollarNode",
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-}
-
-const makeSelf = (loc: error.LocationRange): ast.Self => {
-  return {
-    type:     "SelfNode",
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-}
-
-const makeVar = (id: ast.Identifier, loc: error.LocationRange): ast.Var => {
-  return {
-    type:     "VarNode",
-    id:       id,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-}
-
-const makeSuperIndex = (
-  index: ast.Node | null, id: ast.Identifier | null, loc: error.LocationRange
-): ast.SuperIndex => {
-  return {
-    type:     "SuperIndexNode",
-    index:    index,
-    id:       id,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeAssert = (
-  cond: ast.Node, message: ast.Node | null, rest: ast.Node,
-  loc: error.LocationRange,
-): ast.Assert => {
-  return {
-    type:     "AssertNode",
-    cond:     cond,
-    message:  message,
-    rest:     rest,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeError = (expr: ast.Node, loc: error.LocationRange): ast.Error => {
-  return {
-    type:     "ErrorNode",
-    expr:     expr,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeConditional = (
-  cond: ast.Node, branchTrue: ast.Node, branchFalse: ast.Node | null,
-  loc: error.LocationRange,
-): ast.Conditional => {
-  return {
-    type:        "ConditionalNode",
-    cond:        cond,
-    branchTrue:  branchTrue,
-    branchFalse: branchFalse,
-    loc:         loc,
-    freeVars:    im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeImport = (file: string, loc: error.LocationRange): ast.Import => {
-  return {
-    type:     "ImportNode",
-    file:     file,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeImportStr = (
-  file: string, loc: error.LocationRange
-): ast.ImportStr => {
-  return {
-    type:     "ImportStrNode",
-    file:     file,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeLocal = (
-  binds: ast.LocalBinds, body: ast.Node, loc: error.LocationRange
-): ast.Local => {
-  return {
-    type:     "LocalNode",
-    binds:    binds,
-    body:     body,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeUnary = (
-  op: ast.UnaryOp, expr: ast.Node, loc: error.LocationRange,
-): ast.Unary => {
-  return {
-    type:     "UnaryNode",
-    op:       op,
-    expr:     expr,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeIndex = (
-  target: ast.Node, index: ast.Node | null, id: ast.Identifier | null,
-  loc: error.LocationRange,
-): ast.Index => {
-  return {
-    type:     "IndexNode",
-    target:   target,
-    index:    index,
-    id:       id,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeApply = (
-  target: ast.Node, args: ast.Nodes, trailingComma: boolean,
-  tailStrict: boolean, loc: error.LocationRange,
-): ast.Apply => {
-  return {
-    type:          "ApplyNode",
-    target:        target,
-    arguments:     args,
-    trailingComma: trailingComma,
-    tailStrict:    tailStrict,
-    loc:           loc,
-    freeVars:      im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeApplyBrace = (
-  left: ast.Node, right: ast.Node, loc: error.LocationRange
-): ast.ApplyBrace => {
-  return {
-    type:     "ApplyBraceNode",
-    left:     left,
-    right:    right,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeBinary = (
-  left: ast.Node, op: ast.BinaryOp, right: ast.Node, loc: error.LocationRange,
-): ast.Binary => {
-  return {
-    type:     "BinaryNode",
-    left:     left,
-    op:       op,
-    right:    right,
-    loc:      loc,
-    freeVars: im.List<ast.IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-}
-
-const makeLocalBind = (
-  variable: ast.Identifier, body: ast.Node, functionSugar: boolean,
-  params: ast.IdentifierNames, trailingComma: boolean,
-): ast.LocalBind => {
-  return {
-    variable:      variable,
-    body:          body,
-    functionSugar: functionSugar,
-    params:        params, // if functionSugar is true
-    trailingComma: trailingComma,
-  }
-}
-
 type precedence = number;
 
 const applyPrecedence: precedence = 2,  // Function calls and indexing.
@@ -563,9 +211,9 @@ class parser {
       if (error.isStaticError(body)) {
         return body;
       }
-      const id = makeIdentifier(varID.data, varID.loc);
+      const id = ast.makeIdentifier(varID.data, varID.loc);
       const {ids: params, gotComma: gotComma} = result;
-      const bind = makeLocalBind(id, body, true, params, gotComma);
+      const bind = ast.makeLocalBind(id, body, true, params, gotComma);
       binds = binds.push(bind);
     } else {
       const pop = p.popExpectOp("=");
@@ -576,8 +224,8 @@ class parser {
       if (error.isStaticError(body)) {
         return body;
       }
-      const id = makeIdentifier(varID.data, varID.loc);
-      const bind = makeLocalBind(id, body, false, im.List<string>(), false)
+      const id = ast.makeIdentifier(varID.data, varID.loc);
+      const bind = ast.makeLocalBind(id, body, false, im.List<string>(), false)
       binds = binds.push(bind);
     }
 
@@ -708,22 +356,22 @@ class parser {
     switch (next.kind) {
       case "TokenIdentifier": {
         kind = "ObjectFieldID";
-        id = makeIdentifier(next.data, next.loc);
+        id = ast.makeIdentifier(next.data, next.loc);
         break;
       }
       case "TokenStringDouble": {
         kind = "ObjectFieldStr";
-        expr1 = makeLiteralString(next.data, "StringDouble", next.loc, "");
+        expr1 = ast.makeLiteralString(next.data, "StringDouble", next.loc, "");
         break;
       }
       case "TokenStringSingle": {
         kind = "ObjectFieldStr";
-        expr1 = makeLiteralString(next.data, "StringSingle", next.loc, "");
+        expr1 = ast.makeLiteralString(next.data, "StringSingle", next.loc, "");
         break;
       }
       case "TokenStringBlock": {
         kind = "ObjectFieldStr"
-        expr1 = makeLiteralString(
+        expr1 = ast.makeLiteralString(
           next.data, "StringBlock", next.loc, next.stringBlockIndent);
         break;
       }
@@ -816,7 +464,7 @@ class parser {
     if (error.isStaticError(varID)) {
       return varID;
     }
-    const id = makeIdentifier(varID.data, varID.loc);
+    const id = ast.makeIdentifier(varID.data, varID.loc);
     if (binds.contains(id.name)) {
       return error.MakeStaticError(
         `Duplicate local var: ${id.name}`, varID.loc);
@@ -972,7 +620,7 @@ class parser {
       // Done parsing the object. Return.
       if (next.kind === "TokenBraceR") {
         return {
-          objRemainder: makeObject(
+          objRemainder: ast.makeObject(
             fields, gotComma, heading, locFromTokens(tok, next)),
           next: next
         };
@@ -1057,7 +705,7 @@ class parser {
         return varID;
       }
 
-      const id: ast.Identifier = makeIdentifier(varID.data, varID.loc);
+      const id: ast.Identifier = ast.makeIdentifier(varID.data, varID.loc);
       const pop = p.popExpect("TokenIn");
       if (error.isStaticError(pop)) {
         return pop;
@@ -1107,7 +755,7 @@ class parser {
     let next = p.peek();
     if (next.kind === "TokenBracketR") {
       p.pop();
-      return makeArray(
+      return ast.makeArray(
         im.List<ast.Node>(), false, null, null, locFromTokens(tok, next));
     }
 
@@ -1131,7 +779,7 @@ class parser {
         return result;
       }
 
-      return makeArrayComp(
+      return ast.makeArrayComp(
         first, gotComma, result.compSpecs, locFromTokens(tok, result.maybeIf));
     }
     // Not a comprehension: It can have more elements.
@@ -1173,7 +821,7 @@ class parser {
     // the lexer. If we don't do that, we might accidentally kill
     // comments that correspond to, e.g., the next field of an object.
 
-    return makeArray(elements, gotComma, null, null, locFromTokens(tok, next));
+    return ast.makeArray(elements, gotComma, null, null, locFromTokens(tok, next));
   };
 
   public parseTerminal = (
@@ -1241,31 +889,31 @@ class parser {
           return error.MakeStaticError(
             "Could not parse floating point number.", tok.loc);
         }
-        return makeLiteralNumber(num, tok.data, tok.loc);
+        return ast.makeLiteralNumber(num, tok.data, tok.loc);
       }
       case "TokenStringSingle":
-        return makeLiteralString(tok.data, "StringSingle", tok.loc, "");
+        return ast.makeLiteralString(tok.data, "StringSingle", tok.loc, "");
       case "TokenStringDouble":
-        return makeLiteralString(tok.data, "StringDouble", tok.loc, "");
+        return ast.makeLiteralString(tok.data, "StringDouble", tok.loc, "");
       case "TokenStringBlock":
-        return makeLiteralString(
+        return ast.makeLiteralString(
           tok.data, "StringBlock", tok.loc, tok.stringBlockIndent);
       case "TokenFalse":
-        return makeLiteralBoolean(false, tok.loc);
+        return ast.makeLiteralBoolean(false, tok.loc);
       case "TokenTrue":
-        return makeLiteralBoolean(true, tok.loc);
+        return ast.makeLiteralBoolean(true, tok.loc);
       case "TokenNullLit":
-        return makeLiteralNull(tok.loc);
+        return ast.makeLiteralNull(tok.loc);
 
       // Variables
       case "TokenDollar":
-        return makeDollar(tok.loc);
+        return ast.makeDollar(tok.loc);
       case "TokenIdentifier": {
-        const id = makeIdentifier(tok.data, tok.loc);
-        return makeVar(id, tok.loc);
+        const id = ast.makeIdentifier(tok.data, tok.loc);
+        return ast.makeVar(id, tok.loc);
       }
       case "TokenSelf":
-        return makeSelf(tok.loc);
+        return ast.makeSelf(tok.loc);
       case "TokenSuper": {
         const next = p.pop();
         let index: ast.Node | null = null;
@@ -1276,7 +924,7 @@ class parser {
             if (error.isStaticError(fieldID)) {
               return fieldID;
             }
-            id = makeIdentifier(fieldID.data, fieldID.loc);
+            id = ast.makeIdentifier(fieldID.data, fieldID.loc);
             break;
           }
           case "TokenBracketL": {
@@ -1296,7 +944,7 @@ class parser {
           return error.MakeStaticError(
             "Expected . or [ after super.", tok.loc);
         }
-        return makeSuperIndex(index, id, tok.loc);
+        return ast.makeSuperIndex(index, id, tok.loc);
       }
     }
 
@@ -1354,7 +1002,7 @@ class parser {
         if (error.isStaticError(rest)) {
           return rest;
         }
-        return makeAssert(cond, msg, rest, locFromTokenAST(begin, rest));
+        return ast.makeAssert(cond, msg, rest, locFromTokenAST(begin, rest));
       }
 
       case "TokenError": {
@@ -1363,7 +1011,7 @@ class parser {
         if (error.isStaticError(expr)) {
           return expr;
         }
-        return makeError(expr, locFromTokenAST(begin, expr));
+        return ast.makeError(expr, locFromTokenAST(begin, expr));
       }
 
       case "TokenIf": {
@@ -1390,7 +1038,7 @@ class parser {
           }
           lr = locFromTokenAST(begin, branchFalse)
         }
-        return makeConditional(cond, branchTrue, branchFalse, lr);
+        return ast.makeConditional(cond, branchTrue, branchFalse, lr);
       }
 
       case "TokenFunction": {
@@ -1431,7 +1079,7 @@ class parser {
           return body;
         }
         if (ast.isLiteralString(body)) {
-          return makeImport(body.value, locFromTokenAST(begin, body));
+          return ast.makeImport(body.value, locFromTokenAST(begin, body));
         }
         return error.MakeStaticError(
           "Computed imports are not allowed", body.loc);
@@ -1444,7 +1092,7 @@ class parser {
           return body;
         }
         if (ast.isLiteralString(body)) {
-          return makeImportStr(body.value, locFromTokenAST(begin, body));
+          return ast.makeImportStr(body.value, locFromTokenAST(begin, body));
         }
         return error.MakeStaticError(
           "Computed imports are not allowed", body.loc);
@@ -1472,7 +1120,7 @@ class parser {
         if (error.isStaticError(body)) {
           return body;
         }
-        return makeLocal(binds, body, locFromTokenAST(begin, body));
+        return ast.makeLocal(binds, body, locFromTokenAST(begin, body));
       }
 
       default: {
@@ -1489,7 +1137,7 @@ class parser {
             if (error.isStaticError(expr)) {
               return expr;
             }
-            return makeUnary(uop, expr, locFromTokenAST(op, expr));
+            return ast.makeUnary(uop, expr, locFromTokenAST(op, expr));
           }
         }
 
@@ -1559,7 +1207,7 @@ class parser {
                 return end;
               }
 
-              lhs = makeIndex(lhs, index, null, locFromTokens(begin, end));
+              lhs = ast.makeIndex(lhs, index, null, locFromTokens(begin, end));
               break;
             }
             case "TokenDot": {
@@ -1567,8 +1215,8 @@ class parser {
               if (error.isStaticError(fieldID)) {
                 return fieldID;
               }
-              const id = makeIdentifier(fieldID.data, fieldID.loc);
-              lhs = makeIndex(lhs, null, id, locFromTokens(begin, fieldID));
+              const id = ast.makeIdentifier(fieldID.data, fieldID.loc);
+              lhs = ast.makeIndex(lhs, null, id, locFromTokens(begin, fieldID));
               break;
             }
             case "TokenParenL": {
@@ -1584,7 +1232,7 @@ class parser {
                 p.pop();
                 tailStrict = true;
               }
-              lhs = makeApply(
+              lhs = ast.makeApply(
                 lhs, args, gotComma, tailStrict, locFromTokens(begin, end));
               break;
             }
@@ -1593,7 +1241,7 @@ class parser {
               if (error.isStaticError(result)) {
                 return result;
               }
-              lhs = makeApplyBrace(
+              lhs = ast.makeApplyBrace(
                 lhs, result.objRemainder, locFromTokens(begin, result.next));
               break;
             }
@@ -1605,7 +1253,7 @@ class parser {
               if (bop == null) {
                 throw new Error("INTERNAL ERROR: `parse` can't return a null node unless an `error` is populated");
               }
-              lhs = makeBinary(lhs, bop, rhs, locFromTokenAST(begin, rhs));
+              lhs = ast.makeBinary(lhs, bop, rhs, locFromTokenAST(begin, rhs));
               break;
             }
           }
@@ -1635,7 +1283,5 @@ export const Parse = (
     return error.MakeStaticError(`Did not expect: ${p.peek()}`, p.peek().loc);
   }
 
-  // TODO: Don't cast me bro.
-  return <ast.Node>expr;
+  return expr;
 }
-

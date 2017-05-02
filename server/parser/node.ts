@@ -103,6 +103,20 @@ export interface Identifier extends Node {
   readonly name: IdentifierName
 }
 
+export const makeIdentifier = (
+  name: string, loc: error.LocationRange
+): Identifier => {
+  return {
+    type:     "IdentifierNode",
+    loc:      loc,
+    name:     name,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // TODO(jbeda) implement interning of IdentifierNames if necessary.  The C++
 // version does so.
 
@@ -162,6 +176,24 @@ export interface Apply extends Node {
   readonly tailStrict:    boolean
 }
 
+export const makeApply = (
+  target: Node, args: Nodes, trailingComma: boolean,
+  tailStrict: boolean, loc: error.LocationRange,
+): Apply => {
+  return {
+    type:          "ApplyNode",
+    target:        target,
+    arguments:     args,
+    trailingComma: trailingComma,
+    tailStrict:    tailStrict,
+    loc:           loc,
+    freeVars:      im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // ApplyBrace represents e { }.  Desugared to e + { }.
@@ -170,6 +202,21 @@ export interface ApplyBrace extends Node {
   readonly left:  Node
   readonly right: Node
 }
+
+export const makeApplyBrace = (
+  left: Node, right: Node, loc: error.LocationRange
+): ApplyBrace => {
+  return {
+    type:     "ApplyBraceNode",
+    left:     left,
+    right:    right,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -182,6 +229,24 @@ export interface Array extends Node {
   readonly trailingComment: Comment | null
 }
 
+export const makeArray = (
+  elements: Nodes, trailingComma: boolean, headingComment: Comment | null,
+  trailingComment: Comment | null, loc: error.LocationRange,
+): Array => {
+  return {
+    type:            "ArrayNode",
+    loc:             loc,
+    elements:        elements,
+    trailingComma:   trailingComma,
+    headingComment:  headingComment,
+    trailingComment: trailingComment,
+    freeVars:        im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // ArrayComp represents array comprehensions (which are like Python list
@@ -192,6 +257,23 @@ export interface ArrayComp extends Node {
   readonly trailingComma: boolean
   readonly specs:         CompSpecs
 }
+
+export const makeArrayComp = (
+  body: Node, trailingComma: boolean, specs: CompSpecs,
+  loc: error.LocationRange,
+): ArrayComp => {
+  return {
+    type:          "ArrayCompNode",
+    body:          body,
+    trailingComma: trailingComma,
+    specs:         specs,
+    loc:           loc,
+    freeVars:      im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -205,6 +287,23 @@ export interface Assert extends Node {
   readonly message: Node | null
   readonly rest:    Node
 }
+
+export const makeAssert = (
+  cond: Node, message: Node | null, rest: Node,
+  loc: error.LocationRange,
+): Assert => {
+  return {
+    type:     "AssertNode",
+    cond:     cond,
+    message:  message,
+    rest:     rest,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -296,6 +395,22 @@ export interface Binary extends Node {
   readonly right: Node
 }
 
+export const makeBinary = (
+  left: Node, op: BinaryOp, right: Node, loc: error.LocationRange,
+): Binary => {
+  return {
+    type:     "BinaryNode",
+    left:     left,
+    op:       op,
+    right:    right,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // Builtin represents built-in functions.
@@ -321,10 +436,38 @@ export interface Conditional extends Node {
   readonly branchFalse: Node | null
 }
 
+export const makeConditional = (
+  cond: Node, branchTrue: Node, branchFalse: Node | null,
+  loc: error.LocationRange,
+): Conditional => {
+  return {
+    type:        "ConditionalNode",
+    cond:        cond,
+    branchTrue:  branchTrue,
+    branchFalse: branchFalse,
+    loc:         loc,
+    freeVars:    im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // Dollar represents the $ keyword
 export interface Dollar extends Node { readonly type: "DollarNode" };
+
+export const makeDollar = (loc: error.LocationRange): Dollar => {
+  return {
+    type:     "DollarNode",
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  };
+};
 
 // ---------------------------------------------------------------------------
 
@@ -333,6 +476,18 @@ export interface Error extends Node {
   readonly type: "ErrorNode"
   readonly expr: Node
 }
+
+export const makeError = (expr: Node, loc: error.LocationRange): Error => {
+  return {
+    type:     "ErrorNode",
+    expr:     expr,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -354,6 +509,18 @@ export interface Import extends Node {
   readonly file: string
 }
 
+export const makeImport = (file: string, loc: error.LocationRange): Import => {
+  return {
+    type:     "ImportNode",
+    file:     file,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // ImportStr represents importstr "file".
@@ -361,6 +528,20 @@ export interface ImportStr extends Node {
   readonly type: "ImportStrNode"
   readonly file: string
 }
+
+export const makeImportStr = (
+  file: string, loc: error.LocationRange
+): ImportStr => {
+  return {
+    type:     "ImportStrNode",
+    file:     file,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -375,6 +556,23 @@ export interface Index extends Node {
   readonly id:     Identifier | null
 }
 
+export const makeIndex = (
+  target: Node, index: Node | null, id: Identifier | null,
+  loc: error.LocationRange,
+): Index => {
+  return {
+    type:     "IndexNode",
+    target:   target,
+    index:    index,
+    id:       id,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // LocalBind is a helper struct for Local
@@ -387,12 +585,40 @@ export interface LocalBind {
 }
 export type LocalBinds = im.List<LocalBind>
 
+export const makeLocalBind = (
+  variable: Identifier, body: Node, functionSugar: boolean,
+  params: IdentifierNames, trailingComma: boolean,
+): LocalBind => {
+  return {
+    variable:      variable,
+    body:          body,
+    functionSugar: functionSugar,
+    params:        params, // if functionSugar is true
+    trailingComma: trailingComma,
+  }
+};
+
 // Local represents local x = e; e.  After desugaring, functionSugar is false.
 export interface Local extends Node {
   readonly type:  "LocalNode"
   readonly binds: LocalBinds
   readonly body:  Node
 }
+
+export const makeLocal = (
+  binds: LocalBinds, body: Node, loc: error.LocationRange
+): Local => {
+  return {
+    type:     "LocalNode",
+    binds:    binds,
+    body:     body,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -402,10 +628,35 @@ export interface LiteralBoolean extends Node {
   readonly value: boolean
 }
 
+export const makeLiteralBoolean = (
+  value: boolean, loc: error.LocationRange
+): LiteralBoolean => {
+  return {
+    type:     "LiteralBooleanNode",
+    value:    value,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // LiteralNull represents the null keyword
 export interface LiteralNull extends Node { readonly type: "LiteralNullNode" }
+
+export const makeLiteralNull = (loc: error.LocationRange): LiteralNull => {
+  return {
+    type:     "LiteralNullNode",
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  };
+};
 
 // ---------------------------------------------------------------------------
 
@@ -415,6 +666,21 @@ export interface LiteralNumber extends Node {
   readonly value:          number
   readonly originalString: string
 }
+
+export const makeLiteralNumber = (
+  value: number, originalString: string, loc: error.LocationRange
+): LiteralNumber => {
+  return {
+    type:           "LiteralNumberNode",
+    value:          value,
+    originalString: originalString,
+    loc: loc,
+    freeVars:      im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -434,6 +700,23 @@ export interface LiteralString extends Node {
 export const isLiteralString = (x: Node): x is LiteralString => {
     return x.type === "LiteralStringNode";
 }
+
+export const makeLiteralString = (
+  value: string, kind: LiteralStringKind, loc: error.LocationRange, blockIndent: string
+): LiteralString => {
+  return {
+    type:        "LiteralStringNode",
+    loc:         loc,
+    value:       value,
+    kind:        kind,
+    blockIndent: blockIndent,
+    freeVars:    im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 
 // ---------------------------------------------------------------------------
 
@@ -491,6 +774,23 @@ export interface ObjectNode extends Node {
   readonly headingComments: Comments
 }
 
+export const makeObject = (
+  fields: ObjectFields, trailingComma: boolean,
+  headingComments: Comments, loc: error.LocationRange,
+): ObjectNode => {
+  return {
+    type: "ObjectNode",
+    loc: loc,
+    fields:          fields,
+    trailingComma:   trailingComma,
+    headingComments: headingComments,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 export interface DesugaredObjectField {
@@ -540,6 +840,17 @@ export interface ObjectComprehensionSimple extends Node {
 // Self represents the self keyword.
 export interface Self extends Node { readonly type: "SelfNode" };
 
+export const makeSelf = (loc: error.LocationRange): Self => {
+  return {
+    type:     "SelfNode",
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  };
+};
+
 // ---------------------------------------------------------------------------
 
 // SuperIndex represents the super[e] and super.f constructs.
@@ -551,6 +862,21 @@ export interface SuperIndex extends Node {
   readonly index: Node | null
   readonly id:    Identifier | null
 }
+
+export const makeSuperIndex = (
+  index: Node | null, id: Identifier | null, loc: error.LocationRange
+): SuperIndex => {
+  return {
+    type:     "SuperIndexNode",
+    index:    index,
+    id:       id,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -581,6 +907,21 @@ export interface Unary extends Node {
   readonly expr: Node
 }
 
+export const makeUnary = (
+  op: UnaryOp, expr: Node, loc: error.LocationRange,
+): Unary => {
+  return {
+    type:     "UnaryNode",
+    op:       op,
+    expr:     expr,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
 // ---------------------------------------------------------------------------
 
 // Var represents variables.
@@ -592,5 +933,17 @@ export interface Var extends Node {
 export const isVar = (x: Node): x is Var => {
     return x.type === "VarNode";
 }
+
+export const makeVar = (id: Identifier, loc: error.LocationRange): Var => {
+  return {
+    type:     "VarNode",
+    id:       id,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  };
+};
 
 // ---------------------------------------------------------------------------
