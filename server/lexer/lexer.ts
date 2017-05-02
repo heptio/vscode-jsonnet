@@ -160,6 +160,8 @@ export class Token {
 
 export type Tokens = im.List<Token>;
 
+export const emptyTokens = im.List<Token>();
+
 // ---------------------------------------------------------------------------
 // Helpers
 

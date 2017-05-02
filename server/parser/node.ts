@@ -103,6 +103,10 @@ export interface Identifier extends Node {
   readonly name: IdentifierName
 }
 
+export const isIdentifier = (node: Node): node is Identifier => {
+    return node.type === "IdentifierNode";
+}
+
 export const makeIdentifier = (
   name: string, loc: error.LocationRange
 ): Identifier => {
@@ -556,6 +560,10 @@ export interface Index extends Node {
   readonly id:     Identifier | null
 }
 
+export const isIndex = (node: any): node is Index => {
+    return node.type === "IndexNode";
+}
+
 export const makeIndex = (
   target: Node, index: Node | null, id: Identifier | null,
   loc: error.LocationRange,
@@ -749,18 +757,6 @@ export interface ObjectField extends Node {
 
 // TODO(jbeda): Add the remaining constructor helpers here
 
-// func MakeObjectFieldBase(loc LocationRange) NodeBase {
-//   return MakeNodeBase(, loc, IdentifierNames{})
-// }
-
-// func ObjectFieldLocal(methodSugar bool, id *Identifier, ids IdentifierNames, trailingComma bool, body Node) ObjectField {
-//   return ObjectField{MakeObjectFieldBase(*body.LocationRange()), ObjectLocal, ObjectFieldVisible, false, methodSugar, nil, id, ids, trailingComma, body, nil, nil}
-// }
-
-// func ObjectFieldLocalNoMethod(id *Identifier, body Node) ObjectField {
-//   return ObjectField{MakeObjectFieldBase(*body.LocationRange()), ObjectLocal, ObjectFieldVisible, false, false, nil, id, IdentifierNames{}, false, body, nil, nil}
-// }
-
 export type ObjectFields = im.List<ObjectField>;
 
 // Object represents object constructors { f: e ... }.
@@ -772,6 +768,10 @@ export interface ObjectNode extends Node {
   readonly fields:          ObjectFields
   readonly trailingComma:   boolean
   readonly headingComments: Comments
+}
+
+export const isObjectNode = (node: any): node is ObjectNode => {
+    return node.type === "ObjectNode";
 }
 
 export const makeObject = (

@@ -64,33 +64,33 @@ export class Analyzer implements EventedAnalyzer {
   ): Promise<service.CompletionInfo[]> => {
     const doc = this.documents.get(fileUri);
 
-    return new Promise<immutable.List<lexer.Token>>(
+    return new Promise<service.CompletionInfo[]>(
       (resolve, reject) => {
-        const partialParse = this.compilerService.parseUntil(
-          fileUri, doc.text, cursorLoc, doc.version);
-        if (partialParse == null) {
-          reject(`Failed to do a partial parse document at '${fileUri}'`);
+        //
+        // Generate suggestions. This process follows three steps:
+        //
+        // 1. Try to parse the document text.
+        // 2. If we succeed, go to cursor, select that node, and if
+        //    it's an identifier that can be completed, then return
+        //    the environment.
+        // 3. If we fail, go try to go to the "hole" where the
+        //    identifier exists.
+        //
+
+        const parse = this.compilerService.cache(
+          fileUri, doc.text, doc.version);
+        if (compiler.isFailedParsedDocument(parse)) {
+          // TODO: Fix me.
+          const msg = `Failed to do a partial parse document at '${fileUri}'`;
+          reject(msg);
           return;
         }
-        resolve(findCompletionTokens(partialParse.lex, cursorLoc));
-      })
-      .then(tokens => {
-        const lastSavedDoc = this.compilerService.getLastSuccess(fileUri);
-        const parseLastDocument = new Promise<ast.Node | null>(
-          (resolve, reject) => {
-            resolve(lastSavedDoc && lastSavedDoc.parse || null);
-          });
 
-          return Promise.all([tokens, parseLastDocument]);
-      })
-      .then(([tokens, lastDocumentRoot]) => {
-        if (lastDocumentRoot == null) { return []; }
+        const nodeAtPos = this.getNodeAtPositionFromAst(
+          parse.parse, cursorLoc);
 
-        const nodeAtPos =
-          this.getNodeAtPositionFromAst(lastDocumentRoot, cursorLoc);
-
-        return (nodeAtPos && nodeAtPos.env &&
-          this.completeTokens(tokens, nodeAtPos.env)) || [];
+        const completions = this.completionsFromNode(nodeAtPos);
+        resolve(completions);
       });
   }
 
@@ -98,65 +98,108 @@ export class Analyzer implements EventedAnalyzer {
   // Utilities.
   //
 
-  private completeTokens = (
-    tokens: immutable.List<lexer.Token>,
-    env: ast.Environment,
+  private completionsFromNode = (
+    node: ast.Node,
   ): service.CompletionInfo[] => {
-    const completion =
-      (label, kind, data): service.CompletionInfo => <service.CompletionInfo>{
-        label: label,
-        kind: kind,
-        data: data,
-      };
+    //
+    // We suggest completions only for `Identifier` nodes that are in
+    // specific places in the AST. In particular, we would suggest a
+    // completion if the identifier is a:
+    //
+    // 1. Variable references, i.e., identifiers that reference
+    //    specific variables, that are in scope.
+    // 2. Identifiers that are part of an index expression, e.g.,
+    //    `foo.bar`.
+    //
+    // Note that requiring `node` to be an `Identifier` does
+    // disqualify autocompletions in places like comments or strings.
+    //
 
-    const tokenCount = tokens.count();
-    if (tokenCount == 0) {
-      return []
+    // Only suggest completions if the node is an identifier.
+    if (!ast.isIdentifier(node)) {
+      return [];
     }
-    if (tokenCount == 1 || tokenCount == 2) {
-      // It's a `local` value. Autocomplete suggestions.
-      return envToSuggestions(env);
-    } else {
-      // Repeatedly consume tokens and attempt to populate autocomplete
-      // suggestions.
-      let tokenStream = tokens;
-      let currEnv = env;
-      let tokenCount = tokenStream.count();
-      let lastResolved: ast.Node | null = null;
 
-      while (true) {
-        const nextToken = tokens.first();
-        tokenStream = tokens.shift();
-        tokenCount--;
+    // Document root. Give suggestions from the environment if we have
+    // them. In a well-formed Jsonnet AST, this should not return
+    // valid responses, but return from the environment in case the
+    // tree parent was garbled somehow.
+    const parent = node.parent;
+    if (parent == null) {
+      return node.env && envToSuggestions(node.env) || [];
+    }
 
-        if (tokenCount == 1) {
-          // Last token. Autocomplete suggestions.
-          if (lastResolved == null) {
-            throw new Error("INTERNAL ERROR: lastResolved can't be null");
-          }
-          return getCompletableFields(lastResolved);
-        }
-
-        if (nextToken.kind == "TokenIdentifier") {
-          // Attempt to lookup identifier.
-          const node = this.resolveFromEnv(nextToken.data, currEnv);
-          if (node == null) { return []; }
-          if (node.env == null) {
-            throw new Error(`INTERNAL ERROR: A node environment should never be null ${ast.renderAsJson(node)}`);
-          }
-
-          if (lastResolved != null) {
-            return getCompletableFields(lastResolved);
-          }
-          lastResolved = node;
-          continue;
-        } else if (nextToken.kind == "TokenOperator") {
-          // Currently only `.` operator allowed.
-          if (nextToken.data !== ".") { return []; }
-          continue;
-        }
+    // Identifier is a variable.
+    let index: ast.Index | null = null;
+    if (ast.isVar(parent)) {
+      // Identifier is a variable that is part of an index expression,
+      // e.g., the `b` in `a.b`.
+      if (parent.parent != null && ast.isIndex(parent.parent)) {
+        index = parent.parent;
+      } else {
+        // Identifier is just a variable. Suggest completions from
+        // environment.
+        return node.env && envToSuggestions(node.env) || [];
       }
+    } else if (ast.isIndex(parent)) {
+      // Identifier is part of an index expression.
+      index = parent;
+    } else {
+      // Identifier part of a completable expression.
+      return [];
     }
+
+    // Index target is a variable. e.g., this is `a` in `a.b`.
+    //
+    // TODO: We're not handling the case where the cursor is inside
+    // the target, and not the index. We should!
+    if(!ast.isVar(index.target)) {
+      const target = ast.renderAsJson(index.target);
+      throw new Error(`Target of index must be a var node:\n${target}`);
+    }
+
+    // Resolve the target, get public fields we could reference,
+    // return as completion items.
+    const resolved = this.resolveVar(index.target);
+    if (resolved == null || !ast.isObjectNode(resolved)) {
+      return [];
+    }
+
+    return resolved.fields
+      .filter((field: ast.ObjectField) =>
+        field != null && field.id != null && field.expr2 != null)
+      .map((field: ast.ObjectField) => {
+        if (field == null || field.id == null || field.expr2 == null) {
+          throw new Error(
+            `INTERNAL ERROR: Filtered out null fields, but found field null`);
+        }
+        const comments = this.getComments(field);
+        const kind: service.CompletionType = "Field";
+        return {
+          label: field.id.name,
+          kind: kind,
+          documentation: comments || undefined,
+        };
+      })
+      .toArray();
+  }
+
+  private getComments = (field: ast.ObjectField): string | null => {
+    // Convert to field object, pull comments out.
+    const comments = field.headingComments;
+    if (comments == null || comments.count() == 0) {
+      return null;
+    }
+
+    return comments
+      .reduce((acc: string[], curr) => {
+        if (curr == undefined) {
+          throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
+        }
+        acc.push(curr.text);
+        return acc;
+      }, [])
+      .join("\n");
   }
 
   //
@@ -195,20 +238,7 @@ export class Analyzer implements EventedAnalyzer {
           }
 
           // Convert to field object, pull comments out.
-          const comments = field.headingComments;
-          if (comments == null || comments.count() == 0) {
-            return null;
-          }
-
-          return comments
-            .reduce((acc: string[], curr) => {
-              if (curr == undefined) {
-                throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
-              }
-              acc.push(curr.text);
-              return acc;
-            }, [])
-            .join("\n");
+          return this.getComments(field);
         }
         default: {
           node = node.parent;
@@ -334,8 +364,11 @@ export class Analyzer implements EventedAnalyzer {
           this.documents.get(fileToImport);
         const cached =
           this.compilerService.cache(fileToImport, docText, version);
+        if (compiler.isFailedParsedDocument(cached)) {
+          return null;
+        }
 
-        return cached && cached.parse;
+        return cached.parse;
       }
       default: {
         throw new Error(
@@ -349,10 +382,13 @@ export class Analyzer implements EventedAnalyzer {
   ): ast.Node => {
     const {text: docText, version: version} = this.documents.get(fileUri);
     const cached = this.compilerService.cache(fileUri, docText, version);
-    if (cached == null) {
+    if (compiler.isFailedParsedDocument(cached)) {
       // TODO: Handle this error without an exception.
+      const err = compiler.isLexFailure(cached.parse)
+        ? cached.parse.lexError.Error()
+        : cached.parse.parseError.Error()
       throw new Error(
-        `INTERNAL ERROR: Could not cache analysis of file ${fileUri}`);
+        `INTERNAL ERROR: Could not cache analysis of file ${fileUri}:\b${err}`);
     }
 
     return this.getNodeAtPositionFromAst(cached.parse, pos);
@@ -370,93 +406,6 @@ export class Analyzer implements EventedAnalyzer {
 //
 // Utilities.
 //
-
-// findCompletionTokens finds all "completable" tokens starting from
-// the end of the token stream.
-const findCompletionTokens = (
-  tokens: immutable.List<lexer.Token>, loc: error.Location
-): immutable.List<lexer.Token> => {
-  let stop = false;
-  const completionTokens = tokens
-    .reverse()
-    // TODO: We might want to skip a terminal EOF here. It's not clear
-    // that autocomplete will work if the last token is an EOF.
-    .takeUntil(token => {
-      // TODO: This should be handled by the partial-parser, not us.
-
-      if (token == null || stop) {
-        return true;
-      }
-      switch (token.kind) {
-        case "TokenIdentifier": {
-          // Two subsequent identifier tokens are always separated by
-          // whitespace. We want only the last of these tokens.
-          if (token.fodder && token.fodder.length > 0) {
-            stop = true;
-          }
-          return false;
-        }
-        case "TokenDot": {
-          return false;
-        }
-        default: return true;
-      }
-    })
-    .reverse()
-    .toList();
-
-  // Append an EOF token if we don't have one, to avoid choking
-  // the parser.
-  const lastElement = completionTokens.last();
-  if (lastElement == null || lastElement.kind != "TokenEndOfFile") {
-    const eofToken: lexer.Token = new lexer.Token(
-      "TokenEndOfFile",
-      null,
-      ".",
-      "",
-      "",
-      new error.LocationRange(
-        "",
-        new error.Location(-1, -1),
-        new error.Location(-1, -1)),
-    );
-    return completionTokens.push(eofToken);
-  } else {
-    return completionTokens;
-  }
-};
-
-const getCompletableFields = (node: ast.Node): service.CompletionInfo[] => {
-  if (node.type != "ObjectNode") {
-    return []
-  }
-
-  const objNode = <ast.ObjectNode>node;
-  return objNode.fields.map(field => {
-    let id: string | null = null;
-    if (field == undefined) {
-      throw new Error(`INTERNAL ERROR: element was undefined during a map call`);
-    }
-    if (field.id != null) {
-      id = field.id.name;
-    } else {
-      console.log(`Only fields with ids are currently supported for autocomplete:\n${ast.renderAsJson(field)}`);
-    }
-    const docs = field.headingComments == null
-      ? null
-      : field.headingComments.map(comment => {
-          if (comment == undefined) {
-            throw new Error(`INTERNAL ERROR: element was undefined during a map call`);
-          }
-          return comment.text;
-        }).join("\n\n");
-    return <service.CompletionInfo>{
-      label: id,
-      kind: "Field",
-      documentation: docs,
-    };
-  }).toArray();
-}
 
 const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
     return env.map((value, key) => {
