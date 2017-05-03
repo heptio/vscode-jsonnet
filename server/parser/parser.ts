@@ -573,12 +573,12 @@ class parser {
       //     // Explains `foo`.
       //     , foo: "bar"
       //
-      // To accomodate both styles, we attempt to parse comments before
-      // and after the comma. If there are comments after, that is
-      // becomes the heading comment for that field; if not, then we use
-      // any comments that happen after the line that contains the last
-      // field, but before the comma. So, for example, we ignore the
-      // following comment:
+      // To accomodate both styles, we attempt to parse comments
+      // before and after the comma. If there are comments after, that
+      // is becomes the heading comment for that field; if not, then
+      // we use any comments that happen after the line that contains
+      // the last field, but before the comma. So, for example, we
+      // ignore the following comment:
       //
       //     , foo: "value1" // This comment is not a heading comment.
       //     // But this one is.
@@ -796,8 +796,8 @@ class parser {
       this.parseOptionalComments();
     }
 
-    // TODO: Remove trailing whitespace here after we emit newlines from
-    // the lexer. If we don't do that, we might accidentally kill
+    // TODO: Remove trailing whitespace here after we emit newlines
+    // from the lexer. If we don't do that, we might accidentally kill
     // comments that correspond to, e.g., the next field of an object.
 
     return ast.makeArray(elements, gotComma, null, null, locFromTokens(tok, next));
@@ -858,8 +858,8 @@ class parser {
 
       // Literals
       case "TokenNumber": {
-        // This shouldn't fail as the lexer should make sure we have good input but
-        // we handle the error regardless.
+        // This shouldn't fail as the lexer should make sure we have
+        // good input but we handle the error regardless.
         const num = Number(tok.data);
         // TODO: Figure out whether this is correct.
         if (isNaN(num) && tok.data !== "NaN") {
@@ -952,8 +952,8 @@ class parser {
     }
 
     switch (begin.kind) {
-      // These cases have effectively maxPrecedence as the first
-      // call to parse will parse them.
+      // These cases have effectively maxPrecedence as the first call
+      // to parse will parse them.
       case "TokenAssert": {
         this.pop();
         const cond = this.parse(maxPrecedence, im.List<ast.Comment>());
@@ -1131,17 +1131,18 @@ class parser {
 
           let bop: ast.BinaryOp | null = null;
 
-          // Check precedence is correct for this level.  If we're parsing operators
-          // with higher precedence, then return lhs and let lower levels deal with
-          // the operator.
+          // Check precedence is correct for this level.  If we're
+          // parsing operators with higher precedence, then return lhs
+          // and let lower levels deal with the operator.
           switch (this.peek().kind) {
             case "TokenOperator": {
               // _ = "breakpoint"
               if (this.peek().data === ":") {
-                // Special case for the colons in assert. Since COLON is no-longer a
-                // special token, we have to make sure it does not trip the
-                // op_is_binary test below.  It should terminate parsing of the
-                // expression here, returning control to the parsing of the actual
+                // Special case for the colons in assert. Since COLON
+                // is no-longer a special token, we have to make sure
+                // it does not trip the op_is_binary test below.  It
+                // should terminate parsing of the expression here,
+                // returning control to the parsing of the actual
                 // assert AST.
                 return lhs;
               }
