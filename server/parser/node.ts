@@ -48,6 +48,7 @@ export type NodeKind =
   "CompSpecNode" |
   "ApplyNode" |
   "ApplyBraceNode" |
+  "ApplyParamAssignmentNode" |
   "ArrayNode" |
   "ArrayCompNode" |
   "AssertNode" |
@@ -57,6 +58,7 @@ export type NodeKind =
   "DollarNode" |
   "ErrorNode" |
   "FunctionNode" |
+  "FunctionParamNode" |
   "IdentifierNode" |
   "ImportNode" |
   "ImportStrNode" |
@@ -192,6 +194,35 @@ export const makeApply = (
     tailStrict:    tailStrict,
     loc:           loc,
     freeVars:      im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
+
+export interface ApplyParamAssignment extends Node {
+  readonly type:  "ApplyParamAssignmentNode"
+  readonly id:    IdentifierName
+  readonly right: Node
+}
+export type ApplyParamAssignments = im.List<ApplyParamAssignment>
+
+export const isApplyParamAssignment = (
+  node: Node
+): node is ApplyParamAssignment => {
+  const nodeType: NodeKind = "ApplyParamAssignmentNode";
+  return node.type === nodeType;
+};
+
+export const makeApplyParamsAssignment = (
+  id: IdentifierName, right: Node, loc: error.LocationRange
+): ApplyParamAssignment => {
+  return {
+    type:     "ApplyParamAssignmentNode",
+    id:       id,
+    right:    right,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
 
     parent: null,
     env: null,
@@ -498,12 +529,35 @@ export const makeError = (expr: Node, loc: error.LocationRange): Error => {
 // Function represents a function call. (jbeda: or is it function defn?)
 export interface Function extends Node {
   readonly type:            "FunctionNode"
-  readonly parameters:      IdentifierNames
+  readonly parameters:      FunctionParams
   readonly trailingComma:   boolean
   readonly body:            Node
   readonly headingComment:  Comments
   readonly trailingComment: Comments
 }
+
+export interface FunctionParam extends Node {
+  readonly type:         "FunctionParamNode"
+  readonly id:           IdentifierName
+  readonly defaultValue: Node | null
+}
+export type FunctionParams = im.List<FunctionParam>
+
+export const makeFunctionParam = (
+  id: IdentifierName, loc: error.LocationRange,
+  defaultValue: Node | null = null,
+): FunctionParam => {
+  return {
+    type:         "FunctionParamNode",
+    id:           id,
+    loc:          loc,
+    defaultValue: defaultValue,
+    freeVars:     im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -588,14 +642,14 @@ export interface LocalBind {
   readonly variable:      Identifier
   readonly body:          Node
   readonly functionSugar: boolean
-  readonly params:        IdentifierNames // if functionSugar is true
+  readonly params:        FunctionParams // if functionSugar is true
   readonly trailingComma: boolean
 }
 export type LocalBinds = im.List<LocalBind>
 
 export const makeLocalBind = (
   variable: Identifier, body: Node, functionSugar: boolean,
-  params: IdentifierNames, trailingComma: boolean,
+  params: FunctionParams, trailingComma: boolean,
 ): LocalBind => {
   return {
     variable:      variable,
@@ -748,7 +802,7 @@ export interface ObjectField extends Node {
   readonly methodSugar:     boolean         // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
   readonly expr1:           Node | null     // Not in scope of the object
   readonly id:              Identifier | null
-  readonly ids:             IdentifierNames // If methodSugar == true then holds the params.
+  readonly ids:             FunctionParams  // If methodSugar == true then holds the params.
   readonly trailingComma:   boolean         // If methodSugar == true then remembers the trailing comma
   readonly expr2:           Node | null     // In scope of the object (can see self).
   readonly expr3:           Node | null     // In scope of the object (can see self).

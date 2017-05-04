@@ -117,10 +117,11 @@ class parser {
     return comments
   };
 
-  public parseCommaList = (
-    end: lexer.TokenKind, elementKind: string
-  ): {next: lexer.Token, exprs: ast.Nodes, gotComma: boolean} | error.StaticError => {
-    let exprs = im.List<ast.Node>();
+  public parseCommaList = <T extends ast.Node>(
+    end: lexer.TokenKind, elementKind: string,
+    elementCallback: (e: ast.Node) => T | error.StaticError = (e) => <T>e,
+  ): {next: lexer.Token, exprs: im.List<T>, gotComma: boolean} | error.StaticError => {
+    let exprs = im.List<T>();
     let gotComma = false;
     let first = true;
     while (true) {
@@ -146,31 +147,79 @@ class parser {
       if (error.isStaticError(expr)) {
         return expr;
       }
-      exprs = exprs.push(expr);
+
+      const mappedExpr = elementCallback(expr);
+      if (error.isStaticError(mappedExpr)) {
+        return mappedExpr;
+      }
+      exprs = exprs.push(mappedExpr);
+
       gotComma = false;
       first = false;
     }
   }
 
-  public parseIdentifierList = (
+  public parseArgsList = (
     elementKind: string
-  ): {ids: ast.IdentifierNames, gotComma: boolean} | error.StaticError => {
-    const result = this.parseCommaList("TokenParenR", elementKind);
+  ): {next: lexer.Token, params: ast.Nodes, gotComma: boolean} | error.StaticError => {
+    const result = this.parseCommaList<ast.Node>(
+      "TokenParenR",
+      elementKind,
+      (expr): ast.Node | error.StaticError => {
+        const next = this.peek();
+        let rhs: ast.Node | null = null;
+        if (ast.isVar(expr) && next.kind === "TokenOperator" &&
+            next.data === "="
+        ) {
+          this.pop();
+          const assignment = this.parse(maxPrecedence, im.List<ast.Comment>());
+          if (error.isStaticError(assignment)) {
+            return assignment;
+          }
+          return ast.makeApplyParamsAssignment(
+            expr.id.name, assignment, expr.loc);
+        }
+
+        return expr;
+      });
     if (error.isStaticError(result)) {
       return result;
     }
 
-    let ids = im.List<ast.IdentifierName>();
-    for (let n of result.exprs.toArray()) {
-      if (!ast.isVar(n)) {
-        return error.MakeStaticError(
-          `Expected simple identifier but got a complex expression.`,
-          n.loc);
-      }
-      ids = ids.push(n.id.name);
+    return {next: result.next, params: result.exprs, gotComma: result.gotComma};
+  }
+
+  public parseParamsList = (
+    elementKind: string
+  ): {next: lexer.Token, params: ast.FunctionParams, gotComma: boolean} | error.StaticError => {
+    const result = this.parseCommaList<ast.FunctionParam>(
+      "TokenParenR",
+      elementKind,
+      (expr): ast.FunctionParam | error.StaticError => {
+        if (!ast.isVar(expr)) {
+          return error.MakeStaticError(
+            `Expected simple identifier but got a complex expression.`,
+            expr.loc);
+        }
+
+        const next = this.peek();
+        let rhs: ast.Node | null = null;
+        if (next.kind === "TokenOperator" && next.data === "=") {
+          this.pop();
+          const assignment = this.parse(maxPrecedence, im.List<ast.Comment>());
+          if (error.isStaticError(assignment)) {
+            return assignment;
+          }
+          rhs = assignment;
+        }
+        return ast.makeFunctionParam(expr.id.name, expr.loc, rhs);
+      });
+    if (error.isStaticError(result)) {
+      return result;
     }
-    return {ids: ids, gotComma: result.gotComma};
-  };
+
+    return {next: result.next, params: result.exprs, gotComma: result.gotComma};
+  }
 
   public parseBind = (
     binds: ast.LocalBinds
@@ -189,7 +238,7 @@ class parser {
 
     if (this.peek().kind === "TokenParenL") {
       this.pop();
-      const result = this.parseIdentifierList("function parameter");
+      const result = this.parseParamsList("function parameter");
       if (error.isStaticError(result)) {
         return result;
       }
@@ -204,7 +253,7 @@ class parser {
         return body;
       }
       const id = ast.makeIdentifier(varID.data, varID.loc);
-      const {ids: params, gotComma: gotComma} = result;
+      const {params: params, gotComma: gotComma} = result;
       const bind = ast.makeLocalBind(id, body, true, params, gotComma);
       binds = binds.push(bind);
     } else {
@@ -217,7 +266,8 @@ class parser {
         return body;
       }
       const id = ast.makeIdentifier(varID.data, varID.loc);
-      const bind = ast.makeLocalBind(id, body, false, im.List<string>(), false)
+      const bind = ast.makeLocalBind(
+        id, body, false, im.List<ast.FunctionParam>(), false);
       binds = binds.push(bind);
     }
 
@@ -377,17 +427,18 @@ class parser {
 
     let isMethod = false;
     let methComma = false;
-    let params = im.List<ast.IdentifierName>();
+    let params = im.List<ast.FunctionParam>();
     if (this.peek().kind === "TokenParenL") {
       this.pop();
-      const result = this.parseIdentifierList("method parameter");
+      const result = this.parseParamsList("method parameter");
       if (error.isStaticError(result)) {
         return result;
       }
+      params = result.params;
       isMethod = true
     }
 
-    const result /*[plusSugar, hide, parseAssignErr]*/ = this.parseObjectAssignmentOp();
+    const result = this.parseObjectAssignmentOp();
     if (error.isStaticError(result)) {
       return result;
     }
@@ -456,14 +507,15 @@ class parser {
 
     let isMethod = false;
     let funcComma = false;
-    let params = im.List<ast.IdentifierName>();
+    let params = im.List<ast.FunctionParam>();
     if (this.peek().kind === "TokenParenL") {
       this.pop();
-      isMethod = true;
-      const result = this.parseIdentifierList("function parameter");
+      const result = this.parseParamsList("function parameter");
       if (error.isStaticError(result)) {
         return result;
       }
+      isMethod = true;
+      params = result.params;
     }
     const pop = this.popExpectOp("=");
     if (error.isStaticError(pop)) {
@@ -540,7 +592,7 @@ class parser {
       methodSugar:     false,
       expr1:           null,
       id:              null,
-      ids:             im.List<ast.IdentifierName>(),
+      ids:             im.List<ast.FunctionParam>(),
       trailingComma:   false,
       headingComments: im.List<ast.Comment>(),
 
@@ -1020,7 +1072,7 @@ class parser {
         this.pop();
         const next = this.pop();
         if (next.kind === "TokenParenL") {
-          const result = this.parseIdentifierList("function parameter");
+          const result = this.parseParamsList("function parameter");
           if (error.isStaticError(result)) {
             return result;
           }
@@ -1031,7 +1083,7 @@ class parser {
           }
           const fn: ast.Function = {
             type:            "FunctionNode",
-            parameters:      result.ids,
+            parameters:      result.params,
             trailingComma:   result.gotComma,
             body:            body,
             loc:             locFromTokenAST(begin, body),
@@ -1137,7 +1189,7 @@ class parser {
           switch (this.peek().kind) {
             case "TokenOperator": {
               // _ = "breakpoint"
-              if (this.peek().data === ":") {
+              if (this.peek().data === ":" || this.peek().data === "=") {
                 // Special case for the colons in assert. Since COLON
                 // is no-longer a special token, we have to make sure
                 // it does not trip the op_is_binary test below.  It
@@ -1196,13 +1248,12 @@ class parser {
               break;
             }
             case "TokenParenL": {
-              const result = this.parseCommaList(
-                "TokenParenR", "function argument");
+              const result = this.parseArgsList("function argument");
               if (error.isStaticError(result)) {
                 return result;
               }
 
-              const {next: end, exprs: args, gotComma: gotComma} = result;
+              const {next: end, params: args, gotComma: gotComma} = result;
               let tailStrict = false
               if (this.peek().kind === "TokenTailStrict") {
                 this.pop();
