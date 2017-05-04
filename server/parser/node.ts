@@ -106,7 +106,8 @@ export interface Identifier extends Node {
 }
 
 export const isIdentifier = (node: Node): node is Identifier => {
-    return node.type === "IdentifierNode";
+  const nodeType: NodeKind = "IdentifierNode";
+  return node.type === nodeType;
 }
 
 export const makeIdentifier = (
@@ -141,6 +142,11 @@ export interface Comment extends Node {
   readonly text: string
 };
 export type Comments = im.List<Comment>;
+
+export const isComment = (node: Node): node is Comment => {
+  const nodeType: NodeKind = "CommentNode";
+  return node.type === nodeType;
+}
 
 export const MakeCppComment = (
   loc: error.LocationRange, text: string
@@ -180,6 +186,11 @@ export interface Apply extends Node {
   readonly arguments:     Nodes
   readonly trailingComma: boolean
   readonly tailStrict:    boolean
+}
+
+export const isApply = (node: Node): node is Apply => {
+  const nodeType: NodeKind = "ApplyNode";
+  return node.type === nodeType;
 }
 
 export const makeApply = (
@@ -238,6 +249,11 @@ export interface ApplyBrace extends Node {
   readonly right: Node
 }
 
+export const isApplyBrace = (node: Node): node is ApplyBrace => {
+  const nodeType: NodeKind = "ApplyBraceNode";
+  return node.type === nodeType;
+}
+
 export const makeApplyBrace = (
   left: Node, right: Node, loc: error.LocationRange
 ): ApplyBrace => {
@@ -262,6 +278,11 @@ export interface Array extends Node {
   readonly trailingComma:   boolean
   readonly headingComment:  Comment | null
   readonly trailingComment: Comment | null
+}
+
+export const isArray = (node: Node): node is Array => {
+  const nodeType: NodeKind = "ArrayNode";
+  return node.type === nodeType;
 }
 
 export const makeArray = (
@@ -293,6 +314,11 @@ export interface ArrayComp extends Node {
   readonly specs:         CompSpecs
 }
 
+export const isArrayComp = (node: Node): node is ArrayComp => {
+  const nodeType: NodeKind = "ArrayCompNode";
+  return node.type === nodeType;
+}
+
 export const makeArrayComp = (
   body: Node, trailingComma: boolean, specs: CompSpecs,
   loc: error.LocationRange,
@@ -321,6 +347,11 @@ export interface Assert extends Node {
   readonly cond:    Node
   readonly message: Node | null
   readonly rest:    Node
+}
+
+export const isAssert = (node: Node): node is Assert => {
+  const nodeType: NodeKind = "AssertNode";
+  return node.type === nodeType;
 }
 
 export const makeAssert = (
@@ -430,6 +461,11 @@ export interface Binary extends Node {
   readonly right: Node
 }
 
+export const isBinary = (node: Node): node is Binary => {
+  const nodeType: NodeKind = "BinaryNode";
+  return node.type === nodeType;
+}
+
 export const makeBinary = (
   left: Node, op: BinaryOp, right: Node, loc: error.LocationRange,
 ): Binary => {
@@ -458,6 +494,11 @@ export interface Builtin extends Node {
   readonly params: IdentifierNames
 }
 
+export const isBuiltin = (node: Node): node is Builtin => {
+  const nodeType: NodeKind = "BuiltinNode";
+  return node.type === nodeType;
+}
+
 // ---------------------------------------------------------------------------
 
 // Conditional represents if/then/else.
@@ -469,6 +510,11 @@ export interface Conditional extends Node {
   readonly cond:        Node
   readonly branchTrue:  Node
   readonly branchFalse: Node | null
+}
+
+export const isConditional = (node: Node): node is Conditional => {
+  const nodeType: NodeKind = "ConditionalNode";
+  return node.type === nodeType;
 }
 
 export const makeConditional = (
@@ -493,6 +539,11 @@ export const makeConditional = (
 // Dollar represents the $ keyword
 export interface Dollar extends Node { readonly type: "DollarNode" };
 
+export const isDollar = (node: Node): node is Dollar => {
+  const nodeType: NodeKind = "DollarNode";
+  return node.type === nodeType;
+}
+
 export const makeDollar = (loc: error.LocationRange): Dollar => {
   return {
     type:     "DollarNode",
@@ -510,6 +561,11 @@ export const makeDollar = (loc: error.LocationRange): Dollar => {
 export interface Error extends Node {
   readonly type: "ErrorNode"
   readonly expr: Node
+}
+
+export const isError = (node: Node): node is Error => {
+  const nodeType: NodeKind = "ErrorNode";
+  return node.type === nodeType;
 }
 
 export const makeError = (expr: Node, loc: error.LocationRange): Error => {
@@ -536,12 +592,22 @@ export interface Function extends Node {
   readonly trailingComment: Comments
 }
 
+export const isFunction = (node: Node): node is Function => {
+  const nodeType: NodeKind = "FunctionNode";
+  return node.type === nodeType;
+}
+
 export interface FunctionParam extends Node {
   readonly type:         "FunctionParamNode"
   readonly id:           IdentifierName
   readonly defaultValue: Node | null
 }
 export type FunctionParams = im.List<FunctionParam>
+
+export const isFunctionParam = (node: Node): node is FunctionParam => {
+  const nodeType: NodeKind = "FunctionParamNode";
+  return node.type === nodeType;
+}
 
 export const makeFunctionParam = (
   id: IdentifierName, loc: error.LocationRange,
@@ -567,6 +633,11 @@ export interface Import extends Node {
   readonly file: string
 }
 
+export const isImport = (node: Node): node is Import => {
+  const nodeType: NodeKind = "ImportNode";
+  return node.type === nodeType;
+}
+
 export const makeImport = (file: string, loc: error.LocationRange): Import => {
   return {
     type:     "ImportNode",
@@ -585,6 +656,11 @@ export const makeImport = (file: string, loc: error.LocationRange): Import => {
 export interface ImportStr extends Node {
   readonly type: "ImportStrNode"
   readonly file: string
+}
+
+export const isImportStr = (node: Node): node is ImportStr => {
+  const nodeType: NodeKind = "ImportStrNode";
+  return node.type === nodeType;
 }
 
 export const makeImportStr = (
@@ -614,8 +690,9 @@ export interface Index extends Node {
   readonly id:     Identifier | null
 }
 
-export const isIndex = (node: any): node is Index => {
-    return node.type === "IndexNode";
+export const isIndex = (node: Node): node is Index => {
+  const nodeType: NodeKind = "IndexNode";
+  return node.type === nodeType;
 }
 
 export const makeIndex = (
@@ -667,6 +744,11 @@ export interface Local extends Node {
   readonly body:  Node
 }
 
+export const isLocal = (node: Node): node is Local => {
+  const nodeType: NodeKind = "LocalNode";
+  return node.type === nodeType;
+}
+
 export const makeLocal = (
   binds: LocalBinds, body: Node, loc: error.LocationRange
 ): Local => {
@@ -690,6 +772,11 @@ export interface LiteralBoolean extends Node {
   readonly value: boolean
 }
 
+export const isLiteralBoolean = (node: Node): node is LiteralBoolean => {
+  const nodeType: NodeKind = "LiteralBooleanNode";
+  return node.type === nodeType;
+}
+
 export const makeLiteralBoolean = (
   value: boolean, loc: error.LocationRange
 ): LiteralBoolean => {
@@ -709,6 +796,11 @@ export const makeLiteralBoolean = (
 // LiteralNull represents the null keyword
 export interface LiteralNull extends Node { readonly type: "LiteralNullNode" }
 
+export const isLiteralNull = (node: Node): node is LiteralNull => {
+  const nodeType: NodeKind = "LiteralNullNode";
+  return node.type === nodeType;
+}
+
 export const makeLiteralNull = (loc: error.LocationRange): LiteralNull => {
   return {
     type:     "LiteralNullNode",
@@ -727,6 +819,11 @@ export interface LiteralNumber extends Node {
   readonly type:           "LiteralNumberNode"
   readonly value:          number
   readonly originalString: string
+}
+
+export const isLiteralNumber = (node: Node): node is LiteralNumber => {
+  const nodeType: NodeKind = "LiteralNumberNode";
+  return node.type === nodeType;
 }
 
 export const makeLiteralNumber = (
@@ -759,8 +856,9 @@ export interface LiteralString extends Node {
   readonly blockIndent: string
 }
 
-export const isLiteralString = (x: Node): x is LiteralString => {
-    return x.type === "LiteralStringNode";
+export const isLiteralString = (node: Node): node is LiteralString => {
+  const nodeType: NodeKind = "LiteralStringNode";
+  return node.type === nodeType;
 }
 
 export const makeLiteralString = (
@@ -809,6 +907,11 @@ export interface ObjectField extends Node {
   readonly headingComments: Comments
 }
 
+export const isObjectField = (node: Node): node is ObjectField => {
+  const nodeType: NodeKind = "ObjectFieldNode";
+  return node.type === nodeType;
+}
+
 // TODO(jbeda): Add the remaining constructor helpers here
 
 export type ObjectFields = im.List<ObjectField>;
@@ -824,8 +927,9 @@ export interface ObjectNode extends Node {
   readonly headingComments: Comments
 }
 
-export const isObjectNode = (node: any): node is ObjectNode => {
-    return node.type === "ObjectNode";
+export const isObjectNode = (node: Node): node is ObjectNode => {
+  const nodeType: NodeKind = "ObjectNode";
+  return node.type === nodeType;
 }
 
 export const makeObject = (
@@ -864,6 +968,11 @@ export interface DesugaredObject extends Node {
   readonly fields:  DesugaredObjectFields
 }
 
+export const isDesugaredObject = (node: Node): node is DesugaredObject => {
+  const nodeType: NodeKind = "DesugaredObjectNode";
+  return node.type === nodeType;
+}
+
 // ---------------------------------------------------------------------------
 
 // ObjectComp represents object comprehension
@@ -873,6 +982,11 @@ export interface ObjectComp extends Node {
   readonly fields:        ObjectFields
   readonly trailingComma: boolean
   readonly specs:         CompSpecs
+}
+
+export const isObjectComp = (node: Node): node is ObjectComp => {
+  const nodeType: NodeKind = "ObjectCompNode";
+  return node.type === nodeType;
 }
 
 // ---------------------------------------------------------------------------
@@ -889,10 +1003,22 @@ export interface ObjectComprehensionSimple extends Node {
   readonly array: Node
 }
 
+export const isObjectComprehensionSimple = (
+  node: Node
+): node is ObjectComprehensionSimple => {
+  const nodeType: NodeKind = "ObjectComprehensionSimpleNode";
+  return node.type === nodeType;
+}
+
 // ---------------------------------------------------------------------------
 
 // Self represents the self keyword.
 export interface Self extends Node { readonly type: "SelfNode" };
+
+export const isSelf = (node: Node): node is Self => {
+  const nodeType: NodeKind = "SelfNode";
+  return node.type === nodeType;
+}
 
 export const makeSelf = (loc: error.LocationRange): Self => {
   return {
@@ -915,6 +1041,11 @@ export interface SuperIndex extends Node {
   readonly type: "SuperIndexNode"
   readonly index: Node | null
   readonly id:    Identifier | null
+}
+
+export const isSuperIndex = (node: Node): node is SuperIndex => {
+  const nodeType: NodeKind = "SuperIndexNode";
+  return node.type === nodeType;
 }
 
 export const makeSuperIndex = (
@@ -961,6 +1092,11 @@ export interface Unary extends Node {
   readonly expr: Node
 }
 
+export const isUnary = (node: Node): node is Unary => {
+  const nodeType: NodeKind = "UnaryNode";
+  return node.type === nodeType;
+}
+
 export const makeUnary = (
   op: UnaryOp, expr: Node, loc: error.LocationRange,
 ): Unary => {
@@ -984,8 +1120,9 @@ export interface Var extends Node {
   readonly id: Identifier
 }
 
-export const isVar = (x: Node): x is Var => {
-    return x.type === "VarNode";
+export const isVar = (node: Node): node is Var => {
+  const nodeType: NodeKind = "VarNode";
+  return node.type === nodeType;
 }
 
 export const makeVar = (id: Identifier, loc: error.LocationRange): Var => {
