@@ -288,7 +288,7 @@ export class Analyzer implements EventedAnalyzer {
     }
 
     // Find root target, look up in environment.
-    let resolvedVar: ast.Node;
+    let resolvedTarget: ast.Node;
     switch (index.target.type) {
       case "VarNode": {
         const nullableResolved = this.resolveVar(<ast.Var>index.target);
@@ -296,7 +296,16 @@ export class Analyzer implements EventedAnalyzer {
           return null;
         }
 
-        resolvedVar = nullableResolved;
+        resolvedTarget = nullableResolved;
+        break;
+      }
+      case "IndexNode": {
+        const nullableResolved = this.resolveIndex(<ast.Index>index.target);
+        if (nullableResolved == null) {
+          return null;
+        }
+
+        resolvedTarget = nullableResolved;
         break;
       }
       default: {
@@ -305,9 +314,9 @@ export class Analyzer implements EventedAnalyzer {
       }
     }
 
-    switch (resolvedVar.type) {
+    switch (resolvedTarget.type) {
       case "ObjectNode": {
-        const objectNode = <ast.ObjectNode>resolvedVar;
+        const objectNode = <ast.ObjectNode>resolvedTarget;
         for (let field of objectNode.fields.toArray()) {
           // We're looking for either a field with the id
           if (field.id != null && field.id.name == index.id.name) {
@@ -326,7 +335,7 @@ export class Analyzer implements EventedAnalyzer {
       }
       default: {
         throw new Error(
-          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedVar.type}':\n${resolvedVar}`);
+          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedTarget.type}':\n${resolvedTarget}`);
       }
     }
   }

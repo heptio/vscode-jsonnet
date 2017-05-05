@@ -3,5 +3,6 @@ local fooModule = import "./simple-import.libsonnet";
 {
   bar: fooModule,
   baz: fooModule.foo,
-  bat: fooModule.bar
+  bat: fooModule.bar,
+  bag: fooModule.baz.bat,
 }

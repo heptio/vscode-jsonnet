@@ -154,7 +154,7 @@ describe("Imported symbol resolution", () => {
     assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNull(importedSymbol.parent);
     assert.equal(importedSymbol.headingComments.count(), 0);
-    assertLocationRange(importedSymbol.loc, 1, 1, 7, 2);
+    assertLocationRange(importedSymbol.loc, 1, 1, 11, 2);
   });
 
   it("Can dereference fields from an imported module", () => {
@@ -183,6 +183,23 @@ describe("Imported symbol resolution", () => {
     assert.isNotNull(comments);
     assert.equal(
       comments, " `foo` is a property that has very useful data.");
+  });
+
+  it("Can find comments for a nested field in an imported module", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>analyzer.resolveSymbolAtPositionFromAst(
+        rootNode, makeLocation(7, 23));
+    assert.isNotNull(valueOfObjectField);
+    assert.equal(valueOfObjectField.type, "LiteralStringNode");
+    assert.equal(valueOfObjectField.value, "batVal");
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " `bat` contains a fancy value, `batVal`.");
   });
 
   it("Cannot find comments for `local` field in an imported module", () => {
