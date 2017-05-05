@@ -747,11 +747,8 @@ class parser {
       if (error.isStaticError(arr)) {
         return arr;
       }
-      specs = specs.push({
-        kind:    "CompFor",
-        varName: id,
-        expr:    arr,
-      });
+      specs = specs.push(ast.makeCompSpec(
+        "CompFor", id, arr, locFromTokenAST(varID, arr)));
 
       let maybeIf = this.pop();
       for (; maybeIf.kind === "TokenIf"; maybeIf = this.pop()) {
@@ -759,11 +756,8 @@ class parser {
         if (error.isStaticError(cond)) {
           return cond;
         }
-        specs = specs.push({
-          kind:    "CompIf",
-          varName: null,
-          expr:    cond,
-        });
+        specs = specs.push(ast.makeCompSpec(
+          "CompIf", null, cond, locFromTokenAST(maybeIf, cond)));
       }
       if (maybeIf.kind === end) {
         return {compSpecs: specs, maybeIf: maybeIf};

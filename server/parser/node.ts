@@ -170,12 +170,35 @@ export type CompKind =
   "CompFor" |
   "CompIf";
 
-export interface CompSpec {
+export interface CompSpec extends Node {
+  readonly type:    "CompSpecNode"
   readonly kind:    CompKind
   readonly varName: Identifier | null // null when kind != compSpecFor
   readonly expr:    Node
 };
 export type CompSpecs = im.List<CompSpec>;
+
+export const isCompSpec = (node: Node): node is CompSpec => {
+  const nodeType: NodeKind = "CompSpecNode";
+  return node.type === nodeType;
+}
+
+export const makeCompSpec = (
+  kind: CompKind, varName: Identifier | null, expr: Node,
+  loc: error.LocationRange,
+): CompSpec => {
+  return {
+    type:     "CompSpecNode",
+    kind:     kind,
+    varName:  varName,
+    expr:     expr,
+    loc:      loc,
+    freeVars: im.List<IdentifierName>(),
+
+    parent: null,
+    env: null,
+  }
+}
 
 // ---------------------------------------------------------------------------
 
@@ -951,7 +974,8 @@ export const makeObject = (
 
 // ---------------------------------------------------------------------------
 
-export interface DesugaredObjectField {
+export interface DesugaredObjectField extends Node {
+  readonly type: "DesugaredObjectFieldNode"
   readonly hide: ObjectFieldHide
   readonly name: Node
   readonly body: Node
