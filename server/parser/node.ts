@@ -46,11 +46,13 @@ export const renderAsJson = (node: Node): string => {
   node,
   (k, v) => {
     if (k === "parent") {
-      return (<Node>v).type;
+      return v == null
+        ? "null"
+        : (<Node>v).type;
     } else if (k === "env") {
-      // TODO: Calling `.has` on this causes us to claim that
-      // we can't find function. That's weird.
-      return `${Object.keys(v).join(", ")}`;
+      return v == null
+        ? "null"
+        : `${Object.keys(v).join(", ")}`;
     } else {
       return v;
     }
