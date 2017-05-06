@@ -985,7 +985,9 @@ class parser {
       this.pop();
 
       // Get the CPP comment block
-      heading = im.List<ast.Comment>(ast.MakeCppComment(begin.loc, begin.data))
+      heading = im.List<ast.Comment>([
+        ast.MakeCppComment(begin.loc, begin.data)
+      ]);
       while (true) {
         begin = this.peek();
         if (begin.kind === "TokenCommentCpp") {
