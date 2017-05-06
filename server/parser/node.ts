@@ -9,19 +9,36 @@ export type Environment = im.Map<string, LocalBind>;
 
 export const emptyEnvironment = im.Map<string, LocalBind>();
 
-export const environmentFromLocal = (local: Local): Environment => {
-  const defaultLocal: {[key: string]: LocalBind} = {};
-  const binds = local.binds
-    .reduce(
-      (acc, bind) => {
-        if (acc == undefined || bind == undefined) {
-          throw new Error(`INTERNAL ERROR: Local binds can't be undefined during a \`reduce\``);
-        }
-        acc[bind.variable.name] = bind;
-        return acc;
-      },
-      defaultLocal);
-  return im.Map(binds);
+export const environmentFromLocal = (
+  local: Local | ObjectField
+): Environment => {
+  if (isLocal(local)) {
+    const defaultLocal: {[key: string]: LocalBind} = {};
+    const binds = local.binds
+      .reduce(
+        (acc, bind) => {
+          if (acc == undefined || bind == undefined) {
+            throw new Error(`INTERNAL ERROR: Local binds can't be undefined during a \`reduce\``);
+          }
+          acc[bind.variable.name] = bind;
+          return acc;
+        },
+        defaultLocal);
+    return im.Map(binds);
+  }
+
+  if (local.expr2 == null || local.id == null) {
+    throw new Error(`INTERNAL ERROR: Object local fields can't have a null expr2 or id field`);
+  }
+
+  const bind: LocalBind = {
+    variable:      local.id,
+    body:          local.expr2,
+    functionSugar: local.methodSugar,
+    params:        local.ids,
+    trailingComma: local.trailingComma,
+  };
+  return im.Map<string, LocalBind>().set(local.id.name, bind);
 }
 
 export const renderAsJson = (node: Node): string => {

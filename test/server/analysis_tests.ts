@@ -57,6 +57,7 @@ describe("Searching an AST by position", () => {
     {
       const property1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 5));
+      assert.isNotNull(property1Id);
       assert.equal(property1Id.type, "IdentifierNode");
       assert.equal(property1Id.name, "property1");
       assert.isNotNull(property1Id.parent);
@@ -72,6 +73,7 @@ describe("Searching an AST by position", () => {
     {
       const target1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 14));
+      assert.isNotNull(target1Id);
       assert.equal(target1Id.type, "IdentifierNode");
       assert.equal(target1Id.name, "foo");
       assert.isNotNull(target1Id.parent);
@@ -94,6 +96,7 @@ describe("Searching an AST by position", () => {
 
     const target2Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
       rootNode, makeLocation(3, 15));
+    assert.isNotNull(target2Id);
     assert.equal(target2Id.type, "LiteralNumberNode");
     assert.equal(target2Id.originalString, "2");
     assert.isNotNull(target2Id.parent);
@@ -110,6 +113,7 @@ describe("Searching an AST by position", () => {
     {
       const property3Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 9));
+      assert.isNotNull(property3Id);
       assert.equal(property3Id.type, "IdentifierNode");
       assert.equal(property3Id.name, "foo");
       assert.isNotNull(property3Id.parent);
@@ -125,6 +129,7 @@ describe("Searching an AST by position", () => {
     {
       const target3Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 15));
+      assert.isNotNull(target3Id);
       assert.equal(target3Id.type, "LiteralNumberNode");
       assert.equal(target3Id.originalString, "3");
       assert.isNotNull(target3Id.parent);
@@ -135,6 +140,24 @@ describe("Searching an AST by position", () => {
       assert.equal(target3Parent.kind, "ObjectLocal");
       assertLocationRange(target3Parent.loc, 4, 3, 4, 16);
     }
+  });
+
+  it("Resolution of `local` object fields is order-independent", () => {
+    // This location points at the `baz` symbol in the expression
+    // `bar.baz`, where `bar` is a `local` field that's declared below
+    // the current field. This tests that we correctly resolve that
+    // reference, even though it occurs after the current object
+    // field.
+    const property4Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      rootNode, makeLocation(5, 20));
+    assert.isNotNull(property4Id);
+    assert.equal(property4Id.type, "IdentifierNode");
+    assert.equal(property4Id.name, "baz");
+
+    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(property4Id);
+    assert.isNotNull(resolved);
+    assert.equal(resolved.type, "LiteralNumberNode");
+    assert.equal(resolved.originalString, "3");
   });
 });
 
@@ -151,6 +174,7 @@ describe("Imported symbol resolution", () => {
     const importedSymbol =
       <ast.ObjectNode>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(4, 8));
+    assert.isNotNull(importedSymbol);
     assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNull(importedSymbol.parent);
     assert.equal(importedSymbol.headingComments.count(), 0);
@@ -165,6 +189,7 @@ describe("Imported symbol resolution", () => {
     const valueofObjectField =
       <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(5, 19));
+    assert.isNotNull(valueofObjectField);
     assert.equal(valueofObjectField.type, "LiteralNumberNode");
     assert.equal(valueofObjectField.originalString, "99");
     assertLocationRange(valueofObjectField.loc, 3, 8, 3, 10);

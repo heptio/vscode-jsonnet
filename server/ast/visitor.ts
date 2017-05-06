@@ -248,11 +248,37 @@ export abstract class VisitorBase implements Visitor {
       case "ObjectNode": {
         const castedNode = <ast.ObjectNode>node;
         this.VisitObject(castedNode);
-        castedNode.fields.forEach(field => {
-          if (field == undefined) {
-            throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
-          }
-          this.Visit(field, castedNode, currEnv);
+
+        // `local` object fields are scoped with order-independence,
+        // so something like this is legal:
+        //
+        // {
+        //    bar: {baz: foo},
+        //    local foo = 3,
+        // }
+        //
+        // Since this case requires `foo` to be in the environment of
+        // `bar`'s body, we here collect up the `local` fields first,
+        // create a new environment that includes them, and pass that
+        // on to each field we visit.
+        const envWithLocals = castedNode.fields
+          .filter((field: ast.ObjectField) => {
+            const localKind: ast.ObjectFieldKind = "ObjectLocal";
+            return field.kind === localKind;
+          })
+          .reduce(
+            (acc: ast.Environment, field: ast.ObjectField) => {
+              return acc.merge(ast.environmentFromLocal(field));
+            },
+            immutable.Map<string, ast.LocalBind>()
+          );
+
+        castedNode.fields.forEach((field: ast.ObjectField) => {
+          // NOTE: If this is a `local` field, there is no need to
+          // remove current field from environment. It is perfectly
+          // legal to do something like `local foo = foo; foo` (though
+          // it will cause a stack overflow).
+          this.Visit(field, castedNode, currEnv.merge(envWithLocals));
         });
         return;
       }
