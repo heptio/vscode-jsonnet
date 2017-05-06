@@ -172,13 +172,12 @@ describe("Imported symbol resolution", () => {
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
-      <ast.ObjectNode>analyzer.resolveSymbolAtPositionFromAst(
+      <ast.Local>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
-    assert.equal(importedSymbol.type, "ObjectNode");
+    assert.equal(importedSymbol.type, "LocalNode");
     assert.isNull(importedSymbol.parent);
-    assert.equal(importedSymbol.headingComments.count(), 0);
-    assertLocationRange(importedSymbol.loc, 1, 1, 11, 2);
+    assertLocationRange(importedSymbol.loc, 1, 1, 12, 2);
   });
 
   it("Can dereference fields from an imported module", () => {
@@ -192,7 +191,7 @@ describe("Imported symbol resolution", () => {
     assert.isNotNull(valueofObjectField);
     assert.equal(valueofObjectField.type, "LiteralNumberNode");
     assert.equal(valueofObjectField.originalString, "99");
-    assertLocationRange(valueofObjectField.loc, 3, 8, 3, 10);
+    assertLocationRange(valueofObjectField.loc, 4, 8, 4, 10);
   });
 
   it("Can find comments for a field in an imported module", () => {

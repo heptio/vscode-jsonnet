@@ -85,9 +85,6 @@ const tests = [
 describe("Successfully parsing text", () => {
   for (let s of tests) {
     it(`${JSON.stringify(s)}`, () => {
-      if (JSON.stringify(s) === "\"true || false\"") {
-        const s = 3;
-      }
       const tokens = lexer.Lex("test", s);
       if (error.isStaticError(tokens)) {
         throw new Error(`Unexpected lexer to emit tokens\n  input: ${s}`);

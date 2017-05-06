@@ -49,10 +49,14 @@ export class Analyzer implements EventedAnalyzer {
     // Get symbol we're hovering over.
     const resolved = this.resolveSymbolAtPosition(fileUri, cursorLoc);
 
+    if (resolved == null) {
+      return Promise.reject("failed to resolve variable");
+    }
+
     const commentText: string | null = this.resolveComments(resolved);
     return Promise.resolve().then(
       () => <service.HoverInfo> {
-        contents: <service.LanguageString[]> [
+        contents: <service.LanguageString[]>[
           {language: 'jsonnet', value: line},
           commentText
         ]
@@ -291,12 +295,22 @@ export class Analyzer implements EventedAnalyzer {
     let resolvedTarget: ast.Node;
     switch (index.target.type) {
       case "VarNode": {
-        const nullableResolved = this.resolveVar(<ast.Var>index.target);
+        const varNode = <ast.Var>index.target
+        const nullableResolved = this.resolveVar(varNode);
         if (nullableResolved == null) {
           return null;
         }
 
         resolvedTarget = nullableResolved;
+
+        // If the var was pointing at an import, then resolution
+        // probably has `local` definitions at the top of the file.
+        // Get rid of them, since they are not useful for resolving
+        // the index identifier.
+        while (ast.isLocal(resolvedTarget)) {
+          resolvedTarget = resolvedTarget.body;
+        }
+
         break;
       }
       case "IndexNode": {
@@ -304,7 +318,6 @@ export class Analyzer implements EventedAnalyzer {
         if (nullableResolved == null) {
           return null;
         }
-
         resolvedTarget = nullableResolved;
         break;
       }
@@ -378,6 +391,9 @@ export class Analyzer implements EventedAnalyzer {
         }
 
         return cached.parse;
+      }
+      case "ObjectNode": {
+        return bind.body;
       }
       default: {
         throw new Error(
