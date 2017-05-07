@@ -13,4 +13,7 @@
   local nestedMerge2 = {merged2: merged2},
   local nestedMerge3 = nestedMerge1.merged1 + nestedMerge2.merged2,
   useMerged2: nestedMerge3.a,
+  local numberVal1 = 1,
+  local numberVal2 = numberVal1,
+  number: numberVal2,
 }

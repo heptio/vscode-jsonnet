@@ -231,6 +231,23 @@ describe("Searching an AST by position", () => {
       assert.equal(resolved.originalString, "99");
     }
   });
+
+  it("Can resolve identifiers that point to identifiers", () => {
+    // Regression test. Tests that we can resolve a variable that
+    // points to another variable. In this case, `numberVal2` refers
+    // to `numberVal1`.
+
+    const node = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      rootNode, makeLocation(18, 19));
+    assert.isNotNull(node);
+    assert.equal(node.type, "IdentifierNode");
+    assert.equal(node.name, "numberVal2");
+
+    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(node);
+    assert.isNotNull(resolved);
+    assert.equal(resolved.type, "LiteralNumberNode");
+    assert.equal(resolved.originalString, "1");
+  });
 });
 
 describe("Imported symbol resolution", () => {

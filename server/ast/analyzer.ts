@@ -540,21 +540,23 @@ export class Analyzer implements EventedAnalyzer {
 
         return cached.parse;
       }
-      case "ObjectNode": {
-        return bind.body;
+      case "VarNode": {
+        return this.resolveVar(<ast.Var>bind.body);
+      }
+      case "IndexNode": {
+        return this.resolveIndex(<ast.Index>bind.body);
       }
       case "BinaryNode": {
         const binaryNode = <ast.Binary>bind.body;
         if (binaryNode.op !== "BopPlus") {
           throw new Error(
-            `INTERNAL ERROR: Bind currently requires an import or object node as body ${ast.renderAsJson(bind.body)}`);
+            `INTERNAL ERROR: Bind currently can't resolve to binary operations that are not '+':\n${ast.renderAsJson(bind.body)}`);
         }
 
         return binaryNode;
       }
       default: {
-        throw new Error(
-          `INTERNAL ERROR: Bind currently requires an import or object node as body ${ast.renderAsJson(bind.body)}`);
+        return bind.body;
       }
     }
   }
