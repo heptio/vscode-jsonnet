@@ -285,10 +285,10 @@ export class Analyzer implements EventedAnalyzer {
   public resolveIndex = (index: ast.Index): ast.Node | null => {
     if (index.target == null) {
       throw new Error(
-        `INTERNAL ERROR: Index node must have a target:\n${index}`);
+        `INTERNAL ERROR: Index node must have a target:\n${ast.renderAsJson(index)}`);
     } else if (index.id == null) {
       throw new Error(
-        `INTERNAL ERROR: Index node must have a name:\n${index}`);
+        `INTERNAL ERROR: Index node must have a name:\n${ast.renderAsJson(index)}`);
     }
 
     // Find root target, look up in environment.
@@ -323,7 +323,7 @@ export class Analyzer implements EventedAnalyzer {
       }
       default: {
         throw new Error(
-          `INTERNAL ERROR: Index node can't have node target of type '${index.target.type}':\n${index.target}`);
+          `INTERNAL ERROR: Index node can't have node target of type '${index.target.type}':\n${ast.renderAsJson(index.target)}`);
       }
     }
 
@@ -348,7 +348,7 @@ export class Analyzer implements EventedAnalyzer {
       }
       default: {
         throw new Error(
-          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedTarget.type}':\n${resolvedTarget}`);
+          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedTarget.type}':\n${ast.renderAsJson(resolvedTarget)}`);
       }
     }
   }
@@ -397,7 +397,7 @@ export class Analyzer implements EventedAnalyzer {
       }
       default: {
         throw new Error(
-          `INTERNAL ERROR: Bind currently requires an import node as body ${bind}`);
+          `INTERNAL ERROR: Bind currently requires an import or object node as body ${ast.renderAsJson(bind.body)}`);
       }
     }
   }
