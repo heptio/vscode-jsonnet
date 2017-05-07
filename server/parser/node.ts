@@ -102,7 +102,7 @@ export type NodeKind =
 // ---------------------------------------------------------------------------
 
 export interface Node {
-  readonly type:     string
+  readonly type:     NodeKind
   readonly loc:      error.LocationRange
   readonly freeVars: IdentifierNames
 
