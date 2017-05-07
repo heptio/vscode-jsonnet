@@ -159,6 +159,78 @@ describe("Searching an AST by position", () => {
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "3");
   });
+
+  it("Can resolve identifiers that refer to mixins", () => {
+    // merged1.b
+    {
+      const merged1 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 23));
+      assert.isNotNull(merged1);
+      assert.equal(merged1.type, "IdentifierNode");
+      assert.equal(merged1.name, "b");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged1);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "3");
+    }
+
+    // merged2.a
+    {
+      const merged2 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 34));
+      assert.isNotNull(merged2);
+      assert.equal(merged2.type, "IdentifierNode");
+      assert.equal(merged2.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged2);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "99");
+    }
+
+    // merged3.a
+    {
+      const merged3 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 45));
+      assert.isNotNull(merged3);
+      assert.equal(merged3.type, "IdentifierNode");
+      assert.equal(merged3.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged3);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "1");
+    }
+
+    // merged4.a
+    {
+      const merged4 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 56));
+      assert.isNotNull(merged4);
+      assert.equal(merged4.type, "IdentifierNode");
+      assert.equal(merged4.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged4);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "99");
+    }
+
+    // merged4.a
+    {
+      const merged5 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(15, 28));
+      assert.isNotNull(merged5);
+      assert.equal(merged5.type, "IdentifierNode");
+      assert.equal(merged5.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged5);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "99");
+    }
+  });
 });
 
 describe("Imported symbol resolution", () => {

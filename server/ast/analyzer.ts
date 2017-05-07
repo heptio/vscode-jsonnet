@@ -162,14 +162,32 @@ export class Analyzer implements EventedAnalyzer {
       throw new Error(`Target of index must be a var node:\n${target}`);
     }
 
-    // Resolve the target, get public fields we could reference,
-    // return as completion items.
+    // Resolve the target.
     const resolved = this.resolveVar(index.target);
-    if (resolved == null || !ast.isObjectNode(resolved)) {
+    if (resolved == null) {
       return [];
     }
 
-    return resolved.fields
+    // Attempt to get all the possible fields we could suggest. If the
+    // resolved item is an `ObjectNode`, just use its fields; if it's
+    // a mixin of two objects, merge them and use the merged fields
+    // instead.
+    let fields: ast.ObjectFields | null = null;
+    if (ast.isObjectNode(resolved)) {
+      fields = resolved.fields;
+    } else if (ast.isBinary(resolved)) {
+      const merged = this.completableFieldSet(resolved);
+
+      if (merged == null) {
+        fields = immutable.List<ast.ObjectField>();
+      } else {
+        fields = immutable.List(merged.values());
+      }
+    } else {
+      return [];
+    }
+
+    return fields
       .filter((field: ast.ObjectField) =>
         field != null && field.id != null && field.expr2 != null)
       .map((field: ast.ObjectField) => {
@@ -206,6 +224,72 @@ export class Analyzer implements EventedAnalyzer {
       .join("\n");
   }
 
+  private completableFieldSet = (bin: ast.Binary): immutable.Map<string, ast.ObjectField> | null => {
+    const getCompletableFields = (node: ast.Node): immutable.Map<string, ast.ObjectField> | null => {
+      // This loop will try to "strip out the indirections" of an
+      // argument to a mixin. For example, consider the expression
+      // `foo1.bar + foo2.bar` in the following example:
+      //
+      //   local bar1 = {a: 1, b: 2},
+      //   local bar2 = {b: 3, c: 4},
+      //   local foo1 = {bar: bar1},
+      //   local foo2 = {bar: bar2},
+      //   useMerged: foo1.bar + foo2.bar,
+      //
+      // In this case, if we try to resolve `foo1.bar + foo2.bar`, we
+      // will first need to resolve `foo1.bar`, and then the value of
+      // that resolve, `bar1`, which resolves to an object, and so on.
+      //
+      // This loop follows these indirections: first, it resolves
+      // `foo1.bar`, and then `bar1`, before encountering an object
+      // and stopping.
+      let resolved: ast.Node | null = node;
+      while (true) {
+        if (ast.isObjectNode(resolved)) {
+          // Found an object. Break.
+          break;
+        } else if (ast.isBinary(resolved)) {
+          // May have found an object mixin. Break.
+          break;
+        } else if (ast.isVar(resolved)) {
+          resolved = this.resolveVar(resolved);
+        } else if (ast.isIndex(resolved)) {
+          resolved = this.resolveIndex(resolved);
+        } else {
+          throw new Error(`${ast.renderAsJson(bin.left)}`);
+        }
+
+        if (resolved == null) {
+          return null;
+        }
+      }
+
+      // Recursively merge fields if it's another mixin; if it's an
+      // object, return fields; else, no fields to return.
+      if (ast.isBinary(resolved)) {
+        return this.completableFieldSet(resolved);
+      } else if (ast.isObjectNode(resolved)) {
+        return resolved.fields
+          .reduce((
+            acc: immutable.Map<string, ast.ObjectField>, field: ast.ObjectField
+          ) => {
+            return field.id != null && acc.set(field.id.name, field) || acc;
+          },
+          immutable.Map<string, ast.ObjectField>()
+        );
+      }
+      return null;
+    }
+
+    if (bin.op !== "BopPlus") {
+      return null;
+    }
+
+    const leftFields = getCompletableFields(bin.left);
+    const rightFields = getCompletableFields(bin.right);
+    return leftFields && rightFields && leftFields.merge(rightFields) || null;
+  }
+
   //
   // The rest.
   //
@@ -230,7 +314,7 @@ export class Analyzer implements EventedAnalyzer {
   // nodes until we find the object field, and return the comments
   // associated with that (if any).
   public resolveComments = (node: ast.Node | null): string | null => {
-    while(true) {
+    while (true) {
       if (node == null) { return null; }
 
       switch (node.type) {
@@ -346,6 +430,25 @@ export class Analyzer implements EventedAnalyzer {
 
         return null;
       }
+      case "BinaryNode": {
+        const fields = this.completableFieldSet(<ast.Binary>resolvedTarget);
+        if (fields == null) {
+          throw new Error(
+            `INTERNAL ERROR: Could not merge fields in binary node:\n${ast.renderAsJson(resolvedTarget)}`);
+        }
+
+        const filtered = fields.filter((field: ast.ObjectField) => {
+          return field.id != null && index.id != null &&
+            field.id.name == index.id.name;
+        });
+
+        if (filtered.count() != 1) {
+          throw new Error(
+            `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${ast.renderAsJson(resolvedTarget)}`);
+        }
+
+        return filtered.first().expr2;
+      }
       default: {
         throw new Error(
           `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedTarget.type}':\n${ast.renderAsJson(resolvedTarget)}`);
@@ -394,6 +497,15 @@ export class Analyzer implements EventedAnalyzer {
       }
       case "ObjectNode": {
         return bind.body;
+      }
+      case "BinaryNode": {
+        const binaryNode = <ast.Binary>bind.body;
+        if (binaryNode.op !== "BopPlus") {
+          throw new Error(
+            `INTERNAL ERROR: Bind currently requires an import or object node as body ${ast.renderAsJson(bind.body)}`);
+        }
+
+        return binaryNode;
       }
       default: {
         throw new Error(
