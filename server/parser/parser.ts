@@ -108,7 +108,7 @@ class parser {
       const next = this.peek();
       if (next.kind === "TokenCommentCpp") {
         this.pop();
-        comments = comments.push(ast.MakeCppComment(next.loc, next.data));
+        comments = comments.push(new ast.CppComment(next.data, next.loc));
       } else {
         break;
       }
@@ -176,7 +176,7 @@ class parser {
           if (error.isStaticError(assignment)) {
             return assignment;
           }
-          return ast.makeApplyParamsAssignment(
+          return new ast.ApplyParamAssignment(
             expr.id.name, assignment, expr.loc);
         }
 
@@ -212,7 +212,7 @@ class parser {
           }
           rhs = assignment;
         }
-        return ast.makeFunctionParam(expr.id.name, expr.loc, rhs);
+        return new ast.FunctionParam(expr.id.name, rhs, expr.loc);
       });
     if (error.isStaticError(result)) {
       return result;
@@ -252,7 +252,7 @@ class parser {
       if (error.isStaticError(body)) {
         return body;
       }
-      const id = ast.makeIdentifier(varID.data, varID.loc);
+      const id = new ast.Identifier(varID.data, varID.loc);
       const {params: params, gotComma: gotComma} = result;
       const bind = ast.makeLocalBind(id, body, true, params, gotComma);
       binds = binds.push(bind);
@@ -265,7 +265,7 @@ class parser {
       if (error.isStaticError(body)) {
         return body;
       }
-      const id = ast.makeIdentifier(varID.data, varID.loc);
+      const id = new ast.Identifier(varID.data, varID.loc);
       const bind = ast.makeLocalBind(
         id, body, false, im.List<ast.FunctionParam>(), false);
       binds = binds.push(bind);
@@ -366,17 +366,12 @@ class parser {
       return result;
     }
 
-    const comp: ast.ObjectComp = {
-      type:          "ObjectCompNode",
-      loc:           locFromTokens(first, result.maybeIf),
-      fields:        fields,
-      trailingComma: gotComma,
-      specs:         result.compSpecs,
-      freeVars:      im.List<string>(),
-
-      parent: null,
-      env: null,
-    }
+    const comp = new ast.ObjectComp(
+      fields,
+      gotComma,
+      result.compSpecs,
+      locFromTokens(first, result.maybeIf),
+    );
     return {comp: comp, last: result.maybeIf};
   };
 
@@ -392,23 +387,23 @@ class parser {
     switch (next.kind) {
       case "TokenIdentifier": {
         kind = "ObjectFieldID";
-        id = ast.makeIdentifier(next.data, next.loc);
+        id = new ast.Identifier(next.data, next.loc);
         break;
       }
       case "TokenStringDouble": {
         kind = "ObjectFieldStr";
-        expr1 = ast.makeLiteralString(next.data, "StringDouble", next.loc, "");
+        expr1 = new ast.LiteralStringDouble(next.data, next.loc);
         break;
       }
       case "TokenStringSingle": {
         kind = "ObjectFieldStr";
-        expr1 = ast.makeLiteralString(next.data, "StringSingle", next.loc, "");
+        expr1 = new ast.LiteralStringSingle(next.data, next.loc);
         break;
       }
       case "TokenStringBlock": {
         kind = "ObjectFieldStr"
-        expr1 = ast.makeLiteralString(
-          next.data, "StringBlock", next.loc, next.stringBlockIndent);
+        expr1 = new ast.LiteralStringBlock(
+          next.data, next.stringBlockIndent, next.loc);
         break;
       }
       default: {
@@ -466,25 +461,20 @@ class parser {
     // location range will only reflect the string contents, not the
     // ending quote.
     return {
-      field: {
-        type:            "ObjectFieldNode",
-        kind:            kind,
-        loc:             locFromTokenAST(next, body),
-        hide:            result.hide,
-        superSugar:      result.plusSugar,
-        methodSugar:     isMethod,
-        expr1:           expr1,
-        id:              id,
-        ids:             params,
-        trailingComma:   methComma,
-        expr2:           body,
-        expr3:           null,
-        headingComments: headingComments,
-        freeVars:        im.List<ast.IdentifierName>(),
-
-        parent: null,
-        env: null,
-      },
+      field: new ast.ObjectField(
+        kind,
+        result.hide,
+        result.plusSugar,
+        isMethod,
+        expr1,
+        id,
+        params,
+        methComma,
+        body,
+        null,
+        headingComments,
+        locFromTokenAST(next, body),
+      ),
       literals: literalFields
     };
   }
@@ -499,7 +489,7 @@ class parser {
     if (error.isStaticError(varID)) {
       return varID;
     }
-    const id = ast.makeIdentifier(varID.data, varID.loc);
+    const id = new ast.Identifier(varID.data, varID.loc);
     if (binds.contains(id.name)) {
       return error.MakeStaticError(
         `Duplicate local var: ${id.name}`, varID.loc);
@@ -530,25 +520,20 @@ class parser {
     binds = binds.add(id.name);
 
     return {
-      field: {
-        type:            "ObjectFieldNode",
-        kind:            "ObjectLocal",
-        loc:             locFromTokenAST(assertToken, body),
-        hide:            "ObjectFieldVisible",
-        superSugar:      false,
-        methodSugar:     isMethod,
-        id:              id,
-        ids:             params,
-        trailingComma:   funcComma,
-        expr1:           null,
-        expr2:           body,
-        expr3:           null,
-        headingComments: im.List<ast.Comment>(),
-        freeVars:        im.List<ast.IdentifierName>(),
-
-        parent: null,
-        env: null,
-      },
+      field: new ast.ObjectField(
+        "ObjectLocal",
+        "ObjectFieldVisible",
+        false,
+        isMethod,
+        null,
+        id,
+        params,
+        funcComma,
+        body,
+        null,
+        im.List<ast.Comment>(),
+        locFromTokenAST(assertToken, body),
+      ),
       binds: binds,
     };
   };
@@ -579,26 +564,20 @@ class parser {
       ?  locFromTokenAST(localToken, cond)
       : locFromTokenAST(localToken, msg);
 
-    return {
-      type:     "ObjectFieldNode",
-      loc:      loc,
-      kind:     "ObjectAssert",
-      hide:     "ObjectFieldVisible",
-      expr2:    cond,
-      expr3:    msg,
-      freeVars: im.List<ast.IdentifierName>(),
-
-      superSugar:      false,
-      methodSugar:     false,
-      expr1:           null,
-      id:              null,
-      ids:             im.List<ast.FunctionParam>(),
-      trailingComma:   false,
-      headingComments: im.List<ast.Comment>(),
-
-      parent: null,
-      env: null,
-    };
+    return new ast.ObjectField(
+      "ObjectAssert",
+      "ObjectFieldVisible",
+      false,
+      false,
+      null,
+      null,
+      im.List<ast.FunctionParam>(),
+      false,
+      cond,
+      msg,
+      im.List<ast.Comment>(),
+      loc,
+    );
   };
 
   // parseObjectRemainder parses "the rest" of an object, typically
@@ -654,7 +633,7 @@ class parser {
       // Done parsing the object. Return.
       if (next.kind === "TokenBraceR") {
         return {
-          objRemainder: ast.makeObject(
+          objRemainder: new ast.ObjectNode(
             fields, gotComma, heading, locFromTokens(tok, next)),
           next: next
         };
@@ -738,7 +717,7 @@ class parser {
         return varID;
       }
 
-      const id: ast.Identifier = ast.makeIdentifier(varID.data, varID.loc);
+      const id: ast.Identifier = new ast.Identifier(varID.data, varID.loc);
       const pop = this.popExpect("TokenIn");
       if (error.isStaticError(pop)) {
         return pop;
@@ -747,8 +726,8 @@ class parser {
       if (error.isStaticError(arr)) {
         return arr;
       }
-      specs = specs.push(ast.makeCompSpec(
-        "CompFor", id, arr, locFromTokenAST(varID, arr)));
+      specs = specs.push(new ast.CompSpecFor(
+        id, arr, locFromTokenAST(varID, arr)));
 
       let maybeIf = this.pop();
       for (; maybeIf.kind === "TokenIf"; maybeIf = this.pop()) {
@@ -756,8 +735,8 @@ class parser {
         if (error.isStaticError(cond)) {
           return cond;
         }
-        specs = specs.push(ast.makeCompSpec(
-          "CompIf", null, cond, locFromTokenAST(maybeIf, cond)));
+        specs = specs.push(new ast.CompSpecIf(
+          cond, locFromTokenAST(maybeIf, cond)));
       }
       if (maybeIf.kind === end) {
         return {compSpecs: specs, maybeIf: maybeIf};
@@ -780,7 +759,7 @@ class parser {
     let next = this.peek();
     if (next.kind === "TokenBracketR") {
       this.pop();
-      return ast.makeArray(
+      return new ast.Array(
         im.List<ast.Node>(), false, null, null, locFromTokens(tok, next));
     }
 
@@ -804,7 +783,7 @@ class parser {
         return result;
       }
 
-      return ast.makeArrayComp(
+      return new ast.ArrayComp(
         first, gotComma, result.compSpecs, locFromTokens(tok, result.maybeIf));
     }
     // Not a comprehension: It can have more elements.
@@ -846,7 +825,8 @@ class parser {
     // from the lexer. If we don't do that, we might accidentally kill
     // comments that correspond to, e.g., the next field of an object.
 
-    return ast.makeArray(elements, gotComma, null, null, locFromTokens(tok, next));
+    return new ast.Array(
+      elements, gotComma, null, null, locFromTokens(tok, next));
   };
 
   public parseTerminal = (
@@ -912,31 +892,31 @@ class parser {
           return error.MakeStaticError(
             "Could not parse floating point number.", tok.loc);
         }
-        return ast.makeLiteralNumber(num, tok.data, tok.loc);
+        return new ast.LiteralNumber(num, tok.data, tok.loc);
       }
       case "TokenStringSingle":
-        return ast.makeLiteralString(tok.data, "StringSingle", tok.loc, "");
+        return new ast.LiteralStringSingle(tok.data, tok.loc);
       case "TokenStringDouble":
-        return ast.makeLiteralString(tok.data, "StringDouble", tok.loc, "");
+        return new ast.LiteralStringDouble(tok.data, tok.loc);
       case "TokenStringBlock":
-        return ast.makeLiteralString(
-          tok.data, "StringBlock", tok.loc, tok.stringBlockIndent);
+        return new ast.LiteralStringBlock(
+          tok.data, tok.stringBlockIndent, tok.loc);
       case "TokenFalse":
-        return ast.makeLiteralBoolean(false, tok.loc);
+        return new ast.LiteralBoolean(false, tok.loc);
       case "TokenTrue":
-        return ast.makeLiteralBoolean(true, tok.loc);
+        return new ast.LiteralBoolean(true, tok.loc);
       case "TokenNullLit":
-        return ast.makeLiteralNull(tok.loc);
+        return new ast.LiteralNull(tok.loc);
 
       // Variables
       case "TokenDollar":
-        return ast.makeDollar(tok.loc);
+        return new ast.Dollar(tok.loc);
       case "TokenIdentifier": {
-        const id = ast.makeIdentifier(tok.data, tok.loc);
-        return ast.makeVar(id, tok.loc);
+        const id = new ast.Identifier(tok.data, tok.loc);
+        return new ast.Var(id, tok.loc);
       }
       case "TokenSelf":
-        return ast.makeSelf(tok.loc);
+        return new ast.Self(tok.loc);
       case "TokenSuper": {
         const next = this.pop();
         let index: ast.Node | null = null;
@@ -947,7 +927,7 @@ class parser {
             if (error.isStaticError(fieldID)) {
               return fieldID;
             }
-            id = ast.makeIdentifier(fieldID.data, fieldID.loc);
+            id = new ast.Identifier(fieldID.data, fieldID.loc);
             break;
           }
           case "TokenBracketL": {
@@ -967,7 +947,7 @@ class parser {
           return error.MakeStaticError(
             "Expected . or [ after super.", tok.loc);
         }
-        return ast.makeSuperIndex(index, id, tok.loc);
+        return new ast.SuperIndex(index, id, tok.loc);
       }
     }
 
@@ -986,13 +966,13 @@ class parser {
 
       // Get the CPP comment block
       heading = im.List<ast.Comment>([
-        ast.MakeCppComment(begin.loc, begin.data)
+        new ast.CppComment(begin.data, begin.loc)
       ]);
       while (true) {
         begin = this.peek();
         if (begin.kind === "TokenCommentCpp") {
           this.pop();
-          heading = heading.push(ast.MakeCppComment(begin.loc, begin.data));
+          heading = heading.push(new ast.CppComment(begin.data, begin.loc));
         } else {
           break;
         }
@@ -1025,7 +1005,7 @@ class parser {
         if (error.isStaticError(rest)) {
           return rest;
         }
-        return ast.makeAssert(cond, msg, rest, locFromTokenAST(begin, rest));
+        return new ast.Assert(cond, msg, rest, locFromTokenAST(begin, rest));
       }
 
       case "TokenError": {
@@ -1034,7 +1014,7 @@ class parser {
         if (error.isStaticError(expr)) {
           return expr;
         }
-        return ast.makeError(expr, locFromTokenAST(begin, expr));
+        return new ast.ErrorNode(expr, locFromTokenAST(begin, expr));
       }
 
       case "TokenIf": {
@@ -1061,7 +1041,7 @@ class parser {
           }
           lr = locFromTokenAST(begin, branchFalse)
         }
-        return ast.makeConditional(cond, branchTrue, branchFalse, lr);
+        return new ast.Conditional(cond, branchTrue, branchFalse, lr);
       }
 
       case "TokenFunction": {
@@ -1077,19 +1057,14 @@ class parser {
           if (error.isStaticError(body)) {
             return body;
           }
-          const fn: ast.Function = {
-            type:            "FunctionNode",
-            parameters:      result.params,
-            trailingComma:   result.gotComma,
-            body:            body,
-            loc:             locFromTokenAST(begin, body),
-            headingComment:  im.List<ast.Comment>(),
-            trailingComment: im.List<ast.Comment>(),
-            freeVars:        im.List<ast.IdentifierName>(),
-
-            parent: null,
-            env: null,
-          };
+          const fn = new ast.Function(
+            result.params,
+            result.gotComma,
+            body,
+            im.List<ast.Comment>(),
+            im.List<ast.Comment>(),
+            locFromTokenAST(begin, body),
+          );
           return fn;
         }
         return error.MakeStaticError(`Expected ( but got ${next}`, next.loc);
@@ -1102,7 +1077,7 @@ class parser {
           return body;
         }
         if (ast.isLiteralString(body)) {
-          return ast.makeImport(body.value, locFromTokenAST(begin, body));
+          return new ast.Import(body.value, locFromTokenAST(begin, body));
         }
         return error.MakeStaticError(
           "Computed imports are not allowed", body.loc);
@@ -1115,7 +1090,7 @@ class parser {
           return body;
         }
         if (ast.isLiteralString(body)) {
-          return ast.makeImportStr(body.value, locFromTokenAST(begin, body));
+          return new ast.ImportStr(body.value, locFromTokenAST(begin, body));
         }
         return error.MakeStaticError(
           "Computed imports are not allowed", body.loc);
@@ -1143,7 +1118,7 @@ class parser {
         if (error.isStaticError(body)) {
           return body;
         }
-        return ast.makeLocal(binds, body, locFromTokenAST(begin, body));
+        return new ast.Local(binds, body, locFromTokenAST(begin, body));
       }
 
       default: {
@@ -1160,7 +1135,7 @@ class parser {
             if (error.isStaticError(expr)) {
               return expr;
             }
-            return ast.makeUnary(uop, expr, locFromTokenAST(op, expr));
+            return new ast.Unary(uop, expr, locFromTokenAST(op, expr));
           }
         }
 
@@ -1219,6 +1194,19 @@ class parser {
               return lhs;
           }
 
+          // NOTE: This check is repeated here due to a bug in the
+          // TypeScript 2.0.3 type checker. If `lhs` was an error, we
+          // should have returned immediately after defining it above.
+          // Since we don't assign it after that point, we should be
+          // ok to use it as an argument to functions below that
+          // require an `ast.Node`. But, the type checker gets
+          // confused and emits an error instead. To be absolutely
+          // safe, we throw an error here, just in case we were
+          // subtlely wrong about the flow control.
+          if (error.isStaticError(lhs)) {
+            throw new Error(`INTERNAL ERROR: Didn't expect 'lhs' to be a StaticError`);
+          }
+
           const op = this.pop();
           switch (op.kind) {
             case "TokenBracketL": {
@@ -1231,7 +1219,8 @@ class parser {
                 return end;
               }
 
-              lhs = ast.makeIndex(lhs, index, null, locFromTokens(begin, end));
+              lhs = new ast.IndexSubscript(
+                lhs, index, locFromTokens(begin, end));
               break;
             }
             case "TokenDot": {
@@ -1239,8 +1228,8 @@ class parser {
               if (error.isStaticError(fieldID)) {
                 return fieldID;
               }
-              const id = ast.makeIdentifier(fieldID.data, fieldID.loc);
-              lhs = ast.makeIndex(lhs, null, id, locFromTokens(begin, fieldID));
+              const id = new ast.Identifier(fieldID.data, fieldID.loc);
+              lhs = new ast.IndexDot(lhs, id, locFromTokens(begin, fieldID));
               break;
             }
             case "TokenParenL": {
@@ -1255,7 +1244,7 @@ class parser {
                 this.pop();
                 tailStrict = true;
               }
-              lhs = ast.makeApply(
+              lhs = new ast.Apply(
                 lhs, args, gotComma, tailStrict, locFromTokens(begin, end));
               break;
             }
@@ -1264,7 +1253,7 @@ class parser {
               if (error.isStaticError(result)) {
                 return result;
               }
-              lhs = ast.makeApplyBrace(
+              lhs = new ast.ApplyBrace(
                 lhs, result.objRemainder, locFromTokens(begin, result.next));
               break;
             }
@@ -1276,7 +1265,7 @@ class parser {
               if (bop == null) {
                 throw new Error("INTERNAL ERROR: `parse` can't return a null node unless an `error` is populated");
               }
-              lhs = ast.makeBinary(lhs, bop, rhs, locFromTokenAST(begin, rhs));
+              lhs = new ast.Binary(lhs, bop, rhs, locFromTokenAST(begin, rhs));
               break;
             }
           }

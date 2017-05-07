@@ -20,7 +20,7 @@ export interface Visitor {
   VisitBuiltin(node: ast.Builtin): void
   VisitConditional(node: ast.Conditional): void
   VisitDollar(node: ast.Dollar): void
-  VisitError(node: ast.Error): void
+  VisitError(node: ast.ErrorNode): void
   VisitFunction(node: ast.Function): void
   VisitIdentifier(node: ast.Identifier): void
   VisitImport(node: ast.Import): void
@@ -71,7 +71,7 @@ export abstract class VisitorBase implements Visitor {
         const castedNode = <ast.Apply>node;
         this.VisitApply(castedNode);
         this.Visit(castedNode.target, castedNode, currEnv);
-        castedNode.arguments.forEach((arg: ast.Node) => {
+        castedNode.args.forEach((arg: ast.Node) => {
           this.Visit(arg, castedNode, currEnv);
         });
         return;
@@ -145,7 +145,7 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "ErrorNode": {
-        const castedNode = <ast.Error>node;
+        const castedNode = <ast.ErrorNode>node;
         this.VisitError(castedNode);
         this.Visit(castedNode.expr, castedNode, currEnv);
         return;
@@ -361,7 +361,7 @@ export abstract class VisitorBase implements Visitor {
   public abstract VisitBuiltin = (node: ast.Builtin): void => {}
   public abstract VisitConditional = (node: ast.Conditional): void => {}
   public abstract VisitDollar = (node: ast.Dollar): void => {}
-  public abstract VisitError = (node: ast.Error): void => {}
+  public abstract VisitError = (node: ast.ErrorNode): void => {}
   public abstract VisitFunction = (node: ast.Function): void => {}
 
   public abstract VisitIdentifier = (node: ast.Identifier): void => {}
@@ -401,7 +401,7 @@ export class DeserializingVisitor extends VisitorBase {
   public VisitBuiltin = (node: ast.Builtin): void => {}
   public VisitConditional = (node: ast.Conditional): void => {}
   public VisitDollar = (node: ast.Dollar): void => {}
-  public VisitError = (node: ast.Error): void => {}
+  public VisitError = (node: ast.ErrorNode): void => {}
   public VisitFunction = (node: ast.Function): void => {}
 
   public VisitIdentifier = (node: ast.Identifier): void => {}
@@ -448,7 +448,7 @@ export class CursorVisitor extends VisitorBase {
   public VisitBuiltin = (node: ast.Builtin): void => { this.updateIfCursorInRange(node); }
   public VisitConditional = (node: ast.Conditional): void => { this.updateIfCursorInRange(node); }
   public VisitDollar = (node: ast.Dollar): void => { this.updateIfCursorInRange(node); }
-  public VisitError = (node: ast.Error): void => { this.updateIfCursorInRange(node); }
+  public VisitError = (node: ast.ErrorNode): void => { this.updateIfCursorInRange(node); }
   public VisitFunction = (node: ast.Function): void => { this.updateIfCursorInRange(node); }
 
   public VisitIdentifier = (node: ast.Identifier): void => { this.updateIfCursorInRange(node); }

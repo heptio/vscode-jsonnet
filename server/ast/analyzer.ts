@@ -43,23 +43,15 @@ export class Analyzer implements EventedAnalyzer {
   public onHover = (
     fileUri: string, cursorLoc: error.Location
   ): Promise<service.HoverInfo> => {
-    const doc = this.documents.get(fileUri);
-    let line = doc.text.split(os.EOL)[cursorLoc.line - 1].trim();
-
     // Get symbol we're hovering over.
     const resolved = this.resolveSymbolAtPosition(fileUri, cursorLoc);
-
     if (resolved == null) {
       return Promise.reject("failed to resolve variable");
     }
 
-    const commentText: string | null = this.resolveComments(resolved);
     return Promise.resolve().then(
       () => <service.HoverInfo> {
-        contents: <service.LanguageString[]>[
-          {language: 'jsonnet', value: line},
-          commentText
-        ]
+        contents: this.renderOnhoverMessage(resolved)
       });
   }
 
@@ -101,6 +93,59 @@ export class Analyzer implements EventedAnalyzer {
   //
   // Utilities.
   //
+
+  private renderOnhoverMessage = (node: ast.Node): service.LanguageString[] => {
+    const commentText: string | null = this.resolveComments(node);
+
+    const doc = this.documents.get(node.loc.fileName);
+    let line: string = doc.text.split(os.EOL)
+      .slice(node.loc.begin.line - 1, node.loc.end.line)
+      .join("\n");
+
+    if (node.parent != null) {
+      switch (node.parent.type) {
+        case "ObjectFieldNode": {
+          const field = <ast.ObjectField>node.parent;
+          if (field.id != null) {
+            const name = field.id.name;
+            let hidden = ":";
+            if (field.hide === "ObjectFieldHidden") {
+              hidden = "::";
+            } else if (field.hide === "ObjectFieldVisible") {
+              hidden = ":::";
+            }
+
+            let paramsList = "";
+            if (field.methodSugar) {
+              const params = field.ids
+                .map((param: ast.FunctionParam) => {
+                  if (param.defaultValue == null) {
+                    return param.id;
+                  } else {
+                    return `${param.id}=${param.defaultValue}`
+                  }
+                })
+                .join(", ");
+              paramsList = `(${params})`;
+            }
+
+            let type = "field";
+            if (field.methodSugar) {
+              type = "method";
+            }
+
+            line = `(${type}) ${name}${paramsList}${hidden} { [...] }`
+          }
+        }
+      }
+    }
+
+
+    return <service.LanguageString[]>[
+      {language: 'jsonnet', value: line},
+      commentText,
+    ];
+  }
 
   private completionsFromNode = (
     node: ast.Node,

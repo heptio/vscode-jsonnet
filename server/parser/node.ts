@@ -62,6 +62,12 @@ export const renderAsJson = (node: Node): string => {
 
 // ---------------------------------------------------------------------------
 
+// NodeKind captures the type of the node. Implementing this as a
+// union of specific strings allows us to `switch` on node type.
+// Additionally, specific nodes can specialize and restrict the `type`
+// field to be something like `type: "ObjectNode" = "ObjectNode"`,
+// which will cause a type error if something tries to instantiate on
+// `ObjectNode` with a `type` that is not this specific string.
 export type NodeKind =
   "CommentNode" |
   "CompSpecNode" |
@@ -104,12 +110,32 @@ export type NodeKind =
 export interface Node {
   readonly type:     NodeKind
   readonly loc:      error.LocationRange
-  readonly freeVars: IdentifierNames
+
+  prettyPrint(): string
 
   parent: Node | null;     // Filled in by the visitor.
   env: Environment | null; // Filled in by the visitor.
 }
 export type Nodes = im.List<Node>
+
+// NodeBase is a simple abstract base class that makes sure we're
+// initializing the parent and env members to null. It is not exposed
+// to the public because it is meant to be a transparent base blass
+// for all `Node` implementations.
+abstract class NodeBase implements Node {
+  readonly type:     NodeKind
+  readonly loc:      error.LocationRange
+
+  constructor() {
+    this.parent = null;
+    this.env = null;
+  }
+
+  abstract prettyPrint;
+
+  parent: Node | null;     // Filled in by the visitor.
+  env: Environment | null; // Filled in by the visitor.
+}
 
 // ---------------------------------------------------------------------------
 
@@ -119,29 +145,22 @@ export type IdentifierName = string
 export type IdentifierNames = im.List<IdentifierName>
 export type IdentifierSet = im.Set<IdentifierName>;
 
-export interface Identifier extends Node {
-  readonly type: "IdentifierNode";
-  readonly name: IdentifierName
+export class Identifier extends NodeBase {
+  readonly type: "IdentifierNode" = "IdentifierNode";
+
+  constructor(
+    readonly name: IdentifierName,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return this.name;
+  }
 }
 
 export const isIdentifier = (node: Node): node is Identifier => {
-  const nodeType: NodeKind = "IdentifierNode";
-  return node.type === nodeType;
+  return node instanceof Identifier;
 }
-
-export const makeIdentifier = (
-  name: string, loc: error.LocationRange
-): Identifier => {
-  return {
-    type:     "IdentifierNode",
-    loc:      loc,
-    name:     name,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // TODO(jbeda) implement interning of IdentifierNames if necessary.  The C++
 // version does so.
@@ -167,19 +186,22 @@ export const isComment = (node: Node): node is Comment => {
   return node.type === nodeType;
 }
 
-export const MakeCppComment = (
-  loc: error.LocationRange, text: string
-): Comment => {
-  return {
-    type:     "CommentNode",
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-    kind:     "CppStyle",
-    text:     text,
+export class CppComment extends NodeBase implements Comment {
+  readonly type: "CommentNode" = "CommentNode";
+  readonly kind: "CppStyle"    = "CppStyle";
 
-    parent: null,
-    env: null,
+  constructor(
+    readonly text: string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return this.text;
   }
+}
+
+export const isCppComment = (node: Node): node is Identifier => {
+  return node instanceof CppComment;
 }
 
 
@@ -202,181 +224,168 @@ export const isCompSpec = (node: Node): node is CompSpec => {
   return node.type === nodeType;
 }
 
-export const makeCompSpec = (
-  kind: CompKind, varName: Identifier | null, expr: Node,
-  loc: error.LocationRange,
-): CompSpec => {
-  return {
-    type:     "CompSpecNode",
-    kind:     kind,
-    varName:  varName,
-    expr:     expr,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
+export class CompSpecIf extends NodeBase implements CompSpec {
+  readonly type:    "CompSpecNode" = "CompSpecNode";
+  readonly kind:    "CompIf"       = "CompIf";
+  readonly varName: Identifier | null = null // null when kind != compSpecFor
 
-    parent: null,
-    env: null,
+  constructor(
+    readonly expr: Node,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `if ${this.expr.prettyPrint()}`;
   }
+}
+
+export const isCompSpecIf = (node: Node): node is CompSpec => {
+  return node instanceof CompSpecIf;
+}
+
+export class CompSpecFor extends NodeBase implements CompSpec {
+  readonly type:    "CompSpecNode" = "CompSpecNode";
+  readonly kind:    "CompFor"      = "CompFor";
+
+  constructor(
+    readonly varName: Identifier, // null for `CompSpecIf`
+    readonly expr:    Node,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `for ${this.varName.prettyPrint()} in ${this.expr.prettyPrint()}`;
+  }
+}
+
+export const isCompSpecFor = (node: Node): node is CompSpec => {
+  return node instanceof CompSpecFor;
 }
 
 // ---------------------------------------------------------------------------
 
 // Apply represents a function call
-export interface Apply extends Node {
-  readonly type:          "ApplyNode"
-  readonly target:        Node
-  readonly arguments:     Nodes
-  readonly trailingComma: boolean
-  readonly tailStrict:    boolean
+export class Apply extends NodeBase  {
+  readonly type: "ApplyNode" = "ApplyNode";
+
+  constructor(
+    readonly target:        Node,
+    readonly args:          Nodes,
+    readonly trailingComma: boolean,
+    readonly tailStrict:    boolean,
+    readonly loc:           error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const argsString = this.args
+      .map((arg: Node) => arg.prettyPrint())
+      .join(", ");
+
+    const tailStrictString = this.tailStrict
+      ? "tailstrict"
+      : "";
+
+    return `${this.target.prettyPrint()}(${argsString} ${tailStrictString})`;
+  }
 }
 
 export const isApply = (node: Node): node is Apply => {
-  const nodeType: NodeKind = "ApplyNode";
-  return node.type === nodeType;
+  return node instanceof Apply;
 }
 
-export const makeApply = (
-  target: Node, args: Nodes, trailingComma: boolean,
-  tailStrict: boolean, loc: error.LocationRange,
-): Apply => {
-  return {
-    type:          "ApplyNode",
-    target:        target,
-    arguments:     args,
-    trailingComma: trailingComma,
-    tailStrict:    tailStrict,
-    loc:           loc,
-    freeVars:      im.List<IdentifierName>(),
+export class ApplyParamAssignment extends NodeBase {
+  readonly type: "ApplyParamAssignmentNode" = "ApplyParamAssignmentNode";
 
-    parent: null,
-    env: null,
+  constructor(
+    readonly id:    IdentifierName,
+    readonly right: Node,
+    readonly loc:   error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${this.id}=${this.right.prettyPrint()}`;
   }
-};
-
-export interface ApplyParamAssignment extends Node {
-  readonly type:  "ApplyParamAssignmentNode"
-  readonly id:    IdentifierName
-  readonly right: Node
 }
 export type ApplyParamAssignments = im.List<ApplyParamAssignment>
 
 export const isApplyParamAssignment = (
   node: Node
 ): node is ApplyParamAssignment => {
-  const nodeType: NodeKind = "ApplyParamAssignmentNode";
-  return node.type === nodeType;
-};
-
-export const makeApplyParamsAssignment = (
-  id: IdentifierName, right: Node, loc: error.LocationRange
-): ApplyParamAssignment => {
-  return {
-    type:     "ApplyParamAssignmentNode",
-    id:       id,
-    right:    right,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
+  return node instanceof ApplyParamAssignment;
 };
 
 // ---------------------------------------------------------------------------
 
 // ApplyBrace represents e { }.  Desugared to e + { }.
-export interface ApplyBrace extends Node {
-  readonly type:  "ApplyBraceNode"
-  readonly left:  Node
-  readonly right: Node
+export class ApplyBrace extends NodeBase {
+  readonly type: "ApplyBraceNode" = "ApplyBraceNode";
+
+  constructor(
+    readonly left:  Node,
+    readonly right: Node,
+    readonly loc:   error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${this.left.prettyPrint()} ${this.right.prettyPrint()}`;
+  }
 }
 
 export const isApplyBrace = (node: Node): node is ApplyBrace => {
-  const nodeType: NodeKind = "ApplyBraceNode";
-  return node.type === nodeType;
+  return node instanceof ApplyBrace;
 }
-
-export const makeApplyBrace = (
-  left: Node, right: Node, loc: error.LocationRange
-): ApplyBrace => {
-  return {
-    type:     "ApplyBraceNode",
-    left:     left,
-    right:    right,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // Array represents array constructors [1, 2, 3].
-export interface Array extends Node {
-  readonly type:            "ArrayNode"
-  readonly elements:        Nodes
-  readonly trailingComma:   boolean
-  readonly headingComment:  Comment | null
-  readonly trailingComment: Comment | null
+export class Array extends NodeBase {
+  readonly type: "ArrayNode" = "ArrayNode";
+
+  constructor(
+    readonly elements:        Nodes,
+    readonly trailingComma:   boolean,
+    readonly headingComment:  Comment | null,
+    readonly trailingComment: Comment | null,
+    readonly loc:             error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const elementsString = this.elements
+      .map((element: Node) => element.prettyPrint())
+      .join(", ");
+    return `[${elementsString}]`;
+  }
 }
 
 export const isArray = (node: Node): node is Array => {
-  const nodeType: NodeKind = "ArrayNode";
-  return node.type === nodeType;
+  return node instanceof Array;
 }
-
-export const makeArray = (
-  elements: Nodes, trailingComma: boolean, headingComment: Comment | null,
-  trailingComment: Comment | null, loc: error.LocationRange,
-): Array => {
-  return {
-    type:            "ArrayNode",
-    loc:             loc,
-    elements:        elements,
-    trailingComma:   trailingComma,
-    headingComment:  headingComment,
-    trailingComment: trailingComment,
-    freeVars:        im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // ArrayComp represents array comprehensions (which are like Python list
 // comprehensions)
-export interface ArrayComp extends Node {
-  readonly type:          "ArrayCompNode"
-  readonly body:          Node
-  readonly trailingComma: boolean
-  readonly specs:         CompSpecs
+export class ArrayComp extends NodeBase {
+  readonly type: "ArrayCompNode" = "ArrayCompNode";
+
+  constructor(
+    readonly body:          Node,
+    readonly trailingComma: boolean,
+    readonly specs:         CompSpecs,
+    readonly loc:           error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const specsString = this.specs
+      .map((spec: CompSpec) => spec.prettyPrint())
+      .join(", ");
+    return `[${specsString} ${this.body.prettyPrint()}]`;
+  }
 }
 
 export const isArrayComp = (node: Node): node is ArrayComp => {
-  const nodeType: NodeKind = "ArrayCompNode";
-  return node.type === nodeType;
+  return node instanceof ArrayComp;
 }
-
-export const makeArrayComp = (
-  body: Node, trailingComma: boolean, specs: CompSpecs,
-  loc: error.LocationRange,
-): ArrayComp => {
-  return {
-    type:          "ArrayCompNode",
-    body:          body,
-    trailingComma: trailingComma,
-    specs:         specs,
-    loc:           loc,
-    freeVars:      im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
@@ -384,34 +393,24 @@ export const makeArrayComp = (
 //
 // After parsing, message can be nil indicating that no message was
 // specified. This AST is elimiated by desugaring.
-export interface Assert extends Node {
-  readonly type:    "AssertNode"
-  readonly cond:    Node
-  readonly message: Node | null
-  readonly rest:    Node
+export class Assert extends NodeBase {
+  readonly type: "AssertNode" = "AssertNode";
+
+  constructor(
+    readonly cond:    Node,
+    readonly message: Node | null,
+    readonly rest:    Node,
+    readonly loc:     error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `assert ${this.cond.prettyPrint()}`;
+  }
 }
 
 export const isAssert = (node: Node): node is Assert => {
-  const nodeType: NodeKind = "AssertNode";
-  return node.type === nodeType;
+  return node instanceof Assert;
 }
-
-export const makeAssert = (
-  cond: Node, message: Node | null, rest: Node,
-  loc: error.LocationRange,
-): Assert => {
-  return {
-    type:     "AssertNode",
-    cond:     cond,
-    message:  message,
-    rest:     rest,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
@@ -496,33 +495,27 @@ export const BopMap = im.Map<string, BinaryOp>({
 });
 
 // Binary represents binary operators.
-export interface Binary extends Node {
-  readonly type:  "BinaryNode"
-  readonly left:  Node
-  readonly op:    BinaryOp
-  readonly right: Node
+export class Binary extends NodeBase {
+  readonly type: "BinaryNode" = "BinaryNode";
+
+  constructor(
+    readonly left:  Node,
+    readonly op:    BinaryOp,
+    readonly right: Node,
+    readonly loc:     error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const leftString = this.left.prettyPrint();
+    const opString = BopStrings[this.op];
+    const rightString = this.right.prettyPrint();
+    return `${leftString} ${opString} ${rightString}`;
+  }
 }
 
 export const isBinary = (node: Node): node is Binary => {
-  const nodeType: NodeKind = "BinaryNode";
-  return node.type === nodeType;
+  return node instanceof Binary;
 }
-
-export const makeBinary = (
-  left: Node, op: BinaryOp, right: Node, loc: error.LocationRange,
-): Binary => {
-  return {
-    type:     "BinaryNode",
-    left:     left,
-    op:       op,
-    right:    right,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
@@ -530,15 +523,23 @@ export const makeBinary = (
 //
 // There is no parse rule to build this AST.  Instead, it is used to build the
 // std object in the interpreter.
-export interface Builtin extends Node {
-  readonly type:   "BuiltinNode"
-  readonly id:     number
-  readonly params: IdentifierNames
+export class Builtin extends NodeBase {
+  readonly type: "BuiltinNode" = "BuiltinNode";
+
+  constructor(
+    readonly id:     number,
+    readonly params: IdentifierNames,
+    readonly loc:    error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const paramsString = this.params.join(", ");
+    return `std.${this.id}(${paramsString})`;
+  }
 }
 
 export const isBuiltin = (node: Node): node is Builtin => {
-  const nodeType: NodeKind = "BuiltinNode";
-  return node.type === nodeType;
+  return node instanceof Builtin;
 }
 
 // ---------------------------------------------------------------------------
@@ -547,177 +548,156 @@ export const isBuiltin = (node: Node): node is Builtin => {
 //
 // After parsing, branchFalse can be nil indicating that no else branch
 // was specified.  The desugarer fills this in with a LiteralNull
-export interface Conditional extends Node {
-  readonly type:        "ConditionalNode"
-  readonly cond:        Node
-  readonly branchTrue:  Node
-  readonly branchFalse: Node | null
+export class Conditional extends NodeBase {
+  readonly type: "ConditionalNode" = "ConditionalNode";
+
+  constructor(
+    readonly cond:        Node,
+    readonly branchTrue:  Node,
+    readonly branchFalse: Node | null,
+    readonly loc:    error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const trueClause = `then ${this.branchTrue.prettyPrint()}`;
+    const falseClause = this.branchFalse == null
+      ? ""
+      : `else ${this.branchFalse.prettyPrint()}`;
+    return `if ${this.cond.prettyPrint()} ${trueClause} ${falseClause}`;
+  }
 }
 
 export const isConditional = (node: Node): node is Conditional => {
-  const nodeType: NodeKind = "ConditionalNode";
-  return node.type === nodeType;
+  return node instanceof Conditional;
 }
-
-export const makeConditional = (
-  cond: Node, branchTrue: Node, branchFalse: Node | null,
-  loc: error.LocationRange,
-): Conditional => {
-  return {
-    type:        "ConditionalNode",
-    cond:        cond,
-    branchTrue:  branchTrue,
-    branchFalse: branchFalse,
-    loc:         loc,
-    freeVars:    im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // Dollar represents the $ keyword
-export interface Dollar extends Node { readonly type: "DollarNode" };
+export class Dollar extends NodeBase {
+  readonly type: "DollarNode" = "DollarNode";
+
+  constructor(
+    readonly loc:    error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `$`;
+  }
+};
 
 export const isDollar = (node: Node): node is Dollar => {
-  const nodeType: NodeKind = "DollarNode";
-  return node.type === nodeType;
+  return node instanceof Dollar;
 }
-
-export const makeDollar = (loc: error.LocationRange): Dollar => {
-  return {
-    type:     "DollarNode",
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-};
 
 // ---------------------------------------------------------------------------
 
 // Error represents the error e.
-export interface Error extends Node {
-  readonly type: "ErrorNode"
-  readonly expr: Node
-}
+export class ErrorNode extends NodeBase {
+  readonly type: "ErrorNode" = "ErrorNode";
 
-export const isError = (node: Node): node is Error => {
-  const nodeType: NodeKind = "ErrorNode";
-  return node.type === nodeType;
-}
+  constructor(
+    readonly expr: Node,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
 
-export const makeError = (expr: Node, loc: error.LocationRange): Error => {
-  return {
-    type:     "ErrorNode",
-    expr:     expr,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
+  public prettyPrint = (): string => {
+    return `error ${this.expr.prettyPrint()}`;
   }
-};
+}
+
+export const isError = (node: Node): node is ErrorNode => {
+  return node instanceof ErrorNode;
+}
 
 // ---------------------------------------------------------------------------
 
 // Function represents a function call. (jbeda: or is it function defn?)
-export interface Function extends Node {
-  readonly type:            "FunctionNode"
-  readonly parameters:      FunctionParams
-  readonly trailingComma:   boolean
-  readonly body:            Node
-  readonly headingComment:  Comments
-  readonly trailingComment: Comments
+export class Function extends NodeBase {
+  readonly type: "FunctionNode" = "FunctionNode";
+
+  constructor(
+    readonly parameters:      FunctionParams,
+    readonly trailingComma:   boolean,
+    readonly body:            Node,
+    readonly headingComment:  Comments,
+    readonly trailingComment: Comments,
+    readonly loc:             error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const params = this.parameters
+      .map((param: FunctionParam) => param.prettyPrint())
+      .join(", ");
+    return `function (${params}) ${this.body.prettyPrint()}`;
+  }
 }
 
 export const isFunction = (node: Node): node is Function => {
-  const nodeType: NodeKind = "FunctionNode";
-  return node.type === nodeType;
+  return node instanceof Function;
 }
 
-export interface FunctionParam extends Node {
-  readonly type:         "FunctionParamNode"
-  readonly id:           IdentifierName
-  readonly defaultValue: Node | null
+export class FunctionParam extends NodeBase {
+  readonly type: "FunctionParamNode" = "FunctionParamNode";
+
+  constructor(
+    readonly id:           IdentifierName,
+    readonly defaultValue: Node | null,
+    readonly loc:             error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const defaultValueString = this.defaultValue == null
+      ? ""
+      : `=${this.defaultValue.prettyPrint()}`;
+    return `${this.id}${defaultValueString}`;
+  }
 }
 export type FunctionParams = im.List<FunctionParam>
 
 export const isFunctionParam = (node: Node): node is FunctionParam => {
-  const nodeType: NodeKind = "FunctionParamNode";
-  return node.type === nodeType;
+  return node instanceof FunctionParam;
 }
-
-export const makeFunctionParam = (
-  id: IdentifierName, loc: error.LocationRange,
-  defaultValue: Node | null = null,
-): FunctionParam => {
-  return {
-    type:         "FunctionParamNode",
-    id:           id,
-    loc:          loc,
-    defaultValue: defaultValue,
-    freeVars:     im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // Import represents import "file".
-export interface Import extends Node {
-  readonly type: "ImportNode"
-  readonly file: string
+export class Import extends NodeBase {
+  readonly type: "ImportNode" = "ImportNode";
+
+  constructor(
+    readonly file: string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `import "${this.file}"`;
+  }
 }
 
 export const isImport = (node: Node): node is Import => {
-  const nodeType: NodeKind = "ImportNode";
-  return node.type === nodeType;
+  return node instanceof Import;
 }
-
-export const makeImport = (file: string, loc: error.LocationRange): Import => {
-  return {
-    type:     "ImportNode",
-    file:     file,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // ImportStr represents importstr "file".
-export interface ImportStr extends Node {
-  readonly type: "ImportStrNode"
-  readonly file: string
+export class ImportStr extends NodeBase {
+  readonly type: "ImportStrNode" = "ImportStrNode";
+
+  constructor(
+    readonly file: string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `importstr "${this.file}"`;
+  }
 }
 
 export const isImportStr = (node: Node): node is ImportStr => {
-  const nodeType: NodeKind = "ImportStrNode";
-  return node.type === nodeType;
+  return node instanceof ImportStr;
 }
-
-export const makeImportStr = (
-  file: string, loc: error.LocationRange
-): ImportStr => {
-  return {
-    type:     "ImportStrNode",
-    file:     file,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
@@ -737,22 +717,43 @@ export const isIndex = (node: Node): node is Index => {
   return node.type === nodeType;
 }
 
-export const makeIndex = (
-  target: Node, index: Node | null, id: Identifier | null,
-  loc: error.LocationRange,
-): Index => {
-  return {
-    type:     "IndexNode",
-    target:   target,
-    index:    index,
-    id:       id,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
+export class IndexSubscript extends NodeBase implements Index {
+  readonly type: "IndexNode"        = "IndexNode";
+  readonly id:    Identifier | null = null;
 
-    parent: null,
-    env: null,
+  constructor(
+    readonly target: Node,
+    readonly index:  Node,
+    readonly loc:    error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${this.target.prettyPrint()}[${this.index.prettyPrint()}]`;
   }
-};
+}
+
+export const isIndexSubscript = (node: Node): node is Index => {
+  return node instanceof IndexSubscript;
+}
+
+export class IndexDot extends NodeBase implements Index {
+  readonly type:  "IndexNode" = "IndexNode";
+  readonly index: Node | null = null;
+
+  constructor(
+    readonly target: Node,
+    readonly id:     Identifier,
+    readonly loc:    error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${this.target.prettyPrint()}.${this.id.prettyPrint()}`;
+  }
+}
+
+export const isIndexDot = (node: Node): node is Index => {
+  return node instanceof IndexDot;
+}
 
 // ---------------------------------------------------------------------------
 
@@ -780,108 +781,96 @@ export const makeLocalBind = (
 };
 
 // Local represents local x = e; e.  After desugaring, functionSugar is false.
-export interface Local extends Node {
-  readonly type:  "LocalNode"
-  readonly binds: LocalBinds
-  readonly body:  Node
+export class Local extends NodeBase {
+  readonly type: "LocalNode" = "LocalNode";
+
+  constructor(
+    readonly binds: LocalBinds,
+    readonly body:  Node,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const bindsString = this.binds
+      .map((bind: LocalBind) => {
+        const idString = bind.variable.prettyPrint();
+        if (bind.functionSugar) {
+          const paramsString = bind.params
+            .map((param: FunctionParam) => param.prettyPrint())
+            .join(", ");
+          return `${idString}(${paramsString})`;
+        }
+        return `${idString} = ${this.body.prettyPrint()}`;
+      })
+      .join(",\n  ");
+
+    return `local ${bindsString}`;
+  }
 }
 
 export const isLocal = (node: Node): node is Local => {
-  const nodeType: NodeKind = "LocalNode";
-  return node.type === nodeType;
+  return node instanceof Local;
 }
-
-export const makeLocal = (
-  binds: LocalBinds, body: Node, loc: error.LocationRange
-): Local => {
-  return {
-    type:     "LocalNode",
-    binds:    binds,
-    body:     body,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // LiteralBoolean represents true and false
-export interface LiteralBoolean extends Node {
-  readonly type: "LiteralBooleanNode"
-  readonly value: boolean
+export class LiteralBoolean extends NodeBase {
+  readonly type: "LiteralBooleanNode" = "LiteralBooleanNode";
+
+  constructor(
+    readonly value: boolean,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${this.value}`;
+  }
 }
 
 export const isLiteralBoolean = (node: Node): node is LiteralBoolean => {
-  const nodeType: NodeKind = "LiteralBooleanNode";
-  return node.type === nodeType;
+  return node instanceof LiteralBoolean;
 }
-
-export const makeLiteralBoolean = (
-  value: boolean, loc: error.LocationRange
-): LiteralBoolean => {
-  return {
-    type:     "LiteralBooleanNode",
-    value:    value,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // LiteralNull represents the null keyword
-export interface LiteralNull extends Node { readonly type: "LiteralNullNode" }
+export class LiteralNull extends NodeBase {
+  readonly type: "LiteralNullNode" = "LiteralNullNode";
 
-export const isLiteralNull = (node: Node): node is LiteralNull => {
-  const nodeType: NodeKind = "LiteralNullNode";
-  return node.type === nodeType;
+  constructor(
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `null`;
+  }
 }
 
-export const makeLiteralNull = (loc: error.LocationRange): LiteralNull => {
-  return {
-    type:     "LiteralNullNode",
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-};
+export const isLiteralNull = (node: Node): node is LiteralNull => {
+  return node instanceof LiteralNull;
+}
 
 // ---------------------------------------------------------------------------
 
 // LiteralNumber represents a JSON number
-export interface LiteralNumber extends Node {
-  readonly type:           "LiteralNumberNode"
-  readonly value:          number
-  readonly originalString: string
+export class LiteralNumber extends NodeBase {
+  readonly type: "LiteralNumberNode" = "LiteralNumberNode";
+
+  constructor(
+    readonly value:          number,
+    readonly originalString: string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${this.originalString}`;
+  }
 }
 
 export const isLiteralNumber = (node: Node): node is LiteralNumber => {
-  const nodeType: NodeKind = "LiteralNumberNode";
-  return node.type === nodeType;
+  return node instanceof LiteralNumber;
 }
-
-export const makeLiteralNumber = (
-  value: number, originalString: string, loc: error.LocationRange
-): LiteralNumber => {
-  return {
-    type:           "LiteralNumberNode",
-    value:          value,
-    originalString: originalString,
-    loc: loc,
-    freeVars:      im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
@@ -892,7 +881,7 @@ export type LiteralStringKind =
 
 // LiteralString represents a JSON string
 export interface LiteralString extends Node {
-  readonly type: "LiteralStringNode"
+  readonly type:        "LiteralStringNode"
   readonly value:       string
   readonly kind:        LiteralStringKind
   readonly blockIndent: string
@@ -903,22 +892,64 @@ export const isLiteralString = (node: Node): node is LiteralString => {
   return node.type === nodeType;
 }
 
-export const makeLiteralString = (
-  value: string, kind: LiteralStringKind, loc: error.LocationRange, blockIndent: string
-): LiteralString => {
-  return {
-    type:        "LiteralStringNode",
-    loc:         loc,
-    value:       value,
-    kind:        kind,
-    blockIndent: blockIndent,
-    freeVars:    im.List<IdentifierName>(),
+export class LiteralStringSingle extends NodeBase implements LiteralString {
+  readonly type:        "LiteralStringNode" = "LiteralStringNode";
+  readonly kind:        "StringSingle"      = "StringSingle";
+  readonly blockIndent: ""                  = "";
 
-    parent: null,
-    env: null,
+  constructor(
+    readonly value:       string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `'${this.value}'`;
   }
-};
+}
 
+export const isLiteralStringSingle = (
+  node: Node
+): node is LiteralStringSingle => {
+  return node instanceof LiteralStringSingle;
+}
+
+export class LiteralStringDouble extends NodeBase implements LiteralString {
+  readonly type:        "LiteralStringNode" = "LiteralStringNode";
+  readonly kind:        "StringDouble"      = "StringDouble";
+  readonly blockIndent: ""                  = "";
+
+  constructor(
+    readonly value:       string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `"${this.value}"`;
+  }
+}
+
+export const isLiteralStringDouble = (node: Node): node is LiteralString => {
+  return node instanceof LiteralStringDouble;
+}
+
+export class LiteralStringBlock extends NodeBase implements LiteralString {
+  readonly type: "LiteralStringNode" = "LiteralStringNode";
+  readonly kind: "StringBlock"       = "StringBlock";
+
+  constructor(
+    readonly value:       string,
+    readonly blockIndent: string,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `|||${this.value}|||`;
+  }
+}
+
+export const isLiteralStringBlock = (node: Node): node is LiteralStringBlock => {
+  return node instanceof LiteralStringBlock;
+}
 
 // ---------------------------------------------------------------------------
 
@@ -934,66 +965,84 @@ export type ObjectFieldHide =
   "ObjectFieldInherit" | // f: e
   "ObjectFieldVisible";  // f::: e
 
-export interface ObjectField extends Node {
-  readonly type:            "ObjectFieldNode"
-  readonly kind:            ObjectFieldKind
-  readonly hide:            ObjectFieldHide // (ignore if kind != astObjectField*)
-  readonly superSugar:      boolean         // +:  (ignore if kind != astObjectField*)
-  readonly methodSugar:     boolean         // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
-  readonly expr1:           Node | null     // Not in scope of the object
-  readonly id:              Identifier | null
-  readonly ids:             FunctionParams  // If methodSugar == true then holds the params.
-  readonly trailingComma:   boolean         // If methodSugar == true then remembers the trailing comma
-  readonly expr2:           Node | null     // In scope of the object (can see self).
-  readonly expr3:           Node | null     // In scope of the object (can see self).
-  readonly headingComments: Comments
+// export interface ObjectField extends NodeBase {
+//   readonly type:            "ObjectFieldNode"
+//   readonly kind:            ObjectFieldKind
+//   readonly hide:            ObjectFieldHide // (ignore if kind != astObjectField*)
+//   readonly superSugar:      boolean         // +:  (ignore if kind != astObjectField*)
+//   readonly methodSugar:     boolean         // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
+//   readonly expr1:           Node | null     // Not in scope of the object
+//   readonly id:              Identifier | null
+//   readonly ids:             FunctionParams  // If methodSugar == true then holds the params.
+//   readonly trailingComma:   boolean         // If methodSugar == true then remembers the trailing comma
+//   readonly expr2:           Node | null     // In scope of the object (can see self).
+//   readonly expr3:           Node | null     // In scope of the object (can see self).
+//   readonly headingComments: Comments
+// }
+
+export class ObjectField extends NodeBase {
+  readonly type: "ObjectFieldNode" = "ObjectFieldNode";
+
+  constructor(
+    readonly kind:            ObjectFieldKind,
+    readonly hide:            ObjectFieldHide, // (ignore if kind != astObjectField*)
+    readonly superSugar:      boolean,         // +:  (ignore if kind != astObjectField*)
+    readonly methodSugar:     boolean,         // f(x, y, z): ...  (ignore if kind  == astObjectAssert)
+    readonly expr1:           Node | null,     // Not in scope of the object
+    readonly id:              Identifier | null,
+    readonly ids:             FunctionParams,  // If methodSugar == true then holds the params.
+    readonly trailingComma:   boolean,         // If methodSugar == true then remembers the trailing comma
+    readonly expr2:           Node | null,     // In scope of the object (can see self).
+    readonly expr3:           Node | null,     // In scope of the object (can see self).
+    readonly headingComments: Comments,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `[OBJECT FIELD]`;
+  }
 }
 
 export const isObjectField = (node: Node): node is ObjectField => {
-  const nodeType: NodeKind = "ObjectFieldNode";
-  return node.type === nodeType;
+  return node instanceof ObjectField;
 }
 
 // TODO(jbeda): Add the remaining constructor helpers here
 
 export type ObjectFields = im.List<ObjectField>;
 
+// ---------------------------------------------------------------------------
+
 // Object represents object constructors { f: e ... }.
 //
 // The trailing comma is only allowed if len(fields) > 0.  Converted to
 // DesugaredObject during desugaring.
-export interface ObjectNode extends Node {
-  readonly type:            "ObjectNode"
-  readonly fields:          ObjectFields
-  readonly trailingComma:   boolean
-  readonly headingComments: Comments
+export class ObjectNode extends NodeBase {
+  readonly type: "ObjectNode" = "ObjectNode";
+
+  constructor(
+    readonly fields:          ObjectFields,
+    readonly trailingComma:   boolean,
+    readonly headingComments: Comments,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const fields = this.fields
+      .map((field: ObjectField) => `  ${field.prettyPrint()}`)
+      .join(", ");
+
+    return `{\n${fields}\n}`;
+  }
 }
 
 export const isObjectNode = (node: Node): node is ObjectNode => {
-  const nodeType: NodeKind = "ObjectNode";
-  return node.type === nodeType;
+  return node instanceof ObjectNode;
 }
-
-export const makeObject = (
-  fields: ObjectFields, trailingComma: boolean,
-  headingComments: Comments, loc: error.LocationRange,
-): ObjectNode => {
-  return {
-    type: "ObjectNode",
-    loc: loc,
-    fields:          fields,
-    trailingComma:   trailingComma,
-    headingComments: headingComments,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
-export interface DesugaredObjectField extends Node {
+export interface DesugaredObjectField extends NodeBase {
   readonly type: "DesugaredObjectFieldNode"
   readonly hide: ObjectFieldHide
   readonly name: Node
@@ -1005,7 +1054,7 @@ export type DesugaredObjectFields = im.List<DesugaredObjectField>;
 // desugaring.
 //
 // The assertions either return true or raise an error.
-export interface DesugaredObject extends Node {
+export interface DesugaredObject extends NodeBase {
   readonly type:    "DesugaredObjectNode"
   readonly asserts: Nodes
   readonly fields:  DesugaredObjectFields
@@ -1020,16 +1069,30 @@ export const isDesugaredObject = (node: Node): node is DesugaredObject => {
 
 // ObjectComp represents object comprehension
 //   { [e]: e for x in e for.. if... }.
-export interface ObjectComp extends Node {
-  readonly type: "ObjectCompNode"
-  readonly fields:        ObjectFields
-  readonly trailingComma: boolean
-  readonly specs:         CompSpecs
+// export interface ObjectComp extends NodeBase {
+//   readonly type: "ObjectCompNode"
+//   readonly fields:        ObjectFields
+//   readonly trailingComma: boolean
+//   readonly specs:         CompSpecs
+// }
+
+export class ObjectComp extends NodeBase {
+  readonly type: "ObjectCompNode" = "ObjectCompNode";
+
+  constructor(
+    readonly fields:        ObjectFields,
+    readonly trailingComma: boolean,
+    readonly specs:         CompSpecs,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `[OBJECT COMP]`
+  }
 }
 
 export const isObjectComp = (node: Node): node is ObjectComp => {
-  const nodeType: NodeKind = "ObjectCompNode";
-  return node.type === nodeType;
+  return node instanceof ObjectComp;
 }
 
 // ---------------------------------------------------------------------------
@@ -1038,7 +1101,7 @@ export const isObjectComp = (node: Node): node is ObjectComp => {
 // comprehension { [e]: e for x in e }.
 //
 // TODO: Rename this to `ObjectCompSimple`
-export interface ObjectComprehensionSimple extends Node {
+export interface ObjectComprehensionSimple extends NodeBase {
   readonly type: "ObjectComprehensionSimpleNode"
   readonly field: Node
   readonly value: Node
@@ -1056,23 +1119,21 @@ export const isObjectComprehensionSimple = (
 // ---------------------------------------------------------------------------
 
 // Self represents the self keyword.
-export interface Self extends Node { readonly type: "SelfNode" };
+export class Self extends NodeBase {
+  readonly type: "SelfNode" = "SelfNode";
+
+  constructor(
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `self`;
+  }
+};
 
 export const isSelf = (node: Node): node is Self => {
-  const nodeType: NodeKind = "SelfNode";
-  return node.type === nodeType;
+  return node instanceof Self;
 }
-
-export const makeSelf = (loc: error.LocationRange): Self => {
-  return {
-    type:     "SelfNode",
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-};
 
 // ---------------------------------------------------------------------------
 
@@ -1080,31 +1141,28 @@ export const makeSelf = (loc: error.LocationRange): Self => {
 //
 // Either index or identifier will be set before desugaring.  After desugaring, id will be
 // nil.
-export interface SuperIndex extends Node {
-  readonly type: "SuperIndexNode"
-  readonly index: Node | null
-  readonly id:    Identifier | null
+export class SuperIndex extends NodeBase {
+  readonly type: "SuperIndexNode" = "SuperIndexNode";
+
+  constructor(
+    readonly index: Node | null,
+    readonly id:    Identifier | null,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    if (this.id != null) {
+      return `super.${this.id.prettyPrint()}`;
+    } else if (this.index != null) {
+      return `super[${this.index.prettyPrint()}]`
+    }
+    throw new Error(`INTERNAL ERROR: Can't pretty-print super index if both 'id' and 'index' fields are null`);
+  }
 }
 
 export const isSuperIndex = (node: Node): node is SuperIndex => {
-  const nodeType: NodeKind = "SuperIndexNode";
-  return node.type === nodeType;
+  return node instanceof SuperIndex;
 }
-
-export const makeSuperIndex = (
-  index: Node | null, id: Identifier | null, loc: error.LocationRange
-): SuperIndex => {
-  return {
-    type:     "SuperIndexNode",
-    index:    index,
-    id:       id,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
@@ -1129,55 +1187,42 @@ export const UopMap = im.Map<string, UnaryOp>({
 });
 
 // Unary represents unary operators.
-export interface Unary extends Node {
-  readonly type: "UnaryNode"
-  readonly op:   UnaryOp
-  readonly expr: Node
+export class Unary extends NodeBase {
+  readonly type: "UnaryNode" = "UnaryNode";
+
+  constructor(
+    readonly op:   UnaryOp,
+    readonly expr: Node,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return `${UopStrings[this.op]}${this.expr.prettyPrint()}`;
+  }
 }
 
 export const isUnary = (node: Node): node is Unary => {
-  const nodeType: NodeKind = "UnaryNode";
-  return node.type === nodeType;
+  return node instanceof Unary;
 }
-
-export const makeUnary = (
-  op: UnaryOp, expr: Node, loc: error.LocationRange,
-): Unary => {
-  return {
-    type:     "UnaryNode",
-    op:       op,
-    expr:     expr,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  }
-};
 
 // ---------------------------------------------------------------------------
 
 // Var represents variables.
-export interface Var extends Node {
-  readonly type: "VarNode"
-  readonly id: Identifier
+export class Var extends NodeBase {
+  readonly type: "VarNode" = "VarNode";
+
+  constructor(
+    readonly id: Identifier,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return this.id.prettyPrint();
+  }
 }
 
 export const isVar = (node: Node): node is Var => {
-  const nodeType: NodeKind = "VarNode";
-  return node.type === nodeType;
+  return node instanceof Var;
 }
-
-export const makeVar = (id: Identifier, loc: error.LocationRange): Var => {
-  return {
-    type:     "VarNode",
-    id:       id,
-    loc:      loc,
-    freeVars: im.List<IdentifierName>(),
-
-    parent: null,
-    env: null,
-  };
-};
 
 // ---------------------------------------------------------------------------
