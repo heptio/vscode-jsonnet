@@ -159,7 +159,18 @@ export abstract class VisitorBase implements Visitor {
         castedNode.parameters.forEach((param: ast.FunctionParam) => {
           this.Visit(param, castedNode, currEnv);
         });
-        this.Visit(castedNode.body, castedNode, currEnv);
+
+        // Add params to environment before visiting body.
+        const envWithParams = castedNode.parameters
+          .reduce(
+            (acc: ast.Environment, field: ast.FunctionParam) => {
+              return acc.merge(ast.environmentFromLocal(field));
+            },
+            immutable.Map<string, ast.LocalBind | ast.FunctionParam>()
+          );
+
+        // Visit body.
+        this.Visit(castedNode.body, castedNode, envWithParams);
         castedNode.trailingComment.forEach((comment: ast.Comment) => {
           this.Visit(comment, castedNode, currEnv);
         });

@@ -5,12 +5,12 @@ import * as error from '../lexer/static_error';
 
 // ---------------------------------------------------------------------------
 
-export type Environment = im.Map<string, LocalBind>;
+export type Environment = im.Map<string, LocalBind | FunctionParam>;
 
 export const emptyEnvironment = im.Map<string, LocalBind>();
 
 export const environmentFromLocal = (
-  local: Local | ObjectField
+  local: Local | ObjectField | FunctionParam
 ): Environment => {
   if (isLocal(local)) {
     const defaultLocal: {[key: string]: LocalBind} = {};
@@ -25,20 +25,24 @@ export const environmentFromLocal = (
         },
         defaultLocal);
     return im.Map(binds);
+  } else if (isObjectField(local)) {
+    if (local.expr2 == null || local.id == null) {
+      throw new Error(`INTERNAL ERROR: Object local fields can't have a null expr2 or id field`);
+    }
+
+    const bind: LocalBind = {
+      variable:      local.id,
+      body:          local.expr2,
+      functionSugar: local.methodSugar,
+      params:        local.ids,
+      trailingComma: local.trailingComma,
+    };
+    return im.Map<string, LocalBind>().set(local.id.name, bind);
   }
 
-  if (local.expr2 == null || local.id == null) {
-    throw new Error(`INTERNAL ERROR: Object local fields can't have a null expr2 or id field`);
-  }
-
-  const bind: LocalBind = {
-    variable:      local.id,
-    body:          local.expr2,
-    functionSugar: local.methodSugar,
-    params:        local.ids,
-    trailingComma: local.trailingComma,
-  };
-  return im.Map<string, LocalBind>().set(local.id.name, bind);
+  // Else, it's a `FunctionParam`, i.e., a free parameter (or a free
+  // parameter with a default value). Either way, emit that.
+  return im.Map<string, LocalBind | FunctionParam>().set(local.id, local);
 }
 
 export const renderAsJson = (node: Node): string => {
@@ -650,12 +654,12 @@ export class FunctionParam extends NodeBase {
     const defaultValueString = this.defaultValue == null
       ? ""
       : `=${this.defaultValue.prettyPrint()}`;
-    return `${this.id}${defaultValueString}`;
+    return `(parameter) ${this.id}${defaultValueString}`;
   }
 }
 export type FunctionParams = im.List<FunctionParam>
 
-export const isFunctionParam = (node: Node): node is FunctionParam => {
+export const isFunctionParam = (node: any): node is FunctionParam => {
   return node instanceof FunctionParam;
 }
 

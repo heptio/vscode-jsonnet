@@ -102,7 +102,12 @@ export class Analyzer implements EventedAnalyzer {
       .slice(node.loc.begin.line - 1, node.loc.end.line)
       .join("\n");
 
-    if (node.parent != null) {
+    if (ast.isFunctionParam(node)) {
+      // A function parameter is either a free variable, or a free
+      // variable with a default value. Either way, there's not more
+      // we can know statically, so emit that.
+      line = node.prettyPrint();
+    } else if (node.parent != null) {
       switch (node.parent.type) {
         case "ObjectFieldNode": {
           const field = <ast.ObjectField>node.parent;
@@ -390,8 +395,12 @@ export class Analyzer implements EventedAnalyzer {
       case "IdentifierNode": {
         return this.resolveIdentifier(<ast.Identifier>node);
       }
-      // TODO: This case should be null.
-      default: { return node; }
+      case "LocalNode": {
+        return node;
+      }
+      default: {
+        return null;
+      }
     }
   }
 
@@ -519,6 +528,12 @@ export class Analyzer implements EventedAnalyzer {
     const bind = env.get(idName);
     if (bind == null) {
       return null;
+    }
+
+    if (ast.isFunctionParam(bind)) {
+      // A function param is either a free variable, or it has a
+      // default value. We return either way.
+      return bind;
     }
 
     if (bind.body == null) {
