@@ -45,72 +45,46 @@ export class VsCompilerService implements compiler.CompilerService {
 
   public cache = (
     fileUri: string, text: string, version: number
-  ): compiler.FullParsedDocument | null => {
-    const command = this.command;
-    if (command == null) {
-      return null;
-    }
+  ): compiler.ParsedDocument | compiler.FailedParsedDocument => {
+    //
+    // There are 3 possible outcomes:
+    //
+    // 1. We successfully parse the document. Cache.
+    // 2. We successfully lex but fail to parse. Return
+    //    `PartialParsedDocument`.
+    // 3. We fail to lex. Return `PartialParsedDocument`.
+    //
 
-    const parsed = url.parse(fileUri);
-    if (!parsed || !parsed.path) {
+
+    // TODO: Replace this with a URL provider abstraction.
+    const parsedUrl = url.parse(fileUri);
+    if (!parsedUrl || !parsedUrl.path) {
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
     }
 
-    const lex = lexer.Lex(parsed.path, text);
+    const lex = lexer.Lex(parsedUrl.path, text);
     if (error.isStaticError(lex)) {
-      return null;
+      // TODO: emptyTokens is not right. Fill it in.
+      const fail = new compiler.LexFailure(lexer.emptyTokens, lex);
+      return new compiler.FailedParsedDocument(text, fail, version);
     }
 
     const parse = parser.Parse(lex);
     if (error.isStaticError(parse)) {
-      return null;
+      const fail = new compiler.ParseFailure(lex, parse);
+      return new compiler.FailedParsedDocument(text, fail, version);
     }
-    const rootNode = <ast.Node>parse;
     new astVisitor.DeserializingVisitor()
-      .Visit(rootNode, null, ast.emptyEnvironment);
+      .Visit(parse, null, ast.emptyEnvironment);
 
-    const cache = <compiler.FullParsedDocument>{
-      text: text,
-      lex: lex,
-      parse: rootNode,
-      version: version,
-    };
-
-    this.docCache = this.docCache.set(fileUri, cache);
-
-    return cache;
-  }
-
-  public parseUntil = (
-    fileUri: string, text: string, cursor: error.Location, version: number
-  ): compiler.PartialParsedDocument | null => {
-    const command = this.command;
-    if (command == null) {
-      return null;
-    }
-
-    const parsed = url.parse(fileUri);
-    if (!parsed || !parsed.path) {
-      throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
-    }
-
-    const lex = lexer.LexRange(parsed.path, text, cursor);
-    if (error.isStaticError(lex)) {
-      return null;
-    }
-
-    const partial = <compiler.PartialParsedDocument>{
-      text: text,
-      lex: lex,
-      version: version,
-    };
-
-    return partial;
+    const parsedDoc = new compiler.ParsedDocument(text, lex, parse, version);
+    this.docCache = this.docCache.set(fileUri, parsedDoc);
+    return parsedDoc;
   }
 
   public getLastSuccess = (
     fileUri: string
-  ): compiler.FullParsedDocument | null => {
+  ): compiler.ParsedDocument | null => {
     return this.docCache.has(fileUri) && this.docCache.get(fileUri) || null;
   }
 
@@ -122,5 +96,5 @@ export class VsCompilerService implements compiler.CompilerService {
   // Private members.
   //
 
-  private docCache = immutable.Map<string, compiler.FullParsedDocument>();
+  private docCache = immutable.Map<string, compiler.ParsedDocument>();
 }

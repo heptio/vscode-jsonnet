@@ -43,19 +43,15 @@ export class Analyzer implements EventedAnalyzer {
   public onHover = (
     fileUri: string, cursorLoc: error.Location
   ): Promise<service.HoverInfo> => {
-    const doc = this.documents.get(fileUri);
-    let line = doc.text.split(os.EOL)[cursorLoc.line - 1].trim();
-
     // Get symbol we're hovering over.
     const resolved = this.resolveSymbolAtPosition(fileUri, cursorLoc);
+    if (resolved == null) {
+      return Promise.reject("failed to resolve variable");
+    }
 
-    const commentText: string | null = this.resolveComments(resolved);
     return Promise.resolve().then(
       () => <service.HoverInfo> {
-        contents: <service.LanguageString[]> [
-          {language: 'jsonnet', value: line},
-          commentText
-        ]
+        contents: this.renderOnhoverMessage(resolved)
       });
   }
 
@@ -64,33 +60,33 @@ export class Analyzer implements EventedAnalyzer {
   ): Promise<service.CompletionInfo[]> => {
     const doc = this.documents.get(fileUri);
 
-    return new Promise<immutable.List<lexer.Token>>(
+    return new Promise<service.CompletionInfo[]>(
       (resolve, reject) => {
-        const partialParse = this.compilerService.parseUntil(
-          fileUri, doc.text, cursorLoc, doc.version);
-        if (partialParse == null) {
-          reject(`Failed to do a partial parse document at '${fileUri}'`);
+        //
+        // Generate suggestions. This process follows three steps:
+        //
+        // 1. Try to parse the document text.
+        // 2. If we succeed, go to cursor, select that node, and if
+        //    it's an identifier that can be completed, then return
+        //    the environment.
+        // 3. If we fail, go try to go to the "hole" where the
+        //    identifier exists.
+        //
+
+        const parse = this.compilerService.cache(
+          fileUri, doc.text, doc.version);
+        if (compiler.isFailedParsedDocument(parse)) {
+          // TODO: Fix me.
+          const msg = `Failed to do a partial parse document at '${fileUri}'`;
+          reject(msg);
           return;
         }
-        resolve(findCompletionTokens(partialParse.lex, cursorLoc));
-      })
-      .then(tokens => {
-        const lastSavedDoc = this.compilerService.getLastSuccess(fileUri);
-        const parseLastDocument = new Promise<ast.Node | null>(
-          (resolve, reject) => {
-            resolve(lastSavedDoc && lastSavedDoc.parse || null);
-          });
 
-          return Promise.all([tokens, parseLastDocument]);
-      })
-      .then(([tokens, lastDocumentRoot]) => {
-        if (lastDocumentRoot == null) { return []; }
+        const nodeAtPos = this.getNodeAtPositionFromAst(
+          parse.parse, cursorLoc);
 
-        const nodeAtPos =
-          this.getNodeAtPositionFromAst(lastDocumentRoot, cursorLoc);
-
-        return (nodeAtPos && nodeAtPos.env &&
-          this.completeTokens(tokens, nodeAtPos.env)) || [];
+        const completions = this.completionsFromNode(nodeAtPos);
+        resolve(completions);
       });
   }
 
@@ -98,65 +94,250 @@ export class Analyzer implements EventedAnalyzer {
   // Utilities.
   //
 
-  private completeTokens = (
-    tokens: immutable.List<lexer.Token>,
-    env: ast.Environment,
-  ): service.CompletionInfo[] => {
-    const completion =
-      (label, kind, data): service.CompletionInfo => <service.CompletionInfo>{
-        label: label,
-        kind: kind,
-        data: data,
-      };
+  private renderOnhoverMessage = (node: ast.Node): service.LanguageString[] => {
+    const commentText: string | null = this.resolveComments(node);
 
-    const tokenCount = tokens.count();
-    if (tokenCount == 0) {
-      return []
-    }
-    if (tokenCount == 1 || tokenCount == 2) {
-      // It's a `local` value. Autocomplete suggestions.
-      return envToSuggestions(env);
-    } else {
-      // Repeatedly consume tokens and attempt to populate autocomplete
-      // suggestions.
-      let tokenStream = tokens;
-      let currEnv = env;
-      let tokenCount = tokenStream.count();
-      let lastResolved: ast.Node | null = null;
+    const doc = this.documents.get(node.loc.fileName);
+    let line: string = doc.text.split(os.EOL)
+      .slice(node.loc.begin.line - 1, node.loc.end.line)
+      .join("\n");
 
-      while (true) {
-        const nextToken = tokens.first();
-        tokenStream = tokens.shift();
-        tokenCount--;
+    if (ast.isFunctionParam(node)) {
+      // A function parameter is either a free variable, or a free
+      // variable with a default value. Either way, there's not more
+      // we can know statically, so emit that.
+      line = node.prettyPrint();
+    } else if (node.parent != null) {
+      switch (node.parent.type) {
+        case "ObjectFieldNode": {
+          const field = <ast.ObjectField>node.parent;
+          if (field.id != null) {
+            const name = field.id.name;
+            let hidden = ":";
+            if (field.hide === "ObjectFieldHidden") {
+              hidden = "::";
+            } else if (field.hide === "ObjectFieldVisible") {
+              hidden = ":::";
+            }
 
-        if (tokenCount == 1) {
-          // Last token. Autocomplete suggestions.
-          if (lastResolved == null) {
-            throw new Error("INTERNAL ERROR: lastResolved can't be null");
+            let paramsList = "";
+            if (field.methodSugar) {
+              const params = field.ids
+                .map((param: ast.FunctionParam) => {
+                  if (param.defaultValue == null) {
+                    return param.id;
+                  } else {
+                    return `${param.id}=${param.defaultValue}`
+                  }
+                })
+                .join(", ");
+              paramsList = `(${params})`;
+            }
+
+            let type = "field";
+            if (field.methodSugar) {
+              type = "method";
+            }
+
+            line = `(${type}) ${name}${paramsList}${hidden} { [...] }`
           }
-          return getCompletableFields(lastResolved);
-        }
-
-        if (nextToken.kind == "TokenIdentifier") {
-          // Attempt to lookup identifier.
-          const node = this.resolveFromEnv(nextToken.data, currEnv);
-          if (node == null) { return []; }
-          if (node.env == null) {
-            throw new Error(`INTERNAL ERROR: A node environment should never be null ${ast.renderAsJson(node)}`);
-          }
-
-          if (lastResolved != null) {
-            return getCompletableFields(lastResolved);
-          }
-          lastResolved = node;
-          continue;
-        } else if (nextToken.kind == "TokenOperator") {
-          // Currently only `.` operator allowed.
-          if (nextToken.data !== ".") { return []; }
-          continue;
         }
       }
     }
+
+
+    return <service.LanguageString[]>[
+      {language: 'jsonnet', value: line},
+      commentText,
+    ];
+  }
+
+  private completionsFromNode = (
+    node: ast.Node,
+  ): service.CompletionInfo[] => {
+    //
+    // We suggest completions only for `Identifier` nodes that are in
+    // specific places in the AST. In particular, we would suggest a
+    // completion if the identifier is a:
+    //
+    // 1. Variable references, i.e., identifiers that reference
+    //    specific variables, that are in scope.
+    // 2. Identifiers that are part of an index expression, e.g.,
+    //    `foo.bar`.
+    //
+    // Note that requiring `node` to be an `Identifier` does
+    // disqualify autocompletions in places like comments or strings.
+    //
+
+    // Only suggest completions if the node is an identifier.
+    if (!ast.isIdentifier(node)) {
+      return [];
+    }
+
+    // Document root. Give suggestions from the environment if we have
+    // them. In a well-formed Jsonnet AST, this should not return
+    // valid responses, but return from the environment in case the
+    // tree parent was garbled somehow.
+    const parent = node.parent;
+    if (parent == null) {
+      return node.env && envToSuggestions(node.env) || [];
+    }
+
+    // Identifier is a variable.
+    let index: ast.Index | null = null;
+    if (ast.isVar(parent)) {
+      // Identifier is a variable that is part of an index expression,
+      // e.g., the `b` in `a.b`.
+      if (parent.parent != null && ast.isIndex(parent.parent)) {
+        index = parent.parent;
+      } else {
+        // Identifier is just a variable. Suggest completions from
+        // environment.
+        return node.env && envToSuggestions(node.env) || [];
+      }
+    } else if (ast.isIndex(parent)) {
+      // Identifier is part of an index expression.
+      index = parent;
+    } else {
+      // Identifier part of a completable expression.
+      return [];
+    }
+
+    // Index target is a variable. e.g., this is `a` in `a.b`.
+    //
+    // TODO: We're not handling the case where the cursor is inside
+    // the target, and not the index. We should!
+    if(!ast.isVar(index.target)) {
+      const target = ast.renderAsJson(index.target);
+      throw new Error(`Target of index must be a var node:\n${target}`);
+    }
+
+    // Resolve the target.
+    const resolved = this.resolveVar(index.target);
+    if (resolved == null) {
+      return [];
+    }
+
+    // Attempt to get all the possible fields we could suggest. If the
+    // resolved item is an `ObjectNode`, just use its fields; if it's
+    // a mixin of two objects, merge them and use the merged fields
+    // instead.
+    let fields: ast.ObjectFields | null = null;
+    if (ast.isObjectNode(resolved)) {
+      fields = resolved.fields;
+    } else if (ast.isBinary(resolved)) {
+      const merged = this.completableFieldSet(resolved);
+
+      if (merged == null) {
+        fields = immutable.List<ast.ObjectField>();
+      } else {
+        fields = immutable.List(merged.values());
+      }
+    } else {
+      return [];
+    }
+
+    return fields
+      .filter((field: ast.ObjectField) =>
+        field != null && field.id != null && field.expr2 != null)
+      .map((field: ast.ObjectField) => {
+        if (field == null || field.id == null || field.expr2 == null) {
+          throw new Error(
+            `INTERNAL ERROR: Filtered out null fields, but found field null`);
+        }
+        const comments = this.getComments(field);
+        const kind: service.CompletionType = "Field";
+        return {
+          label: field.id.name,
+          kind: kind,
+          documentation: comments || undefined,
+        };
+      })
+      .toArray();
+  }
+
+  private getComments = (field: ast.ObjectField): string | null => {
+    // Convert to field object, pull comments out.
+    const comments = field.headingComments;
+    if (comments == null || comments.count() == 0) {
+      return null;
+    }
+
+    return comments
+      .reduce((acc: string[], curr) => {
+        if (curr == undefined) {
+          throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
+        }
+        acc.push(curr.text);
+        return acc;
+      }, [])
+      .join("\n");
+  }
+
+  private completableFieldSet = (bin: ast.Binary): immutable.Map<string, ast.ObjectField> | null => {
+    const getCompletableFields = (node: ast.Node): immutable.Map<string, ast.ObjectField> | null => {
+      // This loop will try to "strip out the indirections" of an
+      // argument to a mixin. For example, consider the expression
+      // `foo1.bar + foo2.bar` in the following example:
+      //
+      //   local bar1 = {a: 1, b: 2},
+      //   local bar2 = {b: 3, c: 4},
+      //   local foo1 = {bar: bar1},
+      //   local foo2 = {bar: bar2},
+      //   useMerged: foo1.bar + foo2.bar,
+      //
+      // In this case, if we try to resolve `foo1.bar + foo2.bar`, we
+      // will first need to resolve `foo1.bar`, and then the value of
+      // that resolve, `bar1`, which resolves to an object, and so on.
+      //
+      // This loop follows these indirections: first, it resolves
+      // `foo1.bar`, and then `bar1`, before encountering an object
+      // and stopping.
+      let resolved: ast.Node | null = node;
+      while (true) {
+        if (ast.isObjectNode(resolved)) {
+          // Found an object. Break.
+          break;
+        } else if (ast.isBinary(resolved)) {
+          // May have found an object mixin. Break.
+          break;
+        } else if (ast.isVar(resolved)) {
+          resolved = this.resolveVar(resolved);
+        } else if (ast.isIndex(resolved)) {
+          resolved = this.resolveIndex(resolved);
+        } else {
+          throw new Error(`${ast.renderAsJson(bin.left)}`);
+        }
+
+        if (resolved == null) {
+          return null;
+        }
+      }
+
+      // Recursively merge fields if it's another mixin; if it's an
+      // object, return fields; else, no fields to return.
+      if (ast.isBinary(resolved)) {
+        return this.completableFieldSet(resolved);
+      } else if (ast.isObjectNode(resolved)) {
+        return resolved.fields
+          .reduce((
+            acc: immutable.Map<string, ast.ObjectField>, field: ast.ObjectField
+          ) => {
+            return field.id != null && acc.set(field.id.name, field) || acc;
+          },
+          immutable.Map<string, ast.ObjectField>()
+        );
+      }
+      return null;
+    }
+
+    if (bin.op !== "BopPlus") {
+      return null;
+    }
+
+    const leftFields = getCompletableFields(bin.left);
+    const rightFields = getCompletableFields(bin.right);
+    return leftFields && rightFields && leftFields.merge(rightFields) || null;
   }
 
   //
@@ -183,7 +364,7 @@ export class Analyzer implements EventedAnalyzer {
   // nodes until we find the object field, and return the comments
   // associated with that (if any).
   public resolveComments = (node: ast.Node | null): string | null => {
-    while(true) {
+    while (true) {
       if (node == null) { return null; }
 
       switch (node.type) {
@@ -195,20 +376,7 @@ export class Analyzer implements EventedAnalyzer {
           }
 
           // Convert to field object, pull comments out.
-          const comments = field.headingComments;
-          if (comments == null || comments.count() == 0) {
-            return null;
-          }
-
-          return comments
-            .reduce((acc: string[], curr) => {
-              if (curr == undefined) {
-                throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
-              }
-              acc.push(curr.text);
-              return acc;
-            }, [])
-            .join("\n");
+          return this.getComments(field);
         }
         default: {
           node = node.parent;
@@ -223,12 +391,20 @@ export class Analyzer implements EventedAnalyzer {
       return null;
     }
 
+    if (node.parent && ast.isObjectField(node.parent)) {
+      return node.parent;
+    }
+
     switch(node.type) {
       case "IdentifierNode": {
         return this.resolveIdentifier(<ast.Identifier>node);
       }
-      // TODO: This case should be null.
-      default: { return node; }
+      case "LocalNode": {
+        return node;
+      }
+      default: {
+        return null;
+      }
     }
   }
 
@@ -250,31 +426,52 @@ export class Analyzer implements EventedAnalyzer {
 
   public resolveIndex = (index: ast.Index): ast.Node | null => {
     if (index.target == null) {
-      throw new Error(`Index node must have a target:\n${index}`);
+      throw new Error(
+        `INTERNAL ERROR: Index node must have a target:\n${ast.renderAsJson(index)}`);
     } else if (index.id == null) {
-      throw new Error(`Index node must have a name:\n${index}`);
+      throw new Error(
+        `INTERNAL ERROR: Index node must have a name:\n${ast.renderAsJson(index)}`);
     }
 
     // Find root target, look up in environment.
-    let resolvedVar: ast.Node;
+    let resolvedTarget: ast.Node;
     switch (index.target.type) {
       case "VarNode": {
-        const nullableResolved = this.resolveVar(<ast.Var>index.target);
+        const varNode = <ast.Var>index.target
+        const nullableResolved = this.resolveVar(varNode);
         if (nullableResolved == null) {
           return null;
         }
 
-        resolvedVar = nullableResolved;
+        resolvedTarget = nullableResolved;
+
+        // If the var was pointing at an import, then resolution
+        // probably has `local` definitions at the top of the file.
+        // Get rid of them, since they are not useful for resolving
+        // the index identifier.
+        while (ast.isLocal(resolvedTarget)) {
+          resolvedTarget = resolvedTarget.body;
+        }
+
+        break;
+      }
+      case "IndexNode": {
+        const nullableResolved = this.resolveIndex(<ast.Index>index.target);
+        if (nullableResolved == null) {
+          return null;
+        }
+        resolvedTarget = nullableResolved;
         break;
       }
       default: {
-        throw new Error(`Index node can't have node target of type '${index.target.type}':\n${index.target}`);
+        throw new Error(
+          `INTERNAL ERROR: Index node can't have node target of type '${index.target.type}':\n${ast.renderAsJson(index.target)}`);
       }
     }
 
-    switch (resolvedVar.type) {
+    switch (resolvedTarget.type) {
       case "ObjectNode": {
-        const objectNode = <ast.ObjectNode>resolvedVar;
+        const objectNode = <ast.ObjectNode>resolvedTarget;
         for (let field of objectNode.fields.toArray()) {
           // We're looking for either a field with the id
           if (field.id != null && field.id.name == index.id.name) {
@@ -285,13 +482,34 @@ export class Analyzer implements EventedAnalyzer {
             continue;
           }
 
-          throw new Error(`Object field is identified by string, but we don't support that yet`);
+          throw new Error(
+            `INTERNAL ERROR: Object field is identified by string, but we don't support that yet`);
         }
 
         return null;
       }
+      case "BinaryNode": {
+        const fields = this.completableFieldSet(<ast.Binary>resolvedTarget);
+        if (fields == null) {
+          throw new Error(
+            `INTERNAL ERROR: Could not merge fields in binary node:\n${ast.renderAsJson(resolvedTarget)}`);
+        }
+
+        const filtered = fields.filter((field: ast.ObjectField) => {
+          return field.id != null && index.id != null &&
+            field.id.name == index.id.name;
+        });
+
+        if (filtered.count() != 1) {
+          throw new Error(
+            `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${ast.renderAsJson(resolvedTarget)}`);
+        }
+
+        return filtered.first().expr2;
+      }
       default: {
-        throw new Error(`Index node currently requires resolved var to be an object type, but was'${resolvedVar.type}':\n${resolvedVar}`);
+        throw new Error(
+          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedTarget.type}':\n${ast.renderAsJson(resolvedTarget)}`);
       }
     }
   }
@@ -299,7 +517,8 @@ export class Analyzer implements EventedAnalyzer {
   public resolveVar = (varNode: ast.Var): ast.Node | null => {
     // Look up in the environment, get docs for that definition.
     if (varNode.env == null) {
-      throw new Error(`AST improperly set up, property 'env' can't be null:\n${ast.renderAsJson(varNode)}`);
+      throw new Error(
+        `INTERNAL ERROR: AST improperly set up, property 'env' can't be null:\n${ast.renderAsJson(varNode)}`);
     } else if (!varNode.env.has(varNode.id.name)) {
       return null;
     }
@@ -315,8 +534,14 @@ export class Analyzer implements EventedAnalyzer {
       return null;
     }
 
+    if (ast.isFunctionParam(bind)) {
+      // A function param is either a free variable, or it has a
+      // default value. We return either way.
+      return bind;
+    }
+
     if (bind.body == null) {
-      throw new Error(`Bind can't have null body:\n${bind}`);
+      throw new Error(`INTERNAL ERROR: Bind can't have null body:\n${bind}`);
     }
 
     switch(bind.body.type) {
@@ -328,12 +553,29 @@ export class Analyzer implements EventedAnalyzer {
           this.documents.get(fileToImport);
         const cached =
           this.compilerService.cache(fileToImport, docText, version);
+        if (compiler.isFailedParsedDocument(cached)) {
+          return null;
+        }
 
-        return cached && cached.parse;
+        return cached.parse;
+      }
+      case "VarNode": {
+        return this.resolveVar(<ast.Var>bind.body);
+      }
+      case "IndexNode": {
+        return this.resolveIndex(<ast.Index>bind.body);
+      }
+      case "BinaryNode": {
+        const binaryNode = <ast.Binary>bind.body;
+        if (binaryNode.op !== "BopPlus") {
+          throw new Error(
+            `INTERNAL ERROR: Bind currently can't resolve to binary operations that are not '+':\n${ast.renderAsJson(bind.body)}`);
+        }
+
+        return binaryNode;
       }
       default: {
-        throw new Error(
-          `Bind currently requires an import node as body ${bind}`);
+        return bind.body;
       }
     }
   }
@@ -343,10 +585,13 @@ export class Analyzer implements EventedAnalyzer {
   ): ast.Node => {
     const {text: docText, version: version} = this.documents.get(fileUri);
     const cached = this.compilerService.cache(fileUri, docText, version);
-    if (cached == null) {
+    if (compiler.isFailedParsedDocument(cached)) {
       // TODO: Handle this error without an exception.
+      const err = compiler.isLexFailure(cached.parse)
+        ? cached.parse.lexError.Error()
+        : cached.parse.parseError.Error()
       throw new Error(
-        `INTERNAL ERROR: Could not cache analysis of file ${fileUri}`);
+        `INTERNAL ERROR: Could not cache analysis of file ${fileUri}:\b${err}`);
     }
 
     return this.getNodeAtPositionFromAst(cached.parse, pos);
@@ -364,93 +609,6 @@ export class Analyzer implements EventedAnalyzer {
 //
 // Utilities.
 //
-
-// findCompletionTokens finds all "completable" tokens starting from
-// the end of the token stream.
-const findCompletionTokens = (
-  tokens: immutable.List<lexer.Token>, loc: error.Location
-): immutable.List<lexer.Token> => {
-  let stop = false;
-  const completionTokens = tokens
-    .reverse()
-    // TODO: We might want to skip a terminal EOF here. It's not clear
-    // that autocomplete will work if the last token is an EOF.
-    .takeUntil(token => {
-      // TODO: This should be handled by the partial-parser, not us.
-
-      if (token == null || stop) {
-        return true;
-      }
-      switch (token.kind) {
-        case "TokenIdentifier": {
-          // Two subsequent identifier tokens are always separated by
-          // whitespace. We want only the last of these tokens.
-          if (token.fodder && token.fodder.length > 0) {
-            stop = true;
-          }
-          return false;
-        }
-        case "TokenDot": {
-          return false;
-        }
-        default: return true;
-      }
-    })
-    .reverse()
-    .toList();
-
-  // Append an EOF token if we don't have one, to avoid choking
-  // the parser.
-  const lastElement = completionTokens.last();
-  if (lastElement == null || lastElement.kind != "TokenEndOfFile") {
-    const eofToken: lexer.Token = new lexer.Token(
-      "TokenEndOfFile",
-      null,
-      ".",
-      "",
-      "",
-      new error.LocationRange(
-        "",
-        new error.Location(-1, -1),
-        new error.Location(-1, -1)),
-    );
-    return completionTokens.push(eofToken);
-  } else {
-    return completionTokens;
-  }
-};
-
-const getCompletableFields = (node: ast.Node): service.CompletionInfo[] => {
-  if (node.type != "ObjectNode") {
-    return []
-  }
-
-  const objNode = <ast.ObjectNode>node;
-  return objNode.fields.map(field => {
-    let id: string | null = null;
-    if (field == undefined) {
-      throw new Error(`INTERNAL ERROR: element was undefined during a map call`);
-    }
-    if (field.id != null) {
-      id = field.id.name;
-    } else {
-      console.log(`Only fields with ids are currently supported for autocomplete:\n${ast.renderAsJson(field)}`);
-    }
-    const docs = field.headingComments == null
-      ? null
-      : field.headingComments.map(comment => {
-          if (comment == undefined) {
-            throw new Error(`INTERNAL ERROR: element was undefined during a map call`);
-          }
-          return comment.text;
-        }).join("\n\n");
-    return <service.CompletionInfo>{
-      label: id,
-      kind: "Field",
-      documentation: docs,
-    };
-  }).toArray();
-}
 
 const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
     return env.map((value, key) => {

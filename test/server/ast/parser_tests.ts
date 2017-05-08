@@ -25,6 +25,7 @@ const tests = [
 \n|||",
 
   `foo(bar)`,
+  `foo(bar=99)`,
   `foo(bar) tailstrict`,
   `foo.bar`,
   `foo[bar]`,
@@ -35,10 +36,13 @@ const tests = [
 
   `local foo = "bar"; foo`,
   `local foo(bar) = bar; foo(1)`,
+  `local foo(bar=4) = bar; foo(1)`,
   `{ local foo = "bar", baz: 1}`,
   `{ local foo(bar) = bar, baz: foo(1)}`,
+  `{ local foo(bar=[1]) = bar, baz: foo(1)}`,
 
   `{ foo(bar, baz): bar+baz }`,
+  `{ foo(bar={a:1}):: bar }`,
 
   `{ ["foo" + "bar"]: 3 }`,
   `{ ["field" + x]: x for x in [1, 2, 3] }`,
@@ -81,9 +85,6 @@ const tests = [
 describe("Successfully parsing text", () => {
   for (let s of tests) {
     it(`${JSON.stringify(s)}`, () => {
-      if (JSON.stringify(s) === "\"true || false\"") {
-        const s = 3;
-      }
       const tokens = lexer.Lex("test", s);
       if (error.isStaticError(tokens)) {
         throw new Error(`Unexpected lexer to emit tokens\n  input: ${s}`);

@@ -57,6 +57,7 @@ describe("Searching an AST by position", () => {
     {
       const property1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 5));
+      assert.isNotNull(property1Id);
       assert.equal(property1Id.type, "IdentifierNode");
       assert.equal(property1Id.name, "property1");
       assert.isNotNull(property1Id.parent);
@@ -72,6 +73,7 @@ describe("Searching an AST by position", () => {
     {
       const target1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 14));
+      assert.isNotNull(target1Id);
       assert.equal(target1Id.type, "IdentifierNode");
       assert.equal(target1Id.name, "foo");
       assert.isNotNull(target1Id.parent);
@@ -94,6 +96,7 @@ describe("Searching an AST by position", () => {
 
     const target2Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
       rootNode, makeLocation(3, 15));
+    assert.isNotNull(target2Id);
     assert.equal(target2Id.type, "LiteralNumberNode");
     assert.equal(target2Id.originalString, "2");
     assert.isNotNull(target2Id.parent);
@@ -110,6 +113,7 @@ describe("Searching an AST by position", () => {
     {
       const property3Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 9));
+      assert.isNotNull(property3Id);
       assert.equal(property3Id.type, "IdentifierNode");
       assert.equal(property3Id.name, "foo");
       assert.isNotNull(property3Id.parent);
@@ -125,6 +129,7 @@ describe("Searching an AST by position", () => {
     {
       const target3Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 15));
+      assert.isNotNull(target3Id);
       assert.equal(target3Id.type, "LiteralNumberNode");
       assert.equal(target3Id.originalString, "3");
       assert.isNotNull(target3Id.parent);
@@ -135,6 +140,113 @@ describe("Searching an AST by position", () => {
       assert.equal(target3Parent.kind, "ObjectLocal");
       assertLocationRange(target3Parent.loc, 4, 3, 4, 16);
     }
+  });
+
+  it("Resolution of `local` object fields is order-independent", () => {
+    // This location points at the `baz` symbol in the expression
+    // `bar.baz`, where `bar` is a `local` field that's declared below
+    // the current field. This tests that we correctly resolve that
+    // reference, even though it occurs after the current object
+    // field.
+    const property4Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      rootNode, makeLocation(5, 20));
+    assert.isNotNull(property4Id);
+    assert.equal(property4Id.type, "IdentifierNode");
+    assert.equal(property4Id.name, "baz");
+
+    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(property4Id);
+    assert.isNotNull(resolved);
+    assert.equal(resolved.type, "LiteralNumberNode");
+    assert.equal(resolved.originalString, "3");
+  });
+
+  it("Can resolve identifiers that refer to mixins", () => {
+    // merged1.b
+    {
+      const merged1 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 23));
+      assert.isNotNull(merged1);
+      assert.equal(merged1.type, "IdentifierNode");
+      assert.equal(merged1.name, "b");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged1);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "3");
+    }
+
+    // merged2.a
+    {
+      const merged2 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 34));
+      assert.isNotNull(merged2);
+      assert.equal(merged2.type, "IdentifierNode");
+      assert.equal(merged2.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged2);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "99");
+    }
+
+    // merged3.a
+    {
+      const merged3 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 45));
+      assert.isNotNull(merged3);
+      assert.equal(merged3.type, "IdentifierNode");
+      assert.equal(merged3.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged3);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "1");
+    }
+
+    // merged4.a
+    {
+      const merged4 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(11, 56));
+      assert.isNotNull(merged4);
+      assert.equal(merged4.type, "IdentifierNode");
+      assert.equal(merged4.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged4);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "99");
+    }
+
+    // merged4.a
+    {
+      const merged5 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(15, 28));
+      assert.isNotNull(merged5);
+      assert.equal(merged5.type, "IdentifierNode");
+      assert.equal(merged5.name, "a");
+
+      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged5);
+      assert.isNotNull(resolved);
+      assert.equal(resolved.type, "LiteralNumberNode");
+      assert.equal(resolved.originalString, "99");
+    }
+  });
+
+  it("Can resolve identifiers that point to identifiers", () => {
+    // Regression test. Tests that we can resolve a variable that
+    // points to another variable. In this case, `numberVal2` refers
+    // to `numberVal1`.
+
+    const node = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      rootNode, makeLocation(18, 19));
+    assert.isNotNull(node);
+    assert.equal(node.type, "IdentifierNode");
+    assert.equal(node.name, "numberVal2");
+
+    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(node);
+    assert.isNotNull(resolved);
+    assert.equal(resolved.type, "LiteralNumberNode");
+    assert.equal(resolved.originalString, "1");
   });
 });
 
@@ -149,12 +261,12 @@ describe("Imported symbol resolution", () => {
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
-      <ast.ObjectNode>analyzer.resolveSymbolAtPositionFromAst(
+      <ast.Local>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(4, 8));
-    assert.equal(importedSymbol.type, "ObjectNode");
+    assert.isNotNull(importedSymbol);
+    assert.equal(importedSymbol.type, "LocalNode");
     assert.isNull(importedSymbol.parent);
-    assert.equal(importedSymbol.headingComments.count(), 0);
-    assertLocationRange(importedSymbol.loc, 1, 1, 7, 2);
+    assertLocationRange(importedSymbol.loc, 1, 1, 12, 2);
   });
 
   it("Can dereference fields from an imported module", () => {
@@ -165,9 +277,10 @@ describe("Imported symbol resolution", () => {
     const valueofObjectField =
       <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(5, 19));
+    assert.isNotNull(valueofObjectField);
     assert.equal(valueofObjectField.type, "LiteralNumberNode");
     assert.equal(valueofObjectField.originalString, "99");
-    assertLocationRange(valueofObjectField.loc, 3, 8, 3, 10);
+    assertLocationRange(valueofObjectField.loc, 4, 8, 4, 10);
   });
 
   it("Can find comments for a field in an imported module", () => {
@@ -183,6 +296,23 @@ describe("Imported symbol resolution", () => {
     assert.isNotNull(comments);
     assert.equal(
       comments, " `foo` is a property that has very useful data.");
+  });
+
+  it("Can find comments for a nested field in an imported module", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>analyzer.resolveSymbolAtPositionFromAst(
+        rootNode, makeLocation(7, 23));
+    assert.isNotNull(valueOfObjectField);
+    assert.equal(valueOfObjectField.type, "LiteralStringNode");
+    assert.equal(valueOfObjectField.value, "batVal");
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " `bat` contains a fancy value, `batVal`.");
   });
 
   it("Cannot find comments for `local` field in an imported module", () => {
