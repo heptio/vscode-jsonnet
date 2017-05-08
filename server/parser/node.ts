@@ -7,9 +7,9 @@ import * as error from '../lexer/static_error';
 
 export type Environment = im.Map<string, LocalBind | FunctionParam>;
 
-export const emptyEnvironment = im.Map<string, LocalBind>();
+export const emptyEnvironment = im.Map<string, LocalBind | FunctionParam>();
 
-export const environmentFromLocal = (
+export const envFromLocalBinds = (
   local: Local | ObjectField | FunctionParam
 ): Environment => {
   if (isLocal(local)) {
@@ -43,6 +43,34 @@ export const environmentFromLocal = (
   // Else, it's a `FunctionParam`, i.e., a free parameter (or a free
   // parameter with a default value). Either way, emit that.
   return im.Map<string, LocalBind | FunctionParam>().set(local.id, local);
+}
+
+export const envFromParams = (
+  params: FunctionParams
+): Environment => {
+  return params
+    .reduce(
+      (acc: Environment, field: FunctionParam) => {
+        return acc.merge(envFromLocalBinds(field));
+      },
+      emptyEnvironment
+    );
+}
+
+export const envFromFields = (
+  fields: ObjectFields,
+): Environment => {
+  return fields
+    .filter((field: ObjectField) => {
+      const localKind: ObjectFieldKind = "ObjectLocal";
+      return field.kind === localKind;
+    })
+    .reduce(
+      (acc: Environment, field: ObjectField) => {
+        return acc.merge(envFromLocalBinds(field));
+      },
+      emptyEnvironment
+    );
 }
 
 export const renderAsJson = (node: Node): string => {
