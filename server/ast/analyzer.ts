@@ -391,6 +391,10 @@ export class Analyzer implements EventedAnalyzer {
       return null;
     }
 
+    if (node.parent && ast.isObjectField(node.parent)) {
+      return node.parent;
+    }
+
     switch(node.type) {
       case "IdentifierNode": {
         return this.resolveIdentifier(<ast.Identifier>node);

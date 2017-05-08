@@ -240,13 +240,28 @@ export abstract class VisitorBase implements Visitor {
       case "ObjectFieldNode": {
         const castedNode = <ast.ObjectField>node;
         this.VisitObjectField(castedNode);
-        castedNode.id != null && this.Visit(castedNode.id, castedNode, currEnv);
+
+        let newEnv = currEnv;
+        if (castedNode.methodSugar) {
+          // Add params to environment before visiting body.
+          newEnv = newEnv.merge(
+            castedNode.ids
+              .reduce(
+                (acc: ast.Environment, field: ast.FunctionParam) => {
+                  return acc.merge(ast.environmentFromLocal(field));
+                },
+                immutable.Map<string, ast.LocalBind | ast.FunctionParam>()
+              )
+          );
+        }
+
+        castedNode.id != null && this.Visit(castedNode.id, castedNode, newEnv);
         castedNode.expr1 != null && this.Visit(
-          castedNode.expr1, castedNode, currEnv);
+          castedNode.expr1, castedNode, newEnv);
         castedNode.expr2 != null && this.Visit(
-          castedNode.expr2, castedNode, currEnv);
+          castedNode.expr2, castedNode, newEnv);
         castedNode.expr3 != null && this.Visit(
-          castedNode.expr3, castedNode, currEnv);
+          castedNode.expr3, castedNode, newEnv);
         castedNode.headingComments != null &&
           castedNode.headingComments.forEach(comment => {
             if (comment == undefined) {
