@@ -31,6 +31,10 @@ class FsDocumentManager implements workspace.DocumentManager {
 
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
   }
+
+  public pathToUri = (uri: string): string => {
+    return uri;
+  }
 }
 
 const assertLocationRange = (
@@ -45,12 +49,18 @@ const assertLocationRange = (
 
 describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
-  const analyzer = new analyze.Analyzer(
-    new FsDocumentManager(), compilerService);
+  const documents = new FsDocumentManager()
+  const analyzer = new analyze.Analyzer(documents, compilerService);
   compilerService.command = jsonnetServer;
 
-  const rootNode = compiler.util.parseJsonnetFile(
-    `${dataDir}/simple-nodes.jsonnet`);
+  const file = `${dataDir}/simple-nodes.jsonnet`;
+  const doc = documents.get(file);
+  const compiled = compilerService.cache(file, doc.text, doc.version);
+  if (compiler.isFailedParsedDocument(compiled)) {
+    throw new Error(`Failed to parse document '${file}'`);
+  }
+
+  const rootNode = compiled.parse;
 
   it("Object field assigned value of `local` symbol", () => {
     // Property.
@@ -252,12 +262,19 @@ describe("Searching an AST by position", () => {
 
 describe("Imported symbol resolution", () => {
   const compilerService = new local.VsCompilerService();
-  const analyzer = new analyze.Analyzer(
-    new FsDocumentManager(), compilerService);
+  const documents = new FsDocumentManager();
+  const analyzer = new analyze.Analyzer(documents, compilerService);
   compilerService.command = jsonnetServer;
 
-  const rootNode = compiler.util.parseJsonnetFile(
-    `${dataDir}/simple-import.jsonnet`);
+  const file = `${dataDir}/simple-import.jsonnet`;
+  const document = documents.get(file);
+  const compile = compilerService.cache(file, document.text, document.version);
+
+  if (compiler.isFailedParsedDocument(compile)) {
+    throw new Error(`Failed to parse document '${file}'`);
+  }
+
+  const rootNode = compile.parse;
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
