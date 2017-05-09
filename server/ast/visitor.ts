@@ -45,6 +45,8 @@ export interface Visitor {
 }
 
 export abstract class VisitorBase implements Visitor {
+  private rootObject: ast.Node | null = null;
+
   public Visit = (
     node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
   ): void => {
@@ -54,6 +56,7 @@ export abstract class VisitorBase implements Visitor {
 
     node.parent = parent;
     node.env = currEnv;
+    node.rootObject = this.rootObject;
 
     switch(node.type) {
       case "CommentNode": {
@@ -273,6 +276,10 @@ export abstract class VisitorBase implements Visitor {
       }
       case "ObjectNode": {
         const castedNode = <ast.ObjectNode>node;
+        if (this.rootObject == null) {
+          this.rootObject = castedNode;
+          castedNode.rootObject = castedNode;
+        }
         this.VisitObject(castedNode);
 
         // `local` object fields are scoped with order-independence,

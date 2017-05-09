@@ -85,6 +85,10 @@ export const renderAsJson = (node: Node): string => {
       return v == null
         ? "null"
         : `${Object.keys(v).join(", ")}`;
+    } else if (k === "rootObject") {
+      return v == null
+        ? "null"
+        : (<Node>v).type;
     } else {
       return v;
     }
@@ -145,6 +149,7 @@ export interface Node {
 
   prettyPrint(): string
 
+  rootObject: Node | null;
   parent: Node | null;     // Filled in by the visitor.
   env: Environment | null; // Filled in by the visitor.
 }
@@ -159,12 +164,14 @@ abstract class NodeBase implements Node {
   readonly loc:      error.LocationRange
 
   constructor() {
+    this.rootObject = null;
     this.parent = null;
     this.env = null;
   }
 
   abstract prettyPrint;
 
+  rootObject: Node | null;
   parent: Node | null;     // Filled in by the visitor.
   env: Environment | null; // Filled in by the visitor.
 }

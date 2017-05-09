@@ -463,6 +463,13 @@ export class Analyzer implements EventedAnalyzer {
         resolvedTarget = nullableResolved;
         break;
       }
+      case "DollarNode": {
+        if (index.target.rootObject == null) {
+          return null;
+        }
+        resolvedTarget = index.target.rootObject;
+        break;
+      }
       default: {
         throw new Error(
           `INTERNAL ERROR: Index node can't have node target of type '${index.target.type}':\n${ast.renderAsJson(index.target)}`);
