@@ -35,17 +35,6 @@ export class VsDocumentManager implements workspace.DocumentManager {
       }
     }
   }
-
-  pathToUri = (filePath: string, currentPath: string): string => {
-    let resource = filePath;
-    if (!path.isAbsolute(resource)) {
-      const resolved = path.resolve(currentPath);
-      const absDir = path.dirname(resolved);
-      resource = path.join(absDir, filePath);
-    }
-    return `file://${resource}`;
-  }
-
 }
 
 export class VsCompilerService implements compiler.CompilerService {

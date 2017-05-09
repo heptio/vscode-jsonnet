@@ -36,7 +36,4 @@ export interface DocumentEventListener {
 //   correctly to the `DocumentEventListener`.
 export interface DocumentManager {
   get: (fileUri: string) => {text: string, version?: number}
-
-  // TODO: Add interface hooks for things like `onDidSave`, etc.
-  pathToUri: (filePath: string, currentPath: string) => string
 }

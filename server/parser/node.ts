@@ -320,11 +320,12 @@ export class Apply extends NodeBase  {
       .map((arg: Node) => arg.prettyPrint())
       .join(", ");
 
+    // NOTE: Space between `tailstrict` is important.
     const tailStrictString = this.tailStrict
-      ? "tailstrict"
+      ? " tailstrict"
       : "";
 
-    return `${this.target.prettyPrint()}(${argsString} ${tailStrictString})`;
+    return `${this.target.prettyPrint()}(${argsString}${tailStrictString})`;
   }
 }
 
@@ -835,11 +836,11 @@ export class Local extends NodeBase {
         const idString = bind.variable.prettyPrint();
         if (bind.functionSugar) {
           const paramsString = bind.params
-            .map((param: FunctionParam) => param.prettyPrint())
+            .map((param: FunctionParam) => param.id)
             .join(", ");
           return `${idString}(${paramsString})`;
         }
-        return `${idString} = ${this.body.prettyPrint()}`;
+        return `${idString} = ${bind.body.prettyPrint()}`;
       })
       .join(",\n  ");
 
@@ -1004,6 +1005,12 @@ export type ObjectFieldHide =
   "ObjectFieldInherit" | // f: e
   "ObjectFieldVisible";  // f::: e
 
+const objectFieldHideStrings = im.Map<ObjectFieldHide, string>({
+  "ObjectFieldHidden": "::",
+  "ObjectFieldInherit": ":",
+  "ObjectFieldVisible": ":::",
+});
+
 // export interface ObjectField extends NodeBase {
 //   readonly type:            "ObjectFieldNode"
 //   readonly kind:            ObjectFieldKind
@@ -1038,12 +1045,59 @@ export class ObjectField extends NodeBase {
   ) { super(); }
 
   public prettyPrint = (): string => {
-    return `[OBJECT FIELD]`;
+    switch (this.kind) {
+      case "ObjectAssert": return prettyPrintObjectAssert(this);
+      case "ObjectFieldID": return prettyPrintObjectFieldId(this);
+      case "ObjectLocal": return prettyPrintObjectLocal(this);
+      case "ObjectFieldExpr":
+      case "ObjectFieldStr":
+      default: throw new Error(`INTERNAL ERROR: Unrecognized object field kind '${this.kind}':\n${renderAsJson(this)}`);
+    }
   }
 }
 
 export const isObjectField = (node: Node): node is ObjectField => {
   return node instanceof ObjectField;
+}
+
+const prettyPrintObjectAssert = (field: ObjectField): string => {
+    if (field.expr2 == null) {
+      throw new Error(`INTERNAL ERROR: object 'assert' must have expression to assert:\n${renderAsJson(field)}`);
+    }
+    return field.expr3 == null
+      ? `assert ${field.expr2.prettyPrint()}`
+      : `assert ${field.expr2.prettyPrint()} : ${field.expr3.prettyPrint()}`;
+}
+
+const prettyPrintObjectFieldId = (field: ObjectField): string => {
+  if (field.id == null) {
+    throw new Error(`INTERNAL ERROR: object field must have id:\n${renderAsJson(field)}`);
+  }
+  const idString = field.id.prettyPrint();
+  const hide = objectFieldHideStrings.get(field.hide);
+
+  if (field.methodSugar) {
+    const argsList = field.ids
+      .map((param: FunctionParam) => param.id)
+      .join(", ");
+    return `(method) ${idString}(${argsList})${hide}`;
+  }
+  return `(field) ${idString}${hide}`;
+}
+
+const prettyPrintObjectLocal = (field: ObjectField): string => {
+  if (field.id == null) {
+    throw new Error(`INTERNAL ERROR: object field must have id:\n${renderAsJson(field)}`);
+  }
+  const idString = field.id.prettyPrint();
+
+  if (field.methodSugar) {
+    const argsList = field.ids
+      .map((param: FunctionParam) => param.id)
+      .join(", ");
+    return `(method) local ${idString}(${argsList})`;
+  }
+  return `(field) local ${idString}`;
 }
 
 // TODO(jbeda): Add the remaining constructor helpers here
@@ -1068,10 +1122,11 @@ export class ObjectNode extends NodeBase {
 
   public prettyPrint = (): string => {
     const fields = this.fields
+      .filter((field: ObjectField) => field.kind === "ObjectFieldID")
       .map((field: ObjectField) => `  ${field.prettyPrint()}`)
-      .join(", ");
+      .join(",\n");
 
-    return `{\n${fields}\n}`;
+    return `(module) {\n${fields}\n}`;
   }
 }
 

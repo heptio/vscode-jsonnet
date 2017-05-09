@@ -43,16 +43,49 @@ export class Analyzer implements EventedAnalyzer {
   public onHover = (
     fileUri: string, cursorLoc: error.Location
   ): Promise<service.HoverInfo> => {
-    // Get symbol we're hovering over.
-    const resolved = this.resolveSymbolAtPosition(fileUri, cursorLoc);
-    if (resolved == null) {
-      return Promise.reject("failed to resolve variable");
+    const onHoverPromise = (node: ast.Node): Promise<service.HoverInfo> => {
+      return Promise.resolve().then(
+        () => <service.HoverInfo> {
+          contents: this.renderOnhoverMessage(node),
+        });
     }
 
-    return Promise.resolve().then(
-      () => <service.HoverInfo> {
-        contents: this.renderOnhoverMessage(resolved)
-      });
+    // Get symbol we're hovering over.
+    const nodeAtPos = this.getNodeAtPosition(fileUri, cursorLoc);
+    if (nodeAtPos.parent != null && ast.isFunctionParam(nodeAtPos.parent)) {
+      // A function parameter is a free variable, so we can't resolve
+      // it. Simply return.
+      return onHoverPromise(nodeAtPos.parent);
+    }
+
+    const resolved = this.resolveSymbol(nodeAtPos);
+    if (resolved == null) {
+      return Promise.resolve().then(
+        () => <service.HoverInfo> {
+          contents: [],
+        });
+    }
+
+    // Handle the special cases. If we hover over a symbol that points
+    // at a function of some sort (i.e., a `function` literal, a
+    // `local` that has a bind that is a function, or an object field
+    // that is a function), then we want to render the name and
+    // parameters that function takes, rather than the definition of
+    // the function itself.
+    if (ast.isFunctionParam(resolved) || resolved.parent == null) {
+      return onHoverPromise(resolved);
+    } else {
+      switch (resolved.parent.type) {
+        case "FunctionNode":
+        case "LocalNode":
+        case "ObjectFieldNode": {
+          return onHoverPromise(resolved.parent);
+        }
+        default: {
+          return onHoverPromise(resolved);
+        }
+      }
+    }
   }
 
   public onComplete = (
@@ -107,44 +140,9 @@ export class Analyzer implements EventedAnalyzer {
       // variable with a default value. Either way, there's not more
       // we can know statically, so emit that.
       line = node.prettyPrint();
-    } else if (node.parent != null) {
-      switch (node.parent.type) {
-        case "ObjectFieldNode": {
-          const field = <ast.ObjectField>node.parent;
-          if (field.id != null) {
-            const name = field.id.name;
-            let hidden = ":";
-            if (field.hide === "ObjectFieldHidden") {
-              hidden = "::";
-            } else if (field.hide === "ObjectFieldVisible") {
-              hidden = ":::";
-            }
-
-            let paramsList = "";
-            if (field.methodSugar) {
-              const params = field.ids
-                .map((param: ast.FunctionParam) => {
-                  if (param.defaultValue == null) {
-                    return param.id;
-                  } else {
-                    return `${param.id}=${param.defaultValue}`
-                  }
-                })
-                .join(", ");
-              paramsList = `(${params})`;
-            }
-
-            let type = "field";
-            if (field.methodSugar) {
-              type = "method";
-            }
-
-            line = `(${type}) ${name}${paramsList}${hidden} { [...] }`
-          }
-        }
-      }
     }
 
+    line = node.prettyPrint();
 
     return <service.LanguageString[]>[
       {language: 'jsonnet', value: line},

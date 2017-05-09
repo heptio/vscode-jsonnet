@@ -31,10 +31,6 @@ class FsDocumentManager implements workspace.DocumentManager {
 
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
   }
-
-  public pathToUri = (uri: string): string => {
-    return uri;
-  }
 }
 
 const assertLocationRange = (
