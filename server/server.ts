@@ -104,11 +104,7 @@ export const initializer = (
 export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
-  if ("server" in change.settings.jsonnet) {
-    compiler.command = change.settings.jsonnet["server"];
-  }
-  console.log(JSON.stringify(change.settings.jsonnet));
-  console.log(compiler.command);
+  // TODO: Update location of Jsonnet variable, etc.
 }
 
 const positionToLocation = (

@@ -38,8 +38,6 @@ export class VsDocumentManager implements workspace.DocumentManager {
 }
 
 export class VsCompilerService implements compiler.CompilerService {
-  public command: string | null;
-
   //
   // CompilerService implementation.
   //

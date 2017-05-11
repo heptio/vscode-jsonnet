@@ -14,8 +14,6 @@ import * as local from '../../server/local';
 import * as workspace from '../../server/ast/workspace';
 
 const dataDir = `${__dirname}/../../../test/data`;
-const jsonnetServer =
-  "/Users/alex/src/go/src/github.com/google/go-jsonnet/jsonnet";
 
 const makeLocation = (line: number, column: number): error.Location => {
   return new error.Location(line, column);
@@ -47,7 +45,6 @@ describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
   const documents = new FsDocumentManager()
   const analyzer = new analyze.Analyzer(documents, compilerService);
-  compilerService.command = jsonnetServer;
 
   const file = `${dataDir}/simple-nodes.jsonnet`;
   const doc = documents.get(file);
@@ -260,7 +257,6 @@ describe("Imported symbol resolution", () => {
   const compilerService = new local.VsCompilerService();
   const documents = new FsDocumentManager();
   const analyzer = new analyze.Analyzer(documents, compilerService);
-  compilerService.command = jsonnetServer;
 
   const file = `${dataDir}/simple-import.jsonnet`;
   const document = documents.get(file);
