@@ -180,6 +180,10 @@ const completionInfoToCompletionItem = (
         kindMapping = server.CompletionItemKind.Field;
         break;
       }
+      case "Method": {
+        kindMapping = server.CompletionItemKind.Method;
+        break;
+      }
       default: throw new Error(
         `Unrecognized completion type '${completionInfo.kind}'`);
     }
