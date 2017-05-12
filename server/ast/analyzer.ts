@@ -108,16 +108,39 @@ export class Analyzer implements EventedAnalyzer {
 
         const parse = this.compilerService.cache(
           fileUri, doc.text, doc.version);
+        let completions: service.CompletionInfo[] = [];
         if (compiler.isFailedParsedDocument(parse)) {
-          resolve([]);
+          // HACK. We should really be propagating the environment
+          // down through the parser, not through the visitor
+          // afterwards. If we did that, we would be able to use the
+          // env of the `rest` node below.
+          const lastParse = this.compilerService.getLastSuccess(fileUri);
+          if (lastParse == null || compiler.isLexFailure(parse.parse) || parse.parse.parseError.rest == null) {
+            resolve([]);
+            return;
+          }
+
+          const nodeAtPos = this.getNodeAtPositionFromAst(
+            lastParse.parse, cursorLoc);
+
+          // Hook up `parent` and `env` into `rest` node.
+          const rest = parse.parse.parseError.rest;
+          const v = new astVisitor.DeserializingVisitor();
+          v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
+
+          const resolved = this.resolveIndirections(rest);
+          if (resolved == null) {
+            resolve([]);
+          } else {
+            resolve(this.completableFields(resolved));
+          }
           return;
+        } else {
+          const nodeAtPos = this.getNodeAtPositionFromAst(
+            parse.parse, cursorLoc);
+
+          resolve(this.completionsFromIdentifier(nodeAtPos));
         }
-
-        const nodeAtPos = this.getNodeAtPositionFromAst(
-          parse.parse, cursorLoc);
-
-        const completions = this.completionsFromNode(nodeAtPos);
-        resolve(completions);
       });
   }
 
@@ -148,8 +171,8 @@ export class Analyzer implements EventedAnalyzer {
     ];
   }
 
-  private completionsFromNode = (
-    node: ast.Node,
+  private completionsFromIdentifier = (
+    node: ast.Node
   ): service.CompletionInfo[] => {
     //
     // We suggest completions only for `Identifier` nodes that are in
@@ -179,70 +202,44 @@ export class Analyzer implements EventedAnalyzer {
       return node.env && envToSuggestions(node.env) || [];
     }
 
-    // Identifier is a variable.
-    let index: ast.Index | null = null;
-    if (ast.isVar(parent)) {
-      // Identifier is a variable that is part of an index expression,
-      // e.g., the `b` in `a.b`.
-      if (parent.parent != null && ast.isIndex(parent.parent)) {
-        index = parent.parent;
-      } else {
-        // Identifier is just a variable. Suggest completions from
-        // environment.
-        return node.env && envToSuggestions(node.env) || [];
-      }
-    } else if (ast.isIndex(parent)) {
-      // Identifier is part of an index expression.
-      index = parent;
-    } else {
-      // Identifier part of a completable expression.
-      return [];
-    }
-
-    // Index target is a variable. e.g., this is `a` in `a.b`.
-    //
-    // TODO: We're not handling the case where the cursor is inside
-    // the target, and not the index. We should!
-    if(!ast.isVar(index.target)) {
-      const target = ast.renderAsJson(index.target);
-      throw new Error(`Target of index must be a var node:\n${target}`);
-    }
-
-    // Resolve the target.
-    const resolved = this.resolveVar(index.target);
+    const resolved = this.resolveIndirections(parent);
     if (resolved == null) {
-      return [];
+      return node.env && envToSuggestions(node.env) || [];
     }
 
+    return this.completableFields(resolved);
+  }
+
+  private completableFields = (
+    resolved: ast.Node
+  ): service.CompletionInfo[] => {
     // Attempt to get all the possible fields we could suggest. If the
     // resolved item is an `ObjectNode`, just use its fields; if it's
     // a mixin of two objects, merge them and use the merged fields
     // instead.
     let fields: ast.ObjectFields | null = null;
-    if (ast.isObjectNode(resolved)) {
-      fields = resolved.fields;
-    } else if (ast.isBinary(resolved)) {
-      const merged = this.completableFieldSet(resolved);
-
-      if (merged == null) {
-        fields = immutable.List<ast.ObjectField>();
-      } else {
-        fields = immutable.List(merged.values());
-      }
+    const fieldSet = this.createFieldSet(resolved);
+    if (fieldSet == null) {
+      fields = immutable.List<ast.ObjectField>();
     } else {
-      return [];
+      fields = immutable.List(fieldSet.values());
     }
 
     return fields
       .filter((field: ast.ObjectField) =>
-        field != null && field.id != null && field.expr2 != null)
+        field != null && field.id != null && field.expr2 != null && field.kind !== "ObjectLocal")
       .map((field: ast.ObjectField) => {
         if (field == null || field.id == null || field.expr2 == null) {
           throw new Error(
             `INTERNAL ERROR: Filtered out null fields, but found field null`);
         }
+
+        let kind: service.CompletionType = "Field";
+        if (field.methodSugar) {
+          kind = "Method";
+        }
+
         const comments = this.getComments(field);
-        const kind: service.CompletionType = "Field";
         return {
           label: field.id.name,
           kind: kind,
@@ -252,93 +249,52 @@ export class Analyzer implements EventedAnalyzer {
       .toArray();
   }
 
-  private getComments = (field: ast.ObjectField): string | null => {
-    // Convert to field object, pull comments out.
-    const comments = field.headingComments;
-    if (comments == null || comments.count() == 0) {
-      return null;
-    }
+  //
+  // Symbol resolution.
+  //
 
-    return comments
-      .reduce((acc: string[], curr) => {
-        if (curr == undefined) {
-          throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
-        }
-        acc.push(curr.text);
-        return acc;
-      }, [])
-      .join("\n");
-  }
+  private resolveIndirections = (node: ast.Node): ast.Node | null => {
+    // This loop will try to "strip out the indirections" of an
+    // argument to a mixin. For example, consider the expression
+    // `foo1.bar + foo2.bar` in the following example:
+    //
+    //   local bar1 = {a: 1, b: 2},
+    //   local bar2 = {b: 3, c: 4},
+    //   local foo1 = {bar: bar1},
+    //   local foo2 = {bar: bar2},
+    //   useMerged: foo1.bar + foo2.bar,
+    //
+    // In this case, if we try to resolve `foo1.bar + foo2.bar`, we
+    // will first need to resolve `foo1.bar`, and then the value of
+    // that resolve, `bar1`, which resolves to an object, and so on.
+    //
+    // This loop follows these indirections: first, it resolves
+    // `foo1.bar`, and then `bar1`, before encountering an object
+    // and stopping.
 
-  private completableFieldSet = (bin: ast.Binary): immutable.Map<string, ast.ObjectField> | null => {
-    const getCompletableFields = (node: ast.Node): immutable.Map<string, ast.ObjectField> | null => {
-      // This loop will try to "strip out the indirections" of an
-      // argument to a mixin. For example, consider the expression
-      // `foo1.bar + foo2.bar` in the following example:
-      //
-      //   local bar1 = {a: 1, b: 2},
-      //   local bar2 = {b: 3, c: 4},
-      //   local foo1 = {bar: bar1},
-      //   local foo2 = {bar: bar2},
-      //   useMerged: foo1.bar + foo2.bar,
-      //
-      // In this case, if we try to resolve `foo1.bar + foo2.bar`, we
-      // will first need to resolve `foo1.bar`, and then the value of
-      // that resolve, `bar1`, which resolves to an object, and so on.
-      //
-      // This loop follows these indirections: first, it resolves
-      // `foo1.bar`, and then `bar1`, before encountering an object
-      // and stopping.
-      let resolved: ast.Node | null = node;
-      while (true) {
-        if (ast.isObjectNode(resolved)) {
-          // Found an object. Break.
-          break;
-        } else if (ast.isBinary(resolved)) {
-          // May have found an object mixin. Break.
-          break;
-        } else if (ast.isVar(resolved)) {
-          resolved = this.resolveVar(resolved);
-        } else if (ast.isIndex(resolved)) {
-          resolved = this.resolveIndex(resolved);
-        } else {
-          throw new Error(`${ast.renderAsJson(bin.left)}`);
-        }
-
-        if (resolved == null) {
-          return null;
-        }
+    let resolved: ast.Node | null = node;
+    while (true) {
+      if (ast.isObjectNode(resolved)) {
+        // Found an object. Break.
+        break;
+      } else if (ast.isBinary(resolved)) {
+        // May have found an object mixin. Break.
+        break;
+      } else if (ast.isVar(resolved)) {
+        resolved = this.resolveVar(resolved);
+      } else if (ast.isIndex(resolved)) {
+        resolved = this.resolveIndex(resolved);
+      } else {
+        throw new Error(`${ast.renderAsJson(node)}`);
       }
 
-      // Recursively merge fields if it's another mixin; if it's an
-      // object, return fields; else, no fields to return.
-      if (ast.isBinary(resolved)) {
-        return this.completableFieldSet(resolved);
-      } else if (ast.isObjectNode(resolved)) {
-        return resolved.fields
-          .reduce((
-            acc: immutable.Map<string, ast.ObjectField>, field: ast.ObjectField
-          ) => {
-            return field.id != null && acc.set(field.id.name, field) || acc;
-          },
-          immutable.Map<string, ast.ObjectField>()
-        );
+      if (resolved == null) {
+        return null;
       }
-      return null;
     }
 
-    if (bin.op !== "BopPlus") {
-      return null;
-    }
-
-    const leftFields = getCompletableFields(bin.left);
-    const rightFields = getCompletableFields(bin.right);
-    return leftFields && rightFields && leftFields.merge(rightFields) || null;
+    return resolved;
   }
-
-  //
-  // The rest.
-  //
 
   public resolveSymbolAtPosition = (
     fileUri: string, pos: error.Location,
@@ -492,7 +448,7 @@ export class Analyzer implements EventedAnalyzer {
         return null;
       }
       case "BinaryNode": {
-        const fields = this.completableFieldSet(<ast.Binary>resolvedTarget);
+        const fields = this.createFieldSet(resolvedTarget);
         if (fields == null) {
           throw new Error(
             `INTERNAL ERROR: Could not merge fields in binary node:\n${ast.renderAsJson(resolvedTarget)}`);
@@ -581,6 +537,60 @@ export class Analyzer implements EventedAnalyzer {
         return bind.body;
       }
     }
+  }
+
+  //
+  // Utilities.
+  //
+
+  private getComments = (field: ast.ObjectField): string | null => {
+    // Convert to field object, pull comments out.
+    const comments = field.headingComments;
+    if (comments == null || comments.count() == 0) {
+      return null;
+    }
+
+    return comments
+      .reduce((acc: string[], curr) => {
+        if (curr == undefined) {
+          throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
+        }
+        acc.push(curr.text);
+        return acc;
+      }, [])
+      .join("\n");
+  }
+
+  private createFieldSet = (
+    resolved: ast.Node
+  ): immutable.Map<string, ast.ObjectField> | null => {
+    // Recursively merge fields if it's another mixin; if it's an
+    // object, return fields; else, no fields to return.
+    if (ast.isBinary(resolved)) {
+      if (resolved.op !== "BopPlus") {
+        return null;
+      }
+
+      const left = this.resolveIndirections(resolved.left);
+      const right = this.resolveIndirections(resolved.right);
+      if (left == null || right == null) {
+        return null;
+      }
+
+      const leftFields = this.createFieldSet(left);
+      const rightFields = this.createFieldSet(right);
+      return leftFields && rightFields && leftFields.merge(rightFields) || null;
+    } else if (ast.isObjectNode(resolved)) {
+      return resolved.fields
+        .reduce((
+          acc: immutable.Map<string, ast.ObjectField>, field: ast.ObjectField
+        ) => {
+          return field.id != null && acc.set(field.id.name, field) || acc;
+        },
+        immutable.Map<string, ast.ObjectField>()
+      );
+    }
+    return null;
   }
 
   public getNodeAtPosition = (
