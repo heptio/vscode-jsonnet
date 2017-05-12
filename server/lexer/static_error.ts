@@ -1,3 +1,5 @@
+import * as ast from "../parser/node";
+
 //////////////////////////////////////////////////////////////////////////////
 // Location
 
@@ -73,6 +75,11 @@ export const MakeLocationRange = (
 // StaticError represents an error during parsing/lexing some jsonnet.
 export class StaticError {
   constructor (
+    // rest allows the parser to return a partial parse result. For
+    // example, if the user types a `.`, it is likely the document
+    // will not parse, and it is useful to the autocomplete mechanisms
+    // to return the AST that preceeds the `.` character.
+    readonly rest: ast.Node | null,
     readonly loc: LocationRange,
     readonly msg: string,
   ) {}
@@ -90,17 +97,23 @@ export const isStaticError = (x: any): x is StaticError => {
 }
 
 export const MakeStaticErrorMsg = (msg: string): StaticError => {
-  return new StaticError(MakeLocationRangeMessage(""), msg);
+  return new StaticError(null, MakeLocationRangeMessage(""), msg);
 }
 
 export const MakeStaticErrorPoint = (
   msg: string, fn: string, l: Location
 ): StaticError => {
-  return new StaticError(MakeLocationRange(fn, l, l), msg);
+  return new StaticError(null, MakeLocationRange(fn, l, l), msg);
 }
 
 export const MakeStaticError = (
   msg: string, lr: LocationRange
 ): StaticError => {
-  return new StaticError(lr, msg);
+  return new StaticError(null, lr, msg);
+}
+
+export const MakeStaticErrorRest = (
+  rest: ast.Node, msg: string, lr: LocationRange
+): StaticError => {
+  return new StaticError(rest, lr, msg);
 }

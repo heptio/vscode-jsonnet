@@ -1226,7 +1226,13 @@ class parser {
             case "TokenDot": {
               const fieldID = this.popExpect("TokenIdentifier");
               if (error.isStaticError(fieldID)) {
-                return fieldID;
+                // After the user types a `.`, the document very
+                // likely doesn't parse. For autocomplete facilities,
+                // it's useful to return the AST that precedes the `.`
+                // character (typically a `Var` or `Index`
+                // expression), so that it is easier to discern what
+                // to complete.
+                return error.MakeStaticErrorRest(lhs, fieldID.msg, fieldID.loc);
               }
               const id = new ast.Identifier(fieldID.data, fieldID.loc);
               lhs = new ast.IndexDot(lhs, id, locFromTokens(begin, fieldID));
