@@ -109,9 +109,7 @@ export class Analyzer implements EventedAnalyzer {
         const parse = this.compilerService.cache(
           fileUri, doc.text, doc.version);
         if (compiler.isFailedParsedDocument(parse)) {
-          // TODO: Fix me.
-          const msg = `Failed to do a partial parse document at '${fileUri}'`;
-          reject(msg);
+          resolve([]);
           return;
         }
 
