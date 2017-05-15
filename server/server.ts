@@ -119,16 +119,20 @@ docs.listen(connection);
 
 connection.onInitialize((params) => initializer(docs, params));
 connection.onDidChangeConfiguration(params => configUpdateProvider(params));
+connection.onHover(position => {
+  const fileUri = position.textDocument.uri;
+  return analyzer.onHover(fileUri, positionToLocation(position));
+});
+
 connection.onCompletion(position => {
   return analyzer
     .onComplete(position.textDocument.uri, positionToLocation(position))
     .then<server.CompletionItem[]>(
       completions => completions.map(completionInfoToCompletionItem));
 });
-connection.onHover(position => {
-  const fileUri = position.textDocument.uri;
-  return analyzer.onHover(fileUri, positionToLocation(position));
-});
+// Prevent the language server from complaining that
+// `onCompletionResolve` handle is not implemented.
+connection.onCompletionResolve(item => item);
 
 // Listen on the connection
 connection.listen();
