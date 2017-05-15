@@ -182,7 +182,7 @@ const completionInfoToCompletionItem = (
         break;
       }
       case "Variable": {
-        kindMapping = server.CompletionItemKind.Field;
+        kindMapping = server.CompletionItemKind.Variable;
         break;
       }
       case "Method": {
