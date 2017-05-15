@@ -1,7 +1,11 @@
 'use strict';
+import * as path from 'path';
+
 import * as im from 'immutable';
 
+import * as compiler from '../ast/compiler';
 import * as error from '../lexer/static_error';
+import * as workspace from '../ast/workspace';
 
 // ---------------------------------------------------------------------------
 
@@ -169,11 +173,36 @@ abstract class NodeBase implements Node {
     this.env = null;
   }
 
-  abstract prettyPrint;
+  abstract prettyPrint: () => string;
 
   rootObject: Node | null;
   parent: Node | null;     // Filled in by the visitor.
   env: Environment | null; // Filled in by the visitor.
+}
+
+// ---------------------------------------------------------------------------
+
+export interface Resolvable extends NodeBase {
+  resolve(
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): Node | null
+}
+
+export const isResolvable = (node: NodeBase): node is Resolvable => {
+  return node instanceof NodeBase && typeof node["resolve"] === "function";
+}
+
+export interface FieldsResolvable extends NodeBase {
+  resolveFields(
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): IndexedObjectFields | null
+}
+
+export const isFieldsResolvable = (
+  node: NodeBase
+): node is FieldsResolvable => {
+  return node instanceof NodeBase &&
+    typeof node["resolveFields"] === "function";
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +213,7 @@ export type IdentifierName = string
 export type IdentifierNames = im.List<IdentifierName>
 export type IdentifierSet = im.Set<IdentifierName>;
 
-export class Identifier extends NodeBase {
+export class Identifier extends NodeBase  {
   readonly type: "IdentifierNode" = "IdentifierNode";
 
   constructor(
@@ -194,6 +223,22 @@ export class Identifier extends NodeBase {
 
   public prettyPrint = (): string => {
     return this.name;
+  }
+
+  public resolve = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): Node | null => {
+    if (this.parent == null) {
+      // An identifier with no parent is not a valid Jsonnet file.
+      return null;
+    }
+
+    if (isResolvable(this.parent)) {
+      // Usually this should be a `Var` or `Index` node.
+      return this.parent.resolve(compiler, documents);
+    }
+
+    return null;
   }
 }
 
@@ -535,7 +580,7 @@ export const BopMap = im.Map<string, BinaryOp>({
 });
 
 // Binary represents binary operators.
-export class Binary extends NodeBase {
+export class Binary extends NodeBase implements FieldsResolvable {
   readonly type: "BinaryNode" = "BinaryNode";
 
   constructor(
@@ -550,6 +595,28 @@ export class Binary extends NodeBase {
     const opString = BopStrings[this.op];
     const rightString = this.right.prettyPrint();
     return `${leftString} ${opString} ${rightString}`;
+  }
+
+  public resolveFields = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): IndexedObjectFields | null => {
+    // Recursively merge fields if it's another mixin; if it's an
+    // object, return fields; else, no fields to return.
+    if (this.op !== "BopPlus") {
+      return null;
+    }
+
+    const left = resolveIndirections(this.left, compiler, documents);
+    const leftFields = left && isFieldsResolvable(left)
+      ? left.resolveFields(compiler, documents)
+      : null;
+
+    const right = resolveIndirections(this.right, compiler, documents);
+    const rightFields = right && isFieldsResolvable(right)
+      ? right.resolveFields(compiler, documents)
+      : null;
+
+    return leftFields && rightFields && leftFields.merge(rightFields) || null;
   }
 }
 
@@ -614,7 +681,7 @@ export const isConditional = (node: Node): node is Conditional => {
 // ---------------------------------------------------------------------------
 
 // Dollar represents the $ keyword
-export class Dollar extends NodeBase {
+export class Dollar extends NodeBase implements Resolvable {
   readonly type: "DollarNode" = "DollarNode";
 
   constructor(
@@ -623,6 +690,12 @@ export class Dollar extends NodeBase {
 
   public prettyPrint = (): string => {
     return `$`;
+  }
+
+  public resolve = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): Node | null => {
+    return this.rootObject;
   }
 };
 
@@ -702,7 +775,7 @@ export const isFunctionParam = (node: any): node is FunctionParam => {
 // ---------------------------------------------------------------------------
 
 // Import represents import "file".
-export class Import extends NodeBase {
+export class Import extends NodeBase implements Resolvable {
   readonly type: "ImportNode" = "ImportNode";
 
   constructor(
@@ -712,6 +785,23 @@ export class Import extends NodeBase {
 
   public prettyPrint = (): string => {
     return `import "${this.file}"`;
+  }
+
+  public resolve = (
+    compilerService: compiler.CompilerService,
+    documents: workspace.DocumentManager,
+  ): Node | null => {
+    const fileToImport =
+      filePathToUri(this.file, this.loc.fileName);
+    const {text: docText, version: version} =
+      documents.get(fileToImport);
+    const cached =
+      compilerService.cache(fileToImport, docText, version);
+    if (compiler.isFailedParsedDocument(cached)) {
+      return null;
+    }
+
+    return cached.parse;
   }
 }
 
@@ -745,11 +835,60 @@ export const isImportStr = (node: Node): node is ImportStr => {
 //
 // One of index and id will be nil before desugaring.  After desugaring id
 // will be nil.
-export interface Index extends Node {
+export interface Index extends Node, Resolvable {
   readonly type:   "IndexNode"
   readonly target: Node
   readonly index:  Node | null
   readonly id:     Identifier | null
+}
+
+const resolveIndex = (
+  index: Index, compilerService: compiler.CompilerService,
+  documents: workspace.DocumentManager,
+): Node | null => {
+  if (index.target == null || !isResolvable(index.target)) {
+    throw new Error(
+      `INTERNAL ERROR: Index node must have a resolvable target:\n${renderAsJson(index)}`);
+  } else if (index.id == null) {
+    return null;
+  }
+
+  // Find root target, look up in environment.
+  let resolvedTarget = index.target.resolve(compilerService, documents);
+  if (resolvedTarget == null) {
+    return null;
+  }
+
+  if (isVar(index.target)) {
+    // If the var was pointing at an import, then resolution probably
+    // has `local` definitions at the top of the file. Get rid of
+    // them, since they are not useful for resolving the index
+    // identifier.
+    while (isLocal(resolvedTarget)) {
+      resolvedTarget = resolvedTarget.body;
+    }
+  }
+
+  if (!isFieldsResolvable(resolvedTarget)) {
+    return null;
+  }
+
+  const fields = resolvedTarget.resolveFields(compilerService, documents);
+  if (fields == null) {
+    return null;
+  }
+
+  const filtered = fields.filter((field: ObjectField) => {
+    return field.id != null && index.id != null &&
+      field.id.name == index.id.name;
+  });
+
+  if (filtered.count() != 1) {
+    throw new Error(
+      `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${renderAsJson(resolvedTarget)}`);
+  }
+
+  return filtered.first().expr2;
 }
 
 export const isIndex = (node: Node): node is Index => {
@@ -770,6 +909,10 @@ export class IndexSubscript extends NodeBase implements Index {
   public prettyPrint = (): string => {
     return `${this.target.prettyPrint()}[${this.index.prettyPrint()}]`;
   }
+
+  public resolve = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): Node | null => resolveIndex(this, compiler, documents);
 }
 
 export const isIndexSubscript = (node: Node): node is Index => {
@@ -789,6 +932,10 @@ export class IndexDot extends NodeBase implements Index {
   public prettyPrint = (): string => {
     return `${this.target.prettyPrint()}.${this.id.prettyPrint()}`;
   }
+
+  public resolve = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): Node | null => resolveIndex(this, compiler, documents);
 }
 
 export const isIndexDot = (node: Node): node is Index => {
@@ -1103,6 +1250,18 @@ const prettyPrintObjectLocal = (field: ObjectField): string => {
 // TODO(jbeda): Add the remaining constructor helpers here
 
 export type ObjectFields = im.List<ObjectField>;
+export type IndexedObjectFields = im.Map<string, ObjectField>;
+
+export const indexFields = (fields: ObjectFields): IndexedObjectFields => {
+  return fields
+    .reduce((
+      acc: im.Map<string, ObjectField>, field: ObjectField
+    ) => {
+      return field.id != null && acc.set(field.id.name, field) || acc;
+    },
+    im.Map<string, ObjectField>()
+  );
+}
 
 // ---------------------------------------------------------------------------
 
@@ -1110,7 +1269,7 @@ export type ObjectFields = im.List<ObjectField>;
 //
 // The trailing comma is only allowed if len(fields) > 0.  Converted to
 // DesugaredObject during desugaring.
-export class ObjectNode extends NodeBase {
+export class ObjectNode extends NodeBase implements FieldsResolvable {
   readonly type: "ObjectNode" = "ObjectNode";
 
   constructor(
@@ -1127,6 +1286,12 @@ export class ObjectNode extends NodeBase {
       .join(",\n");
 
     return `(module) {\n${fields}\n}`;
+  }
+
+  public resolveFields = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): IndexedObjectFields | null => {
+    return indexFields(this.fields);
   }
 }
 
@@ -1302,7 +1467,7 @@ export const isUnary = (node: Node): node is Unary => {
 // ---------------------------------------------------------------------------
 
 // Var represents variables.
-export class Var extends NodeBase {
+export class Var extends NodeBase implements Resolvable {
   readonly type: "VarNode" = "VarNode";
 
   constructor(
@@ -1313,6 +1478,20 @@ export class Var extends NodeBase {
   public prettyPrint = (): string => {
     return this.id.prettyPrint();
   }
+
+  public resolve = (
+    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
+  ): Node | null => {
+    // Look up in the environment, get docs for that definition.
+    if (this.env == null) {
+      throw new Error(
+        `INTERNAL ERROR: AST improperly set up, property 'env' can't be null:\n${renderAsJson(this)}`);
+    } else if (!this.env.has(this.id.name)) {
+      return null;
+    }
+
+    return resolveFromEnv(this.id.name, this.env, compiler, documents);
+  }
 }
 
 export const isVar = (node: Node): node is Var => {
@@ -1320,3 +1499,86 @@ export const isVar = (node: Node): node is Var => {
 }
 
 // ---------------------------------------------------------------------------
+
+const resolveFromEnv = (
+  idName: string, env: Environment, compilerService: compiler.CompilerService,
+  documents: workspace.DocumentManager,
+): Node | null => {
+  const bind = env.get(idName);
+  if (bind == null) {
+    return null;
+  }
+
+  if (isFunctionParam(bind)) {
+    // A function param is either a free variable, or it has a
+    // default value. We return either way.
+    return bind;
+  }
+
+  if (bind.body == null) {
+    throw new Error(`INTERNAL ERROR: Bind can't have null body:\n${bind}`);
+  }
+
+  if (isResolvable(bind.body)) {
+    return bind.body.resolve(compilerService, documents);
+  }
+
+  return bind.body;
+}
+
+// TODO: Replace this with some sort of URL provider.
+const filePathToUri = (filePath: string, currentPath: string): string => {
+  let resource = filePath;
+  if (!path.isAbsolute(resource)) {
+    const resolved = path.resolve(currentPath);
+    const absDir = path.dirname(resolved);
+    resource = path.join(absDir, filePath);
+  }
+  return `file://${resource}`;
+}
+
+export const resolveIndirections = (
+  node: Node, compilerService: compiler.CompilerService,
+  documents: workspace.DocumentManager,
+): Node | null => {
+  // This loop will try to "strip out the indirections" of an
+  // argument to a mixin. For example, consider the expression
+  // `foo1.bar + foo2.bar` in the following example:
+  //
+  //   local bar1 = {a: 1, b: 2},
+  //   local bar2 = {b: 3, c: 4},
+  //   local foo1 = {bar: bar1},
+  //   local foo2 = {bar: bar2},
+  //   useMerged: foo1.bar + foo2.bar,
+  //
+  // In this case, if we try to resolve `foo1.bar + foo2.bar`, we
+  // will first need to resolve `foo1.bar`, and then the value of
+  // that resolve, `bar1`, which resolves to an object, and so on.
+  //
+  // This loop follows these indirections: first, it resolves
+  // `foo1.bar`, and then `bar1`, before encountering an object
+  // and stopping.
+
+  let resolved: Node | null = node;
+  while (true) {
+    if (isObjectNode(resolved)) {
+      // Found an object. Break.
+      break;
+    } else if (isBinary(resolved)) {
+      // May have found an object mixin. Break.
+      break;
+    } else if (isVar(resolved)) {
+      resolved = resolved.resolve(compilerService, documents);
+    } else if (isIndex(resolved)) {
+      resolved = resolved.resolve(compilerService, documents);
+    } else {
+      throw new Error(`${renderAsJson(node)}`);
+    }
+
+    if (resolved == null) {
+      return null;
+    }
+  }
+
+  return resolved;
+}

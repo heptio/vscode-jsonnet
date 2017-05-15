@@ -157,7 +157,8 @@ describe("Searching an AST by position", () => {
     assert.equal(property4Id.type, "IdentifierNode");
     assert.equal(property4Id.name, "baz");
 
-    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(property4Id);
+    const resolved = <ast.LiteralNumber>property4Id.resolve(
+      compilerService, documents);
     assert.isNotNull(resolved);
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "3");
@@ -172,7 +173,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged1.type, "IdentifierNode");
       assert.equal(merged1.name, "b");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged1);
+      const resolved = <ast.LiteralNumber>merged1.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "3");
@@ -186,7 +188,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged2.type, "IdentifierNode");
       assert.equal(merged2.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged2);
+      const resolved = <ast.LiteralNumber>merged2.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -200,7 +203,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged3.type, "IdentifierNode");
       assert.equal(merged3.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged3);
+      const resolved = <ast.LiteralNumber>merged3.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "1");
@@ -214,7 +218,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged4.type, "IdentifierNode");
       assert.equal(merged4.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged4);
+      const resolved = <ast.LiteralNumber>merged4.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -228,7 +233,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged5.type, "IdentifierNode");
       assert.equal(merged5.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged5);
+      const resolved = <ast.LiteralNumber>merged5.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -246,7 +252,8 @@ describe("Searching an AST by position", () => {
     assert.equal(node.type, "IdentifierNode");
     assert.equal(node.name, "numberVal2");
 
-    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(node);
+    const resolved = <ast.LiteralNumber>node.resolve(
+      compilerService, documents);
     assert.isNotNull(resolved);
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "1");

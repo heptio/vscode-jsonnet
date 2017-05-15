@@ -128,7 +128,8 @@ export class Analyzer implements EventedAnalyzer {
           const v = new astVisitor.DeserializingVisitor();
           v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
 
-          const resolved = this.resolveIndirections(rest);
+          const resolved = ast.resolveIndirections(
+            rest, this.compilerService, this.documents);
           if (resolved == null) {
             resolve([]);
           } else {
@@ -202,7 +203,8 @@ export class Analyzer implements EventedAnalyzer {
       return node.env && envToSuggestions(node.env) || [];
     }
 
-    const resolved = this.resolveIndirections(parent);
+    const resolved = ast.resolveIndirections(
+      parent, this.compilerService, this.documents);
     if (resolved == null) {
       return node.env && envToSuggestions(node.env) || [];
     }
@@ -217,13 +219,13 @@ export class Analyzer implements EventedAnalyzer {
     // resolved item is an `ObjectNode`, just use its fields; if it's
     // a mixin of two objects, merge them and use the merged fields
     // instead.
-    let fields: ast.ObjectFields | null = null;
-    const fieldSet = this.createFieldSet(resolved);
-    if (fieldSet == null) {
-      fields = immutable.List<ast.ObjectField>();
-    } else {
-      fields = immutable.List(fieldSet.values());
-    }
+    const fieldSet = ast.isFieldsResolvable(resolved)
+      ? resolved.resolveFields(this.compilerService, this.documents)
+      : immutable.Map<string, ast.ObjectField>();
+
+    const fields = fieldSet == null
+      ? immutable.List()
+      : immutable.List(fieldSet.values())
 
     return fields
       .filter((field: ast.ObjectField) =>
@@ -252,49 +254,6 @@ export class Analyzer implements EventedAnalyzer {
   //
   // Symbol resolution.
   //
-
-  private resolveIndirections = (node: ast.Node): ast.Node | null => {
-    // This loop will try to "strip out the indirections" of an
-    // argument to a mixin. For example, consider the expression
-    // `foo1.bar + foo2.bar` in the following example:
-    //
-    //   local bar1 = {a: 1, b: 2},
-    //   local bar2 = {b: 3, c: 4},
-    //   local foo1 = {bar: bar1},
-    //   local foo2 = {bar: bar2},
-    //   useMerged: foo1.bar + foo2.bar,
-    //
-    // In this case, if we try to resolve `foo1.bar + foo2.bar`, we
-    // will first need to resolve `foo1.bar`, and then the value of
-    // that resolve, `bar1`, which resolves to an object, and so on.
-    //
-    // This loop follows these indirections: first, it resolves
-    // `foo1.bar`, and then `bar1`, before encountering an object
-    // and stopping.
-
-    let resolved: ast.Node | null = node;
-    while (true) {
-      if (ast.isObjectNode(resolved)) {
-        // Found an object. Break.
-        break;
-      } else if (ast.isBinary(resolved)) {
-        // May have found an object mixin. Break.
-        break;
-      } else if (ast.isVar(resolved)) {
-        resolved = this.resolveVar(resolved);
-      } else if (ast.isIndex(resolved)) {
-        resolved = this.resolveIndex(resolved);
-      } else {
-        throw new Error(`${ast.renderAsJson(node)}`);
-      }
-
-      if (resolved == null) {
-        return null;
-      }
-    }
-
-    return resolved;
-  }
 
   public resolveSymbolAtPosition = (
     fileUri: string, pos: error.Location,
@@ -349,192 +308,14 @@ export class Analyzer implements EventedAnalyzer {
 
     switch(node.type) {
       case "IdentifierNode": {
-        return this.resolveIdentifier(<ast.Identifier>node);
+        return (<ast.Identifier>node).resolve(
+          this.compilerService, this.documents);
       }
       case "LocalNode": {
         return node;
       }
       default: {
         return null;
-      }
-    }
-  }
-
-  public resolveIdentifier = (id: ast.Identifier): ast.Node | null => {
-    if (id.parent == null) {
-      // An identifier with no parent is not a valid Jsonnet file.
-      return null;
-    }
-
-    switch (id.parent.type) {
-      case "VarNode": { return this.resolveVar(<ast.Var>id.parent); }
-      case "IndexNode": { return this.resolveIndex(<ast.Index>id.parent); }
-      default: {
-        // TODO: Support other node types as we need them.
-        return null;
-      }
-    }
-  }
-
-  public resolveIndex = (index: ast.Index): ast.Node | null => {
-    if (index.target == null) {
-      throw new Error(
-        `INTERNAL ERROR: Index node must have a target:\n${ast.renderAsJson(index)}`);
-    } else if (index.id == null) {
-      throw new Error(
-        `INTERNAL ERROR: Index node must have a name:\n${ast.renderAsJson(index)}`);
-    }
-
-    // Find root target, look up in environment.
-    let resolvedTarget: ast.Node;
-    switch (index.target.type) {
-      case "VarNode": {
-        const varNode = <ast.Var>index.target
-        const nullableResolved = this.resolveVar(varNode);
-        if (nullableResolved == null) {
-          return null;
-        }
-
-        resolvedTarget = nullableResolved;
-
-        // If the var was pointing at an import, then resolution
-        // probably has `local` definitions at the top of the file.
-        // Get rid of them, since they are not useful for resolving
-        // the index identifier.
-        while (ast.isLocal(resolvedTarget)) {
-          resolvedTarget = resolvedTarget.body;
-        }
-
-        break;
-      }
-      case "IndexNode": {
-        const nullableResolved = this.resolveIndex(<ast.Index>index.target);
-        if (nullableResolved == null) {
-          return null;
-        }
-        resolvedTarget = nullableResolved;
-        break;
-      }
-      case "DollarNode": {
-        if (index.target.rootObject == null) {
-          return null;
-        }
-        resolvedTarget = index.target.rootObject;
-        break;
-      }
-      default: {
-        throw new Error(
-          `INTERNAL ERROR: Index node can't have node target of type '${index.target.type}':\n${ast.renderAsJson(index.target)}`);
-      }
-    }
-
-    switch (resolvedTarget.type) {
-      case "ObjectNode": {
-        const objectNode = <ast.ObjectNode>resolvedTarget;
-        for (let field of objectNode.fields.toArray()) {
-          // We're looking for either a field with the id
-          if (field.id != null && field.id.name == index.id.name) {
-            return field.expr2;
-          } else if (field.expr1 == null) {
-            // Object field must be identified by an `Identifier` or a
-            // string. If those aren't present, skip.
-            continue;
-          }
-
-          throw new Error(
-            `INTERNAL ERROR: Object field is identified by string, but we don't support that yet`);
-        }
-
-        return null;
-      }
-      case "BinaryNode": {
-        const fields = this.createFieldSet(resolvedTarget);
-        if (fields == null) {
-          throw new Error(
-            `INTERNAL ERROR: Could not merge fields in binary node:\n${ast.renderAsJson(resolvedTarget)}`);
-        }
-
-        const filtered = fields.filter((field: ast.ObjectField) => {
-          return field.id != null && index.id != null &&
-            field.id.name == index.id.name;
-        });
-
-        if (filtered.count() != 1) {
-          throw new Error(
-            `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${ast.renderAsJson(resolvedTarget)}`);
-        }
-
-        return filtered.first().expr2;
-      }
-      default: {
-        throw new Error(
-          `INTERNAL ERROR: Index node currently requires resolved var to be an object type, but was'${resolvedTarget.type}':\n${ast.renderAsJson(resolvedTarget)}`);
-      }
-    }
-  }
-
-  public resolveVar = (varNode: ast.Var): ast.Node | null => {
-    // Look up in the environment, get docs for that definition.
-    if (varNode.env == null) {
-      throw new Error(
-        `INTERNAL ERROR: AST improperly set up, property 'env' can't be null:\n${ast.renderAsJson(varNode)}`);
-    } else if (!varNode.env.has(varNode.id.name)) {
-      return null;
-    }
-
-    return this.resolveFromEnv(varNode.id.name, varNode.env);
-  }
-
-  public resolveFromEnv = (
-    idName: string, env: ast.Environment
-  ): ast.Node | null => {
-    const bind = env.get(idName);
-    if (bind == null) {
-      return null;
-    }
-
-    if (ast.isFunctionParam(bind)) {
-      // A function param is either a free variable, or it has a
-      // default value. We return either way.
-      return bind;
-    }
-
-    if (bind.body == null) {
-      throw new Error(`INTERNAL ERROR: Bind can't have null body:\n${bind}`);
-    }
-
-    switch(bind.body.type) {
-      case "ImportNode": {
-        const importNode = <ast.Import>bind.body;
-        const fileToImport =
-          filePathToUri(importNode.file, importNode.loc.fileName);
-        const {text: docText, version: version} =
-          this.documents.get(fileToImport);
-        const cached =
-          this.compilerService.cache(fileToImport, docText, version);
-        if (compiler.isFailedParsedDocument(cached)) {
-          return null;
-        }
-
-        return cached.parse;
-      }
-      case "VarNode": {
-        return this.resolveVar(<ast.Var>bind.body);
-      }
-      case "IndexNode": {
-        return this.resolveIndex(<ast.Index>bind.body);
-      }
-      case "BinaryNode": {
-        const binaryNode = <ast.Binary>bind.body;
-        if (binaryNode.op !== "BopPlus") {
-          throw new Error(
-            `INTERNAL ERROR: Bind currently can't resolve to binary operations that are not '+':\n${ast.renderAsJson(bind.body)}`);
-        }
-
-        return binaryNode;
-      }
-      default: {
-        return bind.body;
       }
     }
   }
@@ -559,38 +340,6 @@ export class Analyzer implements EventedAnalyzer {
         return acc;
       }, [])
       .join("\n");
-  }
-
-  private createFieldSet = (
-    resolved: ast.Node
-  ): immutable.Map<string, ast.ObjectField> | null => {
-    // Recursively merge fields if it's another mixin; if it's an
-    // object, return fields; else, no fields to return.
-    if (ast.isBinary(resolved)) {
-      if (resolved.op !== "BopPlus") {
-        return null;
-      }
-
-      const left = this.resolveIndirections(resolved.left);
-      const right = this.resolveIndirections(resolved.right);
-      if (left == null || right == null) {
-        return null;
-      }
-
-      const leftFields = this.createFieldSet(left);
-      const rightFields = this.createFieldSet(right);
-      return leftFields && rightFields && leftFields.merge(rightFields) || null;
-    } else if (ast.isObjectNode(resolved)) {
-      return resolved.fields
-        .reduce((
-          acc: immutable.Map<string, ast.ObjectField>, field: ast.ObjectField
-        ) => {
-          return field.id != null && acc.set(field.id.name, field) || acc;
-        },
-        immutable.Map<string, ast.ObjectField>()
-      );
-    }
-    return null;
   }
 
   public getNodeAtPosition = (
@@ -635,15 +384,4 @@ const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
       };
     })
     .toArray();
-}
-
-// TODO: Replace this with some sort of URL provider.
-const filePathToUri = (filePath: string, currentPath: string): string => {
-  let resource = filePath;
-  if (!path.isAbsolute(resource)) {
-    const resolved = path.resolve(currentPath);
-    const absDir = path.dirname(resolved);
-    resource = path.join(absDir, filePath);
-  }
-  return `file://${resource}`;
 }
