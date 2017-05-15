@@ -93,8 +93,8 @@ export class Analyzer implements EventedAnalyzer {
   ): Promise<service.CompletionInfo[]> => {
     const doc = this.documents.get(fileUri);
 
-    return new Promise<service.CompletionInfo[]>(
-      (resolve, reject) => {
+    return Promise.resolve().then(
+      (): service.CompletionInfo[] => {
         //
         // Generate suggestions. This process follows three steps:
         //
@@ -116,8 +116,7 @@ export class Analyzer implements EventedAnalyzer {
           // env of the `rest` node below.
           const lastParse = this.compilerService.getLastSuccess(fileUri);
           if (lastParse == null || compiler.isLexFailure(parse.parse) || parse.parse.parseError.rest == null) {
-            resolve([]);
-            return;
+            return [];
           }
 
           const nodeAtPos = this.getNodeAtPositionFromAst(
@@ -131,16 +130,15 @@ export class Analyzer implements EventedAnalyzer {
           const resolved = ast.resolveIndirections(
             rest, this.compilerService, this.documents);
           if (resolved == null) {
-            resolve([]);
+            return [];
           } else {
-            resolve(this.completableFields(resolved));
+            return this.completableFields(resolved);
           }
-          return;
         } else {
           const nodeAtPos = this.getNodeAtPositionFromAst(
             parse.parse, cursorLoc);
 
-          resolve(this.completionsFromIdentifier(nodeAtPos));
+          return this.completionsFromIdentifier(nodeAtPos);
         }
       });
   }
