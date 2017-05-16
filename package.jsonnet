@@ -77,6 +77,7 @@ package.contributes.DefaultConfiguration(
     "vscode-languageserver": "^3.1.0",
   },
   devDependencies: {
+    browserify: "^14.3.0",
     typescript: "^2.3.2",
     vscode: "^1.0.0",
     mocha: "^2.3.3",
