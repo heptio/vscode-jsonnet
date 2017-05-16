@@ -65,10 +65,6 @@ export const isParseFailure = (testMe: any): testMe is ParseFailure => {
 // CompilerService represents the core service for parsing and caching
 // parses of documents.
 export interface CompilerService {
-  // TODO: Make sure we're actually propagating the correct version to
-  // the cache from `TextDocuments`.
-  //
-  // TODO: Fix `cache` to only take the fileUri.
   cache: (
     fileUri: string, text: string, version?: number
   ) => ParsedDocument | FailedParsedDocument

@@ -878,8 +878,7 @@ class parser {
         if (error.isStaticError(pop)) {
           return pop;
         }
-        // TODO: Don't cast me bro.
-        return <ast.Node>inner;
+        return inner;
       }
 
       // Literals
