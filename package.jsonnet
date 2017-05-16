@@ -77,7 +77,7 @@ package.contributes.DefaultConfiguration(
     "vscode-languageserver": "^3.1.0",
   },
   devDependencies: {
-    typescript: "^2.0.3",
+    typescript: "^2.3.2",
     vscode: "^1.0.0",
     mocha: "^2.3.3",
     chai: "^3.5.0",

@@ -85,7 +85,7 @@
       "@types/node": "^6.0.40",
       "chai": "^3.5.0",
       "mocha": "^2.3.3",
-      "typescript": "^2.0.3",
+      "typescript": "^2.3.2",
       "vscode": "^1.0.0"
    },
    "displayName": "Jsonnet",

@@ -1193,19 +1193,6 @@ class parser {
               return lhs;
           }
 
-          // NOTE: This check is repeated here due to a bug in the
-          // TypeScript 2.0.3 type checker. If `lhs` was an error, we
-          // should have returned immediately after defining it above.
-          // Since we don't assign it after that point, we should be
-          // ok to use it as an argument to functions below that
-          // require an `ast.Node`. But, the type checker gets
-          // confused and emits an error instead. To be absolutely
-          // safe, we throw an error here, just in case we were
-          // subtlely wrong about the flow control.
-          if (error.isStaticError(lhs)) {
-            throw new Error(`INTERNAL ERROR: Didn't expect 'lhs' to be a StaticError`);
-          }
-
           const op = this.pop();
           switch (op.kind) {
             case "TokenBracketL": {
