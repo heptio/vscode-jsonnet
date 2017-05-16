@@ -41,6 +41,113 @@ const assertLocationRange = (
   assert.equal(lr.end.column, endCol);
 }
 
+describe("Compiler service", () => {
+  const mockFilename = "mockFile.jsonnet";
+  const mockDocumentText1 = "{}";
+  const mockDocumentText2 = "[]";
+
+  it("returns cached parse if document versions are the same", () => {
+    const compilerService = new local.VsCompilerService();
+
+    {
+      const cachedParse1 = compilerService.cache(
+        mockFilename, mockDocumentText1, 1);
+      assert.isTrue(compiler.isParsedDocument(cachedParse1));
+      assert.equal(cachedParse1.text, mockDocumentText1);
+      assert.equal(cachedParse1.version, 1);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse1.parse) &&
+        !compiler.isParseFailure(cachedParse1.parse) &&
+        cachedParse1.parse.type == "ObjectNode");
+    }
+
+    {
+      // Return the cached parse if the versions are the same, instead
+      // of parsing the new document text.
+      const cachedParse2 = compilerService.cache(
+        mockFilename, mockDocumentText2, 1);
+      assert.isTrue(compiler.isParsedDocument(cachedParse2));
+      assert.equal(cachedParse2.text, mockDocumentText1);
+      assert.equal(cachedParse2.version, 1);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse2.parse) &&
+        !compiler.isParseFailure(cachedParse2.parse) &&
+        cachedParse2.parse.type == "ObjectNode");
+    }
+
+    {
+      // Parse the new version of the document.
+      const cachedParse3 = compilerService.cache(
+        mockFilename, mockDocumentText2, 2);
+      assert.isTrue(compiler.isParsedDocument(cachedParse3));
+      assert.equal(cachedParse3.text, mockDocumentText2);
+      assert.equal(cachedParse3.version, 2);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse3.parse) &&
+        !compiler.isParseFailure(cachedParse3.parse) &&
+        cachedParse3.parse.type == "ArrayNode");
+    }
+  });
+
+  it("always parses document if version is undefined", () => {
+    const compilerService = new local.VsCompilerService();
+
+    {
+      const cachedParse1 = compilerService.cache(
+        mockFilename, mockDocumentText1, undefined);
+      assert.isTrue(compiler.isParsedDocument(cachedParse1));
+      assert.equal(cachedParse1.text, mockDocumentText1);
+      assert.equal(cachedParse1.version, undefined);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse1.parse) &&
+        !compiler.isParseFailure(cachedParse1.parse) &&
+        cachedParse1.parse.type == "ObjectNode");
+    }
+
+    {
+      // Parse the new version of the document if version is
+      // `undefined`.
+      const cachedParse2 = compilerService.cache(
+        mockFilename, mockDocumentText2, undefined);
+      assert.isTrue(compiler.isParsedDocument(cachedParse2));
+      assert.equal(cachedParse2.text, mockDocumentText2);
+      assert.equal(cachedParse2.version, undefined);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse2.parse) &&
+        !compiler.isParseFailure(cachedParse2.parse) &&
+        cachedParse2.parse.type == "ArrayNode");
+    }
+
+    {
+      // Parse the new version of the document if previous version was
+      // `undefined`, but we now have a version number.
+      const cachedParse3 = compilerService.cache(
+        mockFilename, mockDocumentText1, 1);
+      assert.isTrue(compiler.isParsedDocument(cachedParse3));
+      assert.equal(cachedParse3.text, mockDocumentText1);
+      assert.equal(cachedParse3.version, 1);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse3.parse) &&
+        !compiler.isParseFailure(cachedParse3.parse) &&
+        cachedParse3.parse.type == "ObjectNode");
+    }
+
+    {
+      // Parse the new version of the document if we previously had a
+      // version number, but now we don't.
+      const cachedParse4 = compilerService.cache(
+        mockFilename, mockDocumentText2, undefined);
+      assert.isTrue(compiler.isParsedDocument(cachedParse4));
+      assert.equal(cachedParse4.text, mockDocumentText2);
+      assert.equal(cachedParse4.version, undefined);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse4.parse) &&
+        !compiler.isParseFailure(cachedParse4.parse) &&
+        cachedParse4.parse.type == "ArrayNode");
+    }
+  });
+});
+
 describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
   const documents = new FsDocumentManager()
