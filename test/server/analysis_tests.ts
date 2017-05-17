@@ -387,7 +387,7 @@ describe("Imported symbol resolution", () => {
       <ast.Local>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
-    assert.equal(importedSymbol.type, "LocalNode");
+    assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNull(importedSymbol.parent);
     assertLocationRange(importedSymbol.loc, 1, 1, 12, 2);
   });

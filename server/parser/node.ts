@@ -801,7 +801,16 @@ export class Import extends NodeBase implements Resolvable {
       return null;
     }
 
-    return cached.parse;
+    let resolved = cached.parse;
+    // If the var was pointing at an import, then resolution probably
+    // has `local` definitions at the top of the file. Get rid of
+    // them, since they are not useful for resolving the index
+    // identifier.
+    while (isLocal(resolved)) {
+      resolved = resolved.body;
+    }
+
+    return resolved;
   }
 }
 
@@ -859,16 +868,6 @@ const resolveIndex = (
     return null;
   }
 
-  if (isVar(index.target)) {
-    // If the var was pointing at an import, then resolution probably
-    // has `local` definitions at the top of the file. Get rid of
-    // them, since they are not useful for resolving the index
-    // identifier.
-    while (isLocal(resolvedTarget)) {
-      resolvedTarget = resolvedTarget.body;
-    }
-  }
-
   if (!isFieldsResolvable(resolvedTarget)) {
     return null;
   }
@@ -883,7 +882,9 @@ const resolveIndex = (
       field.id.name == index.id.name;
   });
 
-  if (filtered.count() != 1) {
+  if (filtered.count() == 0) {
+    return null;
+  } else if (filtered.count() != 1) {
     throw new Error(
       `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${renderAsJson(resolvedTarget)}`);
   }

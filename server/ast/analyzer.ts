@@ -201,13 +201,20 @@ export class Analyzer implements EventedAnalyzer {
       return node.env && envToSuggestions(node.env) || [];
     }
 
-    const resolved = ast.resolveIndirections(
-      parent, this.compilerService, this.documents);
-    if (resolved == null) {
-      return node.env && envToSuggestions(node.env) || [];
+    let resolved: ast.Node | null = null;
+    if (ast.isIndex(parent)) {
+      resolved = ast.resolveIndirections(
+        parent.target, this.compilerService, this.documents);
+    } else {
+      resolved = ast.resolveIndirections(
+        parent, this.compilerService, this.documents);
     }
 
-    return this.completableFields(resolved);
+    if (resolved != null) {
+      return this.completableFields(resolved);
+    }
+
+    return node.env && envToSuggestions(node.env) || [];
   }
 
   private completableFields = (
