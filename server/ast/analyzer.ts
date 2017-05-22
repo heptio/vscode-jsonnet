@@ -106,39 +106,44 @@ export class Analyzer implements EventedAnalyzer {
         //    identifier exists.
         //
 
-        const parse = this.compilerService.cache(
-          fileUri, doc.text, doc.version);
-        let completions: service.CompletionInfo[] = [];
-        if (compiler.isFailedParsedDocument(parse)) {
-          // HACK. We should really be propagating the environment
-          // down through the parser, not through the visitor
-          // afterwards. If we did that, we would be able to use the
-          // env of the `rest` node below.
-          const lastParse = this.compilerService.getLastSuccess(fileUri);
-          if (lastParse == null || compiler.isLexFailure(parse.parse) || parse.parse.parseError.rest == null) {
-            return [];
-          }
+        try {
+          const parse = this.compilerService.cache(
+            fileUri, doc.text, doc.version);
+          let completions: service.CompletionInfo[] = [];
+          if (compiler.isFailedParsedDocument(parse)) {
+            // HACK. We should really be propagating the environment
+            // down through the parser, not through the visitor
+            // afterwards. If we did that, we would be able to use the
+            // env of the `rest` node below.
+            const lastParse = this.compilerService.getLastSuccess(fileUri);
+            if (lastParse == null || compiler.isLexFailure(parse.parse) || parse.parse.parseError.rest == null) {
+              return [];
+            }
 
-          const nodeAtPos = this.getNodeAtPositionFromAst(
-            lastParse.parse, cursorLoc);
+            const nodeAtPos = this.getNodeAtPositionFromAst(
+              lastParse.parse, cursorLoc);
 
-          // Hook up `parent` and `env` into `rest` node.
-          const rest = parse.parse.parseError.rest;
-          const v = new astVisitor.DeserializingVisitor();
-          v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
+            // Hook up `parent` and `env` into `rest` node.
+            const rest = parse.parse.parseError.rest;
+            const v = new astVisitor.DeserializingVisitor();
+            v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
 
-          const resolved = ast.resolveIndirections(
-            rest, this.compilerService, this.documents);
-          if (resolved == null) {
-            return [];
+            const resolved = ast.resolveIndirections(
+              rest, this.compilerService, this.documents);
+            if (resolved == null) {
+              return [];
+            } else {
+              return this.completableFields(resolved);
+            }
           } else {
-            return this.completableFields(resolved);
-          }
-        } else {
-          const nodeAtPos = this.getNodeAtPositionFromAst(
-            parse.parse, cursorLoc);
+            const nodeAtPos = this.getNodeAtPositionFromAst(
+              parse.parse, cursorLoc);
 
-          return this.completionsFromIdentifier(nodeAtPos);
+            return this.completionsFromIdentifier(nodeAtPos);
+          }
+        } catch (err) {
+          console.log(err);
+          return [];
         }
       });
   }
