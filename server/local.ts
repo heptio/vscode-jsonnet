@@ -1,5 +1,6 @@
 'use strict';
 import * as fs from 'fs';
+import * as path from 'path';
 import * as proc from 'child_process';
 import * as url from 'url';
 
@@ -17,13 +18,16 @@ import * as workspace from './ast/workspace';
 export class VsDocumentManager implements workspace.DocumentManager {
   constructor(private documents: server.TextDocuments) { }
 
-  get = (fileUri: string): {text: string, version: number} => {
+  get = (fileUri: string): {text: string, version?: number} => {
     const doc = this.documents.get(fileUri);
     if (doc == null) {
       const parsed = url.parse(fileUri);
       if (parsed && parsed.path) {
         // TODO: Perhaps make this a promise?
-        return {text: fs.readFileSync(parsed.path).toString(), version: -1};
+        return {
+          text: fs.readFileSync(parsed.path).toString(),
+          version: undefined
+        };
       }
 
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
@@ -37,14 +41,12 @@ export class VsDocumentManager implements workspace.DocumentManager {
 }
 
 export class VsCompilerService implements compiler.CompilerService {
-  public command: string | null;
-
   //
   // CompilerService implementation.
   //
 
   public cache = (
-    fileUri: string, text: string, version: number
+    fileUri: string, text: string, version?: number
   ): compiler.ParsedDocument | compiler.FailedParsedDocument => {
     //
     // There are 3 possible outcomes:
@@ -55,6 +57,15 @@ export class VsCompilerService implements compiler.CompilerService {
     // 3. We fail to lex. Return `PartialParsedDocument`.
     //
 
+    // Attempt to retrieve cached parse if document versions are the
+    // same. If version is undefined, it comes from a source that
+    // doesn't track document version, and we always re-parse.
+    const tryGet = this.docCache.get(fileUri);
+    if (tryGet !== undefined && tryGet.version !== undefined &&
+      tryGet.version === version
+    ) {
+      return tryGet;
+    }
 
     // TODO: Replace this with a URL provider abstraction.
     const parsedUrl = url.parse(fileUri);

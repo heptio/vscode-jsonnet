@@ -35,7 +35,7 @@ export interface LanguageString {
 // CompletionType represents all the possible autocomplete
 // suggestions. For example, when a user `.`'s into an object, we
 // might suggest a `Field` that completes it.
-export type CompletionType = "Field" | "Variable";
+export type CompletionType = "Field" | "Variable" | "Method";
 
 // CompletionInfo represents an auto-complete suggestion. Typically
 // this consists of a `label` (i.e., the suggested completion text), a
@@ -46,4 +46,3 @@ export interface CompletionInfo {
   kind: CompletionType
   documentation?: string
 }
-

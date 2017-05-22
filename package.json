@@ -37,11 +37,6 @@
                   "json",
                   "yaml"
                ]
-            },
-            "jsonnet.server": {
-               "default": null,
-               "description": "Location of the `jsonnet` language server (for static analysis).",
-               "type": "string"
             }
          },
          "title": "Jsonnet configuration",
@@ -88,9 +83,10 @@
       "@types/chai": "^3.5.0",
       "@types/mocha": "^2.2.32",
       "@types/node": "^6.0.40",
+      "browserify": "^14.3.0",
       "chai": "^3.5.0",
       "mocha": "^2.3.3",
-      "typescript": "^2.0.3",
+      "typescript": "^2.3.2",
       "vscode": "^1.0.0"
    },
    "displayName": "Jsonnet",

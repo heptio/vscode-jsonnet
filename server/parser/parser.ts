@@ -878,8 +878,7 @@ class parser {
         if (error.isStaticError(pop)) {
           return pop;
         }
-        // TODO: Don't cast me bro.
-        return <ast.Node>inner;
+        return inner;
       }
 
       // Literals
@@ -1194,19 +1193,6 @@ class parser {
               return lhs;
           }
 
-          // NOTE: This check is repeated here due to a bug in the
-          // TypeScript 2.0.3 type checker. If `lhs` was an error, we
-          // should have returned immediately after defining it above.
-          // Since we don't assign it after that point, we should be
-          // ok to use it as an argument to functions below that
-          // require an `ast.Node`. But, the type checker gets
-          // confused and emits an error instead. To be absolutely
-          // safe, we throw an error here, just in case we were
-          // subtlely wrong about the flow control.
-          if (error.isStaticError(lhs)) {
-            throw new Error(`INTERNAL ERROR: Didn't expect 'lhs' to be a StaticError`);
-          }
-
           const op = this.pop();
           switch (op.kind) {
             case "TokenBracketL": {
@@ -1226,7 +1212,13 @@ class parser {
             case "TokenDot": {
               const fieldID = this.popExpect("TokenIdentifier");
               if (error.isStaticError(fieldID)) {
-                return fieldID;
+                // After the user types a `.`, the document very
+                // likely doesn't parse. For autocomplete facilities,
+                // it's useful to return the AST that precedes the `.`
+                // character (typically a `Var` or `Index`
+                // expression), so that it is easier to discern what
+                // to complete.
+                return error.MakeStaticErrorRest(lhs, fieldID.msg, fieldID.loc);
               }
               const id = new ast.Identifier(fieldID.data, fieldID.loc);
               lhs = new ast.IndexDot(lhs, id, locFromTokens(begin, fieldID));

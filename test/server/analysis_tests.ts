@@ -14,8 +14,6 @@ import * as local from '../../server/local';
 import * as workspace from '../../server/ast/workspace';
 
 const dataDir = `${__dirname}/../../../test/data`;
-const jsonnetServer =
-  "/Users/alex/src/go/src/github.com/google/go-jsonnet/jsonnet";
 
 const makeLocation = (line: number, column: number): error.Location => {
   return new error.Location(line, column);
@@ -43,14 +41,126 @@ const assertLocationRange = (
   assert.equal(lr.end.column, endCol);
 }
 
+describe("Compiler service", () => {
+  const mockFilename = "mockFile.jsonnet";
+  const mockDocumentText1 = "{}";
+  const mockDocumentText2 = "[]";
+
+  it("returns cached parse if document versions are the same", () => {
+    const compilerService = new local.VsCompilerService();
+
+    {
+      const cachedParse1 = compilerService.cache(
+        mockFilename, mockDocumentText1, 1);
+      assert.isTrue(compiler.isParsedDocument(cachedParse1));
+      assert.equal(cachedParse1.text, mockDocumentText1);
+      assert.equal(cachedParse1.version, 1);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse1.parse) &&
+        !compiler.isParseFailure(cachedParse1.parse) &&
+        cachedParse1.parse.type == "ObjectNode");
+    }
+
+    {
+      // Return the cached parse if the versions are the same, instead
+      // of parsing the new document text.
+      const cachedParse2 = compilerService.cache(
+        mockFilename, mockDocumentText2, 1);
+      assert.isTrue(compiler.isParsedDocument(cachedParse2));
+      assert.equal(cachedParse2.text, mockDocumentText1);
+      assert.equal(cachedParse2.version, 1);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse2.parse) &&
+        !compiler.isParseFailure(cachedParse2.parse) &&
+        cachedParse2.parse.type == "ObjectNode");
+    }
+
+    {
+      // Parse the new version of the document.
+      const cachedParse3 = compilerService.cache(
+        mockFilename, mockDocumentText2, 2);
+      assert.isTrue(compiler.isParsedDocument(cachedParse3));
+      assert.equal(cachedParse3.text, mockDocumentText2);
+      assert.equal(cachedParse3.version, 2);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse3.parse) &&
+        !compiler.isParseFailure(cachedParse3.parse) &&
+        cachedParse3.parse.type == "ArrayNode");
+    }
+  });
+
+  it("always parses document if version is undefined", () => {
+    const compilerService = new local.VsCompilerService();
+
+    {
+      const cachedParse1 = compilerService.cache(
+        mockFilename, mockDocumentText1, undefined);
+      assert.isTrue(compiler.isParsedDocument(cachedParse1));
+      assert.equal(cachedParse1.text, mockDocumentText1);
+      assert.equal(cachedParse1.version, undefined);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse1.parse) &&
+        !compiler.isParseFailure(cachedParse1.parse) &&
+        cachedParse1.parse.type == "ObjectNode");
+    }
+
+    {
+      // Parse the new version of the document if version is
+      // `undefined`.
+      const cachedParse2 = compilerService.cache(
+        mockFilename, mockDocumentText2, undefined);
+      assert.isTrue(compiler.isParsedDocument(cachedParse2));
+      assert.equal(cachedParse2.text, mockDocumentText2);
+      assert.equal(cachedParse2.version, undefined);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse2.parse) &&
+        !compiler.isParseFailure(cachedParse2.parse) &&
+        cachedParse2.parse.type == "ArrayNode");
+    }
+
+    {
+      // Parse the new version of the document if previous version was
+      // `undefined`, but we now have a version number.
+      const cachedParse3 = compilerService.cache(
+        mockFilename, mockDocumentText1, 1);
+      assert.isTrue(compiler.isParsedDocument(cachedParse3));
+      assert.equal(cachedParse3.text, mockDocumentText1);
+      assert.equal(cachedParse3.version, 1);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse3.parse) &&
+        !compiler.isParseFailure(cachedParse3.parse) &&
+        cachedParse3.parse.type == "ObjectNode");
+    }
+
+    {
+      // Parse the new version of the document if we previously had a
+      // version number, but now we don't.
+      const cachedParse4 = compilerService.cache(
+        mockFilename, mockDocumentText2, undefined);
+      assert.isTrue(compiler.isParsedDocument(cachedParse4));
+      assert.equal(cachedParse4.text, mockDocumentText2);
+      assert.equal(cachedParse4.version, undefined);
+      assert.isTrue(
+        !compiler.isLexFailure(cachedParse4.parse) &&
+        !compiler.isParseFailure(cachedParse4.parse) &&
+        cachedParse4.parse.type == "ArrayNode");
+    }
+  });
+});
+
 describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
-  const analyzer = new analyze.Analyzer(
-    new FsDocumentManager(), compilerService);
-  compilerService.command = jsonnetServer;
+  const documents = new FsDocumentManager()
+  const analyzer = new analyze.Analyzer(documents, compilerService);
 
-  const rootNode = compiler.util.parseJsonnetFile(
-    `${dataDir}/simple-nodes.jsonnet`);
+  const file = `${dataDir}/simple-nodes.jsonnet`;
+  const doc = documents.get(file);
+  const compiled = compilerService.cache(file, doc.text, doc.version);
+  if (compiler.isFailedParsedDocument(compiled)) {
+    throw new Error(`Failed to parse document '${file}'`);
+  }
+
+  const rootNode = compiled.parse;
 
   it("Object field assigned value of `local` symbol", () => {
     // Property.
@@ -154,7 +264,8 @@ describe("Searching an AST by position", () => {
     assert.equal(property4Id.type, "IdentifierNode");
     assert.equal(property4Id.name, "baz");
 
-    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(property4Id);
+    const resolved = <ast.LiteralNumber>property4Id.resolve(
+      compilerService, documents);
     assert.isNotNull(resolved);
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "3");
@@ -169,7 +280,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged1.type, "IdentifierNode");
       assert.equal(merged1.name, "b");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged1);
+      const resolved = <ast.LiteralNumber>merged1.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "3");
@@ -183,7 +295,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged2.type, "IdentifierNode");
       assert.equal(merged2.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged2);
+      const resolved = <ast.LiteralNumber>merged2.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -197,7 +310,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged3.type, "IdentifierNode");
       assert.equal(merged3.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged3);
+      const resolved = <ast.LiteralNumber>merged3.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "1");
@@ -211,7 +325,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged4.type, "IdentifierNode");
       assert.equal(merged4.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged4);
+      const resolved = <ast.LiteralNumber>merged4.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -225,7 +340,8 @@ describe("Searching an AST by position", () => {
       assert.equal(merged5.type, "IdentifierNode");
       assert.equal(merged5.name, "a");
 
-      const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(merged5);
+      const resolved = <ast.LiteralNumber>merged5.resolve(
+        compilerService, documents);
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -243,7 +359,8 @@ describe("Searching an AST by position", () => {
     assert.equal(node.type, "IdentifierNode");
     assert.equal(node.name, "numberVal2");
 
-    const resolved = <ast.LiteralNumber>analyzer.resolveIdentifier(node);
+    const resolved = <ast.LiteralNumber>node.resolve(
+      compilerService, documents);
     assert.isNotNull(resolved);
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "1");
@@ -252,19 +369,25 @@ describe("Searching an AST by position", () => {
 
 describe("Imported symbol resolution", () => {
   const compilerService = new local.VsCompilerService();
-  const analyzer = new analyze.Analyzer(
-    new FsDocumentManager(), compilerService);
-  compilerService.command = jsonnetServer;
+  const documents = new FsDocumentManager();
+  const analyzer = new analyze.Analyzer(documents, compilerService);
 
-  const rootNode = compiler.util.parseJsonnetFile(
-    `${dataDir}/simple-import.jsonnet`);
+  const file = `${dataDir}/simple-import.jsonnet`;
+  const document = documents.get(file);
+  const compile = compilerService.cache(file, document.text, document.version);
+
+  if (compiler.isFailedParsedDocument(compile)) {
+    throw new Error(`Failed to parse document '${file}'`);
+  }
+
+  const rootNode = compile.parse;
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
       <ast.Local>analyzer.resolveSymbolAtPositionFromAst(
         rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
-    assert.equal(importedSymbol.type, "LocalNode");
+    assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNull(importedSymbol.parent);
     assertLocationRange(importedSymbol.loc, 1, 1, 12, 2);
   });

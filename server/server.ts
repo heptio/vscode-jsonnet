@@ -10,6 +10,7 @@ import * as ast from './parser/node';
 import * as error from './lexer/static_error';
 import * as lexer from './lexer/lexer';
 import * as local from './local';
+import * as compile from "./ast/compiler";
 import * as service from './ast/service';
 
 // Create a connection for the server. The connection uses Node's IPC
@@ -28,6 +29,50 @@ const analyzer: analyze.EventedAnalyzer = new analyze.Analyzer(
   new local.VsDocumentManager(docs),
   compiler);
 
+const failureToDiagnostic = (
+  error: compile.LexFailure | compile.ParseFailure
+): server.Diagnostic => {
+  let begin: error.Location | null = null;
+  let end: error.Location | null = null;
+  let message: string | null = null;
+  if (compile.isLexFailure(error)) {
+    begin = error.lexError.loc.begin;
+    end = error.lexError.loc.end;
+    message = error.lexError.msg;
+  } else {
+    begin = error.parseError.loc.begin;
+    end = error.parseError.loc.end;
+    message = error.parseError.msg;
+  }
+
+  return {
+    severity: server.DiagnosticSeverity.Error,
+    range: {
+      start: {line: begin.line - 1, character: begin.column - 1},
+      end: {line: end.line - 1, character: end.column - 1},
+    },
+    message: `${message}`,
+    source: `Jsonnet`,
+  };
+}
+
+const generateDiagnostics = (doc: server.TextDocument) => {
+  const text = doc.getText();
+  const results = compiler.cache(doc.uri, text, doc.version);
+
+  if (compile.isParsedDocument(results)) {
+    connection.sendDiagnostics({
+      uri: doc.uri,
+      diagnostics: [],
+    });
+  } else {
+    connection.sendDiagnostics({
+      uri: doc.uri,
+      diagnostics: [failureToDiagnostic(results.parse)],
+    });
+  }
+};
+
 //
 // TODO: We should find a way to move these hooks to a "init doc
 // manager" method, or something.
@@ -39,6 +84,7 @@ const analyzer: analyze.EventedAnalyzer = new analyze.Analyzer(
 docs.onDidOpen(openEvent => {
   const doc = openEvent.document;
   if (doc.languageId === "jsonnet") {
+    generateDiagnostics(doc);
     return analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
   }
 });
@@ -49,6 +95,7 @@ docs.onDidSave(saveEvent => {
   // that are single-line, and those that are multi-line.
   const doc = saveEvent.document;
   if (doc.languageId === "jsonnet") {
+    generateDiagnostics(doc);
     return analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
   }
 });
@@ -60,6 +107,11 @@ docs.onDidClose(closeEvent => {
     return analyzer.onDocumentClose(closeEvent.document.uri);
   }
 });
+docs.onDidChangeContent(changeEvent => {
+  if (changeEvent.document.languageId === "jsonnet") {
+    generateDiagnostics(changeEvent.document);
+  }
+});
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events
@@ -67,16 +119,20 @@ docs.listen(connection);
 
 connection.onInitialize((params) => initializer(docs, params));
 connection.onDidChangeConfiguration(params => configUpdateProvider(params));
+connection.onHover(position => {
+  const fileUri = position.textDocument.uri;
+  return analyzer.onHover(fileUri, positionToLocation(position));
+});
+
 connection.onCompletion(position => {
   return analyzer
     .onComplete(position.textDocument.uri, positionToLocation(position))
     .then<server.CompletionItem[]>(
       completions => completions.map(completionInfoToCompletionItem));
 });
-connection.onHover(position => {
-  const fileUri = position.textDocument.uri;
-  return analyzer.onHover(fileUri, positionToLocation(position));
-});
+// Prevent the language server from complaining that
+// `onCompletionResolve` handle is not implemented.
+connection.onCompletionResolve(item => item);
 
 // Listen on the connection
 connection.listen();
@@ -94,7 +150,8 @@ export const initializer = (
       textDocumentSync: documents.syncKind,
       // Tell the client that the server support code complete
       completionProvider: {
-        resolveProvider: true
+        resolveProvider: true,
+        triggerCharacters: ["."],
       },
       hoverProvider: true,
     }
@@ -104,11 +161,7 @@ export const initializer = (
 export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
-  if ("server" in change.settings.jsonnet) {
-    compiler.command = change.settings.jsonnet["server"];
-  }
-  console.log(JSON.stringify(change.settings.jsonnet));
-  console.log(compiler.command);
+  // TODO: Update location of Jsonnet variable, etc.
 }
 
 const positionToLocation = (
@@ -129,7 +182,11 @@ const completionInfoToCompletionItem = (
         break;
       }
       case "Variable": {
-        kindMapping = server.CompletionItemKind.Field;
+        kindMapping = server.CompletionItemKind.Variable;
+        break;
+      }
+      case "Method": {
+        kindMapping = server.CompletionItemKind.Method;
         break;
       }
       default: throw new Error(

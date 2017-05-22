@@ -54,8 +54,6 @@ package.contributes.DefaultConfiguration(
   "Jsonnet configuration",
   contributes.configuration.DefaultStringProperty(
     "jsonnet.executablePath", "Location of the `jsonnet` executable.") +
-  contributes.configuration.DefaultStringProperty(
-    "jsonnet.server", "Location of the `jsonnet` language server (for static analysis).") +
   contributes.configuration.DefaultObjectProperty(
     "jsonnet.extStrs", "External strings to pass to `jsonnet` executable.") +
   contributes.configuration.DefaultEnumProperty(
@@ -79,7 +77,8 @@ package.contributes.DefaultConfiguration(
     "vscode-languageserver": "^3.1.0",
   },
   devDependencies: {
-    typescript: "^2.0.3",
+    browserify: "^14.3.0",
+    typescript: "^2.3.2",
     vscode: "^1.0.0",
     mocha: "^2.3.3",
     chai: "^3.5.0",

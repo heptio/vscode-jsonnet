@@ -45,6 +45,8 @@ export interface Visitor {
 }
 
 export abstract class VisitorBase implements Visitor {
+  private rootObject: ast.Node | null = null;
+
   public Visit = (
     node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
   ): void => {
@@ -54,6 +56,7 @@ export abstract class VisitorBase implements Visitor {
 
     node.parent = parent;
     node.env = currEnv;
+    node.rootObject = this.rootObject;
 
     switch(node.type) {
       case "CommentNode": {
@@ -153,25 +156,23 @@ export abstract class VisitorBase implements Visitor {
       case "FunctionNode": {
         const castedNode = <ast.Function>node;
         this.VisitFunction(castedNode);
+
         castedNode.headingComment.forEach((comment: ast.Comment) => {
           this.Visit(comment, castedNode, currEnv);
         });
-        castedNode.parameters.forEach((param: ast.FunctionParam) => {
-          this.Visit(param, castedNode, currEnv);
-        });
 
         // Add params to environment before visiting body.
-        const envWithParams = castedNode.parameters
-          .reduce(
-            (acc: ast.Environment, field: ast.FunctionParam) => {
-              return acc.merge(ast.environmentFromLocal(field));
-            },
-            immutable.Map<string, ast.LocalBind | ast.FunctionParam>()
-          );
+        const envWithParams = currEnv.merge(
+          ast.envFromParams(castedNode.parameters));
+
+        castedNode.parameters.forEach((param: ast.FunctionParam) => {
+          this.Visit(param, castedNode, envWithParams);
+        });
 
         // Visit body.
         this.Visit(castedNode.body, castedNode, envWithParams);
         castedNode.trailingComment.forEach((comment: ast.Comment) => {
+          // NOTE: Using `currEnv` instead of `envWithparams`.
           this.Visit(comment, castedNode, currEnv);
         });
         return;
@@ -207,18 +208,26 @@ export abstract class VisitorBase implements Visitor {
       // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
       case "LocalNode": {
         const castedNode = <ast.Local>node;
-        const newEnv = currEnv.merge(ast.environmentFromLocal(castedNode));
-
         this.VisitLocal(castedNode);
-        castedNode.binds.forEach(bind => {
-          if (bind == undefined) {
-            throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
-          }
-          bind.body != null && this.Visit(bind.body, castedNode, newEnv);
+
+        const envWithBinds = currEnv.merge(ast.envFromLocalBinds(castedNode));
+        castedNode.binds.forEach((bind: ast.LocalBind) => {
+          // NOTE: If `functionSugar` is false, the params will be
+          // empty.
+          const envWithParams = envWithBinds.merge(
+              ast.envFromParams(bind.params));
+
+          // TODO: `castedNode` is marked as parent here because
+          // `LocalBind` currently does not implement `Node`. We
+          // should decide whether that should change.
+          bind.params.forEach((param: ast.FunctionParam) => {
+            this.Visit(param, castedNode, envWithParams)
+          });
+
+          this.Visit(bind.body, castedNode, envWithParams);
         });
-        castedNode.body != null && this.Visit(
-          castedNode.body, castedNode, newEnv);
-        // throw new Error(`${newEnv.get("fooModule")}`);
+
+        this.Visit(castedNode.body, castedNode, envWithBinds);
         return;
       }
       case "LiteralBooleanNode": {
@@ -241,38 +250,36 @@ export abstract class VisitorBase implements Visitor {
         const castedNode = <ast.ObjectField>node;
         this.VisitObjectField(castedNode);
 
-        let newEnv = currEnv;
-        if (castedNode.methodSugar) {
-          // Add params to environment before visiting body.
-          newEnv = newEnv.merge(
-            castedNode.ids
-              .reduce(
-                (acc: ast.Environment, field: ast.FunctionParam) => {
-                  return acc.merge(ast.environmentFromLocal(field));
-                },
-                immutable.Map<string, ast.LocalBind | ast.FunctionParam>()
-              )
-          );
-        }
+        // NOTE: If `methodSugar` is false, the params will be empty.
+        let envWithParams = currEnv.merge(ast.envFromParams(castedNode.ids));
 
-        castedNode.id != null && this.Visit(castedNode.id, castedNode, newEnv);
+        castedNode.id != null && this.Visit(
+          castedNode.id, castedNode, envWithParams);
         castedNode.expr1 != null && this.Visit(
-          castedNode.expr1, castedNode, newEnv);
+          castedNode.expr1, castedNode, envWithParams);
+
+        castedNode.ids.forEach((param: ast.FunctionParam) => {
+          this.Visit(param, castedNode, envWithParams);
+        });
+
         castedNode.expr2 != null && this.Visit(
-          castedNode.expr2, castedNode, newEnv);
+          castedNode.expr2, castedNode, envWithParams);
         castedNode.expr3 != null && this.Visit(
-          castedNode.expr3, castedNode, newEnv);
-        castedNode.headingComments != null &&
-          castedNode.headingComments.forEach(comment => {
-            if (comment == undefined) {
-              throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
-            }
-            this.Visit(comment, castedNode, currEnv);
-          });
+          castedNode.expr3, castedNode, envWithParams);
+        castedNode.headingComments.forEach(comment => {
+          if (comment == undefined) {
+            throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
+          }
+          this.Visit(comment, castedNode, currEnv);
+        });
         return;
       }
       case "ObjectNode": {
         const castedNode = <ast.ObjectNode>node;
+        if (this.rootObject == null) {
+          this.rootObject = castedNode;
+          castedNode.rootObject = castedNode;
+        }
         this.VisitObject(castedNode);
 
         // `local` object fields are scoped with order-independence,
@@ -287,24 +294,15 @@ export abstract class VisitorBase implements Visitor {
         // `bar`'s body, we here collect up the `local` fields first,
         // create a new environment that includes them, and pass that
         // on to each field we visit.
-        const envWithLocals = castedNode.fields
-          .filter((field: ast.ObjectField) => {
-            const localKind: ast.ObjectFieldKind = "ObjectLocal";
-            return field.kind === localKind;
-          })
-          .reduce(
-            (acc: ast.Environment, field: ast.ObjectField) => {
-              return acc.merge(ast.environmentFromLocal(field));
-            },
-            immutable.Map<string, ast.LocalBind>()
-          );
+        const envWithLocals = currEnv.merge(
+          ast.envFromFields(castedNode.fields));
 
         castedNode.fields.forEach((field: ast.ObjectField) => {
           // NOTE: If this is a `local` field, there is no need to
           // remove current field from environment. It is perfectly
           // legal to do something like `local foo = foo; foo` (though
           // it will cause a stack overflow).
-          this.Visit(field, castedNode, currEnv.merge(envWithLocals));
+          this.Visit(field, castedNode, envWithLocals);
         });
         return;
       }
