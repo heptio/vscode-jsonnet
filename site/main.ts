@@ -22,14 +22,24 @@ const windowDocUri = `${backsplicePrefix}window`;
 
 export class BrowserDocumentManager implements workspace.DocumentManager {
   get = (fileUri: string): {text: string, version?: number} => {
-    if (fileUri === `${backsplicePrefix}core.v1beta1.libsonnet`) {
+    if (fileUri === `${backsplicePrefix}apps.v1beta1.libsonnet`) {
       return {
-        text: data.coreFile,
+        text: data.appsV1Beta1File,
         version: undefined,
       };
-    } else if (fileUri === `${backsplicePrefix}kube.v1beta1.libsonnet`) {
+    } else if (fileUri === `${backsplicePrefix}core.v1.libsonnet`) {
       return {
-        text: data.kubeFile,
+        text: data.coreV1File,
+        version: undefined,
+      };
+    } else if (fileUri === `${backsplicePrefix}extensions.v1beta1.libsonnet`) {
+      return {
+        text: data.extensionsV1Beta1File,
+        version: undefined,
+      };
+    } else if (fileUri === `${backsplicePrefix}k.libsonnet`) {
+      return {
+        text: data.kBeta1File,
         version: undefined,
       };
     } else if (fileUri === windowDocUri) {
