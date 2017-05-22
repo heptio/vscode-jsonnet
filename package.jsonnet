@@ -67,6 +67,7 @@ package.contributes.DefaultConfiguration(
     "vscode:prepublish": "tsc -p ./",
     compile: "tsc -watch -p ./",
     "compile-once": "tsc -p ./",
+    "compile-site": "browserify ./out/site/main.js > ksonnet.js",
     postinstall: "node ./node_modules/vscode/bin/install",
     test: "node ./node_modules/vscode/bin/test"
   },
