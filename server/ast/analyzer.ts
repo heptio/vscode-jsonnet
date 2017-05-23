@@ -372,6 +372,16 @@ export class Analyzer implements EventedAnalyzer {
   public getNodeAtPositionFromAst = (
     rootNode: ast.Node, pos: error.Location
   ): ast.Node => {
+    // Special case. Make sure that if the cursor is beyond the range
+    // of text of the last good parse, we just return the last node.
+    // For example, if the user types a `.` character at the end of
+    // the document, the document now fails to parse, and the cursor
+    // is beyond the range of text of the last good parse.
+    const endLoc = rootNode.loc.end;
+    if (endLoc.line < pos.line || (endLoc.line == pos.line && endLoc.column < pos.column)) {
+      pos = endLoc;
+    }
+
     const visitor = new astVisitor.CursorVisitor(pos);
     visitor.Visit(rootNode, null, ast.emptyEnvironment);
     return visitor.NodeAtPosition;
