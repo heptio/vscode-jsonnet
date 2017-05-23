@@ -509,6 +509,10 @@ export class CursorVisitor extends VisitorBase {
       nodeRangeIsTighter(node, this.tightestWrappingNode)
     ) {
       this.tightestWrappingNode = node;
+    } else if (
+      nodeRangeIsCloser(this.position, node, this.tightestWrappingNode)
+    ) {
+      this.tightestWrappingNode = node;
     }
 
     return this.tightestWrappingNode;
@@ -536,6 +540,30 @@ const nodeRangeIsTighter = (
   };
   return cursorInLocationRange(thisNodeBegin, thatNodeRange) &&
   cursorInLocationRange(thisNodeEnd, thatNodeRange);
+}
+
+// nodeRangeIsCloser checks whether `thisNode` is closer to `pos` than
+// `thatNode`.
+//
+// NOTE: Function currently works for expressions that are on one
+// line.
+const nodeRangeIsCloser = (
+  pos: error.Location, thisNode: ast.Node, thatNode: ast.Node
+): boolean => {
+  const thisLoc = thisNode.loc;
+  const thatLoc = thatNode.loc;
+  if (thisLoc.begin.line == pos.line && thisLoc.end.line == pos.line) {
+    if (thatLoc.begin.line == pos.line && thatLoc.end.line == pos.line) {
+      // `thisNode` and `thatNode` lie on the same line, and
+      // `thisNode` begins closer to the position.
+      return Math.abs(thisLoc.begin.column - pos.column) <
+        Math.abs(thatLoc.begin.column - pos.column)
+    } else {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 const cursorInLocationRange = (
