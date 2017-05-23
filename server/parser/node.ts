@@ -868,7 +868,12 @@ const resolveIndex = (
     return null;
   }
 
-  if (!isFieldsResolvable(resolvedTarget)) {
+  if (isVar(resolvedTarget)) {
+    resolvedTarget =
+      resolveIndirections(resolvedTarget, compilerService, documents);
+  }
+
+  if (resolvedTarget == null || !isFieldsResolvable(resolvedTarget)) {
     return null;
   }
 
