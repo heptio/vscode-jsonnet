@@ -9498,6 +9498,7 @@ export const extensionsV1Beta1File = `{
 `;
 
 export const kBeta1File = `local apps = import "apps.v1beta1.libsonnet";
+local core = import "core.v1.libsonnet";
 local extensions = import "extensions.v1beta1.libsonnet";
 
 {
@@ -9562,6 +9563,7 @@ local extensions = import "extensions.v1beta1.libsonnet";
     },
   },
 
+  core:: core,
   extensions:: extensions,
 }
 `;
