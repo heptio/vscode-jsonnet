@@ -21,23 +21,40 @@ export class VsDocumentManager implements workspace.DocumentManager {
   get = (fileUri: string): {text: string, version?: number} => {
     const doc = this.documents.get(fileUri);
     if (doc == null) {
+      const doc = this.fsCache.get(fileUri);
+      if (doc != null) {
+        return doc;
+      }
+
       const parsed = url.parse(fileUri);
       if (parsed && parsed.path) {
-        // TODO: Perhaps make this a promise?
-        return {
+        const stat = fs.statSync(parsed.path);
+
+        const cached = {
           text: fs.readFileSync(parsed.path).toString(),
-          version: undefined
+          version: stat.atime.valueOf()
         };
+        this.fsCache = this.fsCache.set(fileUri, cached);
+        return cached;
       }
 
       throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
     } else {
+      // Delete from `fsCache` just in case we were `import`'ing a
+      // file and have since opened it.
+      this.fsCache = this.fsCache.delete(fileUri);
       return {
         text: doc.getText(),
         version: doc.version,
       }
     }
   }
+
+  //
+  // Private members.
+  //
+
+  private fsCache = immutable.Map<string, {text: string, version: number}>();
 }
 
 export class VsCompilerService implements compiler.CompilerService {
