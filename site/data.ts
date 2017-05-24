@@ -9497,26 +9497,42 @@ export const extensionsV1Beta1File = `{
 }
 `;
 
+export const utilFile = `{
+  // Remove all empty objects and arrays
+  prune(thing)::
+    if std.type(thing) == "array" then
+      self.pruneArray(thing)
+    else if std.type(thing) == "object" then
+      self.pruneObj(thing)
+    else
+      thing,
+  // Does this value have real content?
+  isContent(v)::
+    if v == null then
+      false
+    else if std.type(v) == "array" then
+      std.length(v) > 0
+    else if std.type(v) == "object" then
+      std.length(v) > 0
+    else
+      true,
+  // Remove all fields that have empty content
+  pruneObj(obj):: {
+    [x]: $.prune(obj[x])
+    for x in std.objectFields(obj) if self.isContent($.prune(obj[x]))
+  },
+  // Remove all members that have empty content
+  pruneArray(arr)::
+    [ $.prune(x) for x in arr if self.isContent($.prune(x)) ]
+}`;
+
 export const kBeta1File = `local apps = import "apps.v1beta1.libsonnet";
 local core = import "core.v1.libsonnet";
 local extensions = import "extensions.v1beta1.libsonnet";
+local util = import "util.libsonnet";
 
 {
   apps:: apps + {
-    v1:: apps.v1 + {
-      container:: apps.v1.container + {
-        default(name, image)::
-          super.default(name) +
-          super.image(image),
-        helpers:: {
-          namedPort(name, port)::
-            local portObj =
-              apps.v1.containerPort.name(name) +
-              apps.v1.containerPort.containerPort(port);
-            apps.v1.container.ports(portObj),
-        }
-      },
-    },
     v1beta1:: apps.v1beta1 + {
       deployment:: apps.v1beta1.deployment + {
         default(name, containers, namespace="default")::
@@ -9563,7 +9579,23 @@ local extensions = import "extensions.v1beta1.libsonnet";
     },
   },
 
-  core:: core,
+  core:: core + {
+    v1:: core.v1 + {
+      container:: core.v1.container + {
+        default(name, image)::
+          super.default(name) +
+          super.image(image),
+        helpers:: {
+          namedPort(name, port)::
+            local portObj =
+              core.v1.containerPort.name(name) +
+              core.v1.containerPort.containerPort(port);
+            core.v1.container.ports(portObj),
+        }
+      },
+    },
+  },
   extensions:: extensions,
+  util:: util,
 }
 `;

@@ -42,6 +42,11 @@ export class BrowserDocumentManager implements workspace.DocumentManager {
         text: data.kBeta1File,
         version: undefined,
       };
+    } else if (fileUri === `${backsplicePrefix}util.libsonnet`) {
+      return {
+        text: data.utilFile,
+        version: undefined,
+      };
     } else if (fileUri === windowDocUri) {
       return {
         text: this.windowText,
