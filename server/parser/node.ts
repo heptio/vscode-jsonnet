@@ -894,7 +894,12 @@ const resolveIndex = (
       `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${renderAsJson(resolvedTarget)}`);
   }
 
-  return filtered.first().expr2;
+  const field = filtered.first();
+  if (field.methodSugar) {
+    return null;
+  } else {
+    return field.expr2;
+  }
 }
 
 export const isIndex = (node: Node): node is Index => {
