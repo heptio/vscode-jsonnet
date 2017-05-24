@@ -25,7 +25,7 @@ package.Default() +
 package.Name(jsonnetLanguage.name) +
 package.DisplayName(jsonnetLanguage.displayName) +
 package.Description("Language support for Jsonnet") +
-package.Version("0.0.10") +
+package.Version("0.0.11") +
 package.Publisher("heptio") +
 package.License("SEE LICENSE IN 'LICENSE' file") +
 package.Homepage("https://github.com/heptio/vscode-jsonnet/blob/master/README.md") +
