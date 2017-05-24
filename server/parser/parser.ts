@@ -1106,8 +1106,13 @@ class parser {
           binds = newBinds;
           const delim = this.pop();
           if (delim.kind !== "TokenSemicolon" && delim.kind !== "TokenComma") {
-            return error.MakeStaticError(
-              `Expected , or ; but got ${delim}`, delim.loc);
+            const msg = `Expected , or ; but got ${delim}`;
+            const rest = restFromBinds(newBinds);
+            if (rest == null) {
+              return error.MakeStaticError(msg, delim.loc);
+            }
+            return error.MakeStaticErrorRest(
+              rest, msg, delim.loc);
           }
           if (delim.kind === "TokenSemicolon") {
             break;
@@ -1268,6 +1273,25 @@ class parser {
 }
 
 type literalField = string;
+
+// ---------------------------------------------------------------------------
+
+const restFromBinds = (newBinds: ast.LocalBinds): ast.Var | null => {
+  if (newBinds.count() == 0) {
+    return null
+  }
+
+  const lastBody = newBinds.last().body;
+  if (ast.isBinary(lastBody) && lastBody.op === "BopPlus" &&
+    ast.isVar(lastBody.right)
+  ) {
+    return lastBody.right;
+  } else if (ast.isVar(lastBody)) {
+    return lastBody;
+  }
+
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 

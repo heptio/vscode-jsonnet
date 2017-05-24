@@ -1577,8 +1577,10 @@ export const resolveIndirections = (
       resolved = resolved.resolve(compilerService, documents);
     } else if (isIndex(resolved)) {
       resolved = resolved.resolve(compilerService, documents);
+    } else if (isIdentifier(resolved)) {
+      resolved = resolved.resolve(compilerService, documents);
     } else {
-      throw new Error(`${renderAsJson(node)}`);
+      return null;
     }
 
     if (resolved == null) {

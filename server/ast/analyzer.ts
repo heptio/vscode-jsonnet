@@ -109,6 +109,9 @@ export class Analyzer implements EventedAnalyzer {
         try {
           const parse = this.compilerService.cache(
             fileUri, doc.text, doc.version);
+          const lines = doc.text.split("\n");
+          const c = lines[cursorLoc.line-1][cursorLoc.column-2];
+
           let completions: service.CompletionInfo[] = [];
           if (compiler.isFailedParsedDocument(parse)) {
             // HACK. We should really be propagating the environment
@@ -126,19 +129,53 @@ export class Analyzer implements EventedAnalyzer {
             // Hook up `parent` and `env` into `rest` node.
             const rest = parse.parse.parseError.rest;
             const v = new astVisitor.DeserializingVisitor();
-            v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
+            if (ast.isLocal(nodeAtPos)) {
+              // Local binds don't inherit from `node`, so this is a
+              // special case.
+              v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.body.env);
+            } else {
+              v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
+            }
 
             const resolved = ast.resolveIndirections(
               rest, this.compilerService, this.documents);
             if (resolved == null) {
+              if (ast.isVar(rest)) {
+                return this.completionsFromIdentifier(rest.id);
+              }
               return [];
             } else {
               return this.completableFields(resolved);
             }
+          } else if (c === ".") {
+            const lastParse = this.compilerService.getLastSuccess(fileUri);
+            if (lastParse == null) {
+              return [];
+            }
+            const nodeAtPos = this.getNodeAtPositionFromAst(
+              lastParse.parse, cursorLoc);
+
+            const resolved = ast.resolveIndirections(
+              nodeAtPos, this.compilerService, this.documents);
+            if (resolved == null) {
+              return [];
+            }
+
+            return this.completableFields(resolved);
           } else {
             const nodeAtPos = this.getNodeAtPositionFromAst(
               parse.parse, cursorLoc);
 
+            if (!ast.isIdentifier(nodeAtPos)) {
+              // Attempt to resolve the node.
+              const resolved = ast.resolveIndirections(
+                nodeAtPos, this.compilerService, this.documents);
+              if (resolved != null) {
+                return this.completableFields(resolved);
+              }
+            }
+
+            // Fallback on completing the identifier.
             return this.completionsFromIdentifier(nodeAtPos);
           }
         } catch (err) {
@@ -219,7 +256,8 @@ export class Analyzer implements EventedAnalyzer {
       return this.completableFields(resolved);
     }
 
-    return node.env && envToSuggestions(node.env) || [];
+    const suggestions = node.env && envToSuggestions(node.env) || [];
+    return suggestions
   }
 
   private completableFields = (
