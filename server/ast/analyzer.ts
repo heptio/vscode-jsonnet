@@ -126,16 +126,14 @@ export class Analyzer implements EventedAnalyzer {
             const nodeAtPos = this.getNodeAtPositionFromAst(
               lastParse.parse, cursorLoc);
 
-            // Hook up `parent` and `env` into `rest` node.
             const rest = parse.parse.parseError.rest;
-            const v = new astVisitor.DeserializingVisitor();
-            if (ast.isLocal(nodeAtPos)) {
-              // Local binds don't inherit from `node`, so this is a
-              // special case.
-              v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.body.env);
-            } else {
-              v.Visit(rest, nodeAtPos, <ast.Environment>nodeAtPos.env);
-            }
+
+            // Local binds don't inherit from `node`, so this is a
+            // special case.
+            const env = ast.isLocal(nodeAtPos)
+              ? <ast.Environment>nodeAtPos.body.env
+              : <ast.Environment>nodeAtPos.env;
+            new astVisitor.InitializingVisitor(rest, nodeAtPos, env).visit();
 
             const resolved = ast.resolveIndirections(
               rest, this.compilerService, this.documents);
@@ -420,8 +418,8 @@ export class Analyzer implements EventedAnalyzer {
       pos = endLoc;
     }
 
-    const visitor = new astVisitor.CursorVisitor(pos);
-    visitor.Visit(rootNode, null, ast.emptyEnvironment);
+    const visitor = new astVisitor.CursorVisitor(pos, rootNode);
+    visitor.visit();
     return visitor.NodeAtPosition;
   }
 }
