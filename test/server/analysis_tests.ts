@@ -388,8 +388,8 @@ describe("Imported symbol resolution", () => {
         rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
     assert.equal(importedSymbol.type, "ObjectNode");
-    assert.isNull(importedSymbol.parent);
-    assertLocationRange(importedSymbol.loc, 1, 1, 12, 2);
+    assert.isNotNull(importedSymbol.parent);
+    assertLocationRange(importedSymbol.loc, 2, 1, 12, 2);
   });
 
   it("Can dereference fields from an imported module", () => {
