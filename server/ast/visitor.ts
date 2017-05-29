@@ -14,13 +14,13 @@ export abstract class VisitorBase implements Visitor {
   protected rootObject: ast.Node | null = null;
 
   constructor(
-    private rootNode: ast.Node,
+    protected rootNode: ast.Node,
     private parent: ast.Node | null = null,
     private env: ast.Environment = ast.emptyEnvironment,
   ) {}
 
   public visit = () => {
-    this.visitHelper(this.rootNode, null, this.env);
+    this.visitHelper(this.rootNode, this.parent, this.env);
   }
 
   protected visitHelper = (
@@ -30,7 +30,7 @@ export abstract class VisitorBase implements Visitor {
       throw Error("INTERNAL ERROR: Can't visit a null node");
     }
 
-    this.onPrevisit(node, parent, currEnv);
+    this.previsit(node, parent, currEnv);
 
     switch(node.type) {
       case "CommentNode": {
@@ -347,7 +347,7 @@ export abstract class VisitorBase implements Visitor {
     }
   }
 
-  protected onPrevisit = (
+  protected previsit = (
     node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
   ): void => {}
 
@@ -390,8 +390,14 @@ export abstract class VisitorBase implements Visitor {
   protected visitVar = (node: ast.Var): void => {}
 }
 
+// ----------------------------------------------------------------------------
+// Initializing visitor.
+// ----------------------------------------------------------------------------
+
+// InitializingVisitor initializes an AST by populating the `parent`
+// and `env` values in every node.
 export class InitializingVisitor extends VisitorBase {
-  protected onPrevisit = (
+  protected previsit = (
     node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
   ): void => {
     node.parent = parent;
@@ -400,68 +406,151 @@ export class InitializingVisitor extends VisitorBase {
   }
 }
 
-// Finds the tightest-binding node that wraps the location denoted by
-// `position`.
-export class CursorVisitor extends VisitorBase {
+// ----------------------------------------------------------------------------
+// Cursor visitor.
+// ----------------------------------------------------------------------------
+
+// FindFailure represents a failure find a node whose range wraps a
+// cursor location.
+export type FindFailure = AnalyzableFindFailure | UnanalyzableFindFailure;
+
+export const isFindFailure = (thing): thing is FindFailure => {
+  return thing instanceof UnanalyzableFindFailure ||
+    thing instanceof AnalyzableFindFailure;
+}
+
+export type FindFailureKind =
+  "BeforeDocStart" | "AfterDocEnd" | "AfterLineEnd" | "NotIdentifier";
+
+// AnalyzableFindFailure represents a failure to find a node whose
+// range wraps a cursor location, but which is amenable to static
+// analysis.
+//
+// In particular, this means that the cursor lies in the range of the
+// document's AST, and it is therefore possible to inspect the AST
+// surrounding the cursor.
+export class AnalyzableFindFailure {
+  // IMPLEMENTATION NOTES: Currently we consider the kind
+  // `"AfterDocEnd"` to be unanalyzable, but as our static analysis
+  // features become more featureful, we can probably revisit this
+  // corner case and get better results in the general case.
+
   constructor(
-    private position: error.Location,
+    public readonly kind: "AfterLineEnd" | "NotIdentifier",
+    public readonly tightestEnclosingNode: ast.Node,
+    public readonly terminalNodeOnCursorLine: ast.Node | null,
+  ) {}
+}
+
+export const isAnalyzableFindFailure = (
+  thing
+): thing is AnalyzableFindFailure => {
+  return thing instanceof AnalyzableFindFailure;
+}
+
+// UnanalyzableFindFailrue represents a failure to find a node whose
+// range wraps a cursor location, and is not amenable to static
+// analysis.
+//
+// In particular, this means that the cursor lies outside of the range
+// of a document's AST, which means we cannot inspect the context of
+// where the cursor lies in an AST.
+export class UnanalyzableFindFailure {
+  constructor(public readonly kind: "BeforeDocStart" | "AfterDocEnd") {}
+}
+
+export const isUnanalyzableFindFailure = (
+  thing
+): thing is UnanalyzableFindFailure => {
+  return thing instanceof UnanalyzableFindFailure;
+}
+
+// CursorVisitor finds a node whose range some cursor lies in, or the
+// closest node to it.
+export class CursorVisitor extends VisitorBase {
+  // IMPLEMENTATION NOTES: The goal of this class is to map the corner
+  // cases into `ast.Node | FindFailure`. Broadly, this mapping falls
+  // into a few cases:
+  //
+  // * Cursor in the range of an identifier.
+  //   * Return the identifier.
+  // * Cursor in the range of a node that is not an identifier (e.g.,
+  //   number literal, multi-line object with no members, and so on).
+  //   * Return a find failure with kind `"NotIdentifier"`.
+  // * Cursor lies inside document range, the last node on the line
+  //   of the cursor ends before the cursor's position.
+  //   * Return find failure with kind `"AfterLineEnd"`.
+  // * Cursor lies outside document range.
+  //   * Return find failure with kind `"BeforeDocStart"` or
+  //     `"AfterDocEnd"`.
+
+  constructor(
+    private cursor: error.Location,
     root: ast.Node,
   ) {
     super(root);
+    this.terminalNode = root;
   }
 
-  get NodeAtPosition(): ast.Node { return this.tightestWrappingNode; }
+  // Identifier whose range encloses the cursor, if there is one. This
+  // can be a multi-line node (e.g., perhaps an empty object), or a
+  // single line node (e.g., a number literal).
+  private enclosingNode: ast.Node | null = null;
 
-  private tightestWrappingNode: ast.Node;
+  // Last node in the tree.
+  private terminalNode: ast.Node;
 
-  protected onPrevisit = (
+  // Last node in the line our cursor lies on, if there is one.
+  private terminalNodeOnCursorLine: ast.Node | null = null;
+
+  get nodeAtPosition(): ast.Identifier | FindFailure {
+    if (this.enclosingNode == null) {
+      if (this.cursor.strictlyBeforeRange(this.rootNode.loc)) {
+        return new UnanalyzableFindFailure("BeforeDocStart");
+      } else if (this.cursor.strictlyAfterRange(this.terminalNode.loc)) {
+        return new UnanalyzableFindFailure("AfterDocEnd");
+      }
+      throw new Error("INTERNAL ERROR: No wrapping identifier was found, but node didn't lie outside of document range");
+    } else if (!ast.isIdentifier(this.enclosingNode)) {
+      if (
+        this.terminalNodeOnCursorLine != null &&
+        this.cursor.strictlyAfterRange(this.terminalNodeOnCursorLine.loc)
+      ) {
+        return new AnalyzableFindFailure(
+          "AfterLineEnd", this.enclosingNode, this.terminalNodeOnCursorLine);
+      }
+      return new AnalyzableFindFailure(
+        "NotIdentifier", this.enclosingNode, this.terminalNodeOnCursorLine);
+    }
+    return this.enclosingNode;
+  }
+
+  protected previsit = (
     node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment,
   ): void => {
-    this.updateTightestNode(node);
-  }
+    const nodeEnd = node.loc.end;
 
-  private updateTightestNode = (node: ast.Node): void => {
-    const locationRange = node.loc;
-    const range = {
-      beginLine: locationRange.begin.line,
-      endLine: locationRange.end.line,
-      beginCol: locationRange.begin.column,
-      endCol: locationRange.end.column,
-    };
+    if (this.cursor.inRange(node.loc)) {
+      if (
+        this.enclosingNode == null ||
+        node.loc.rangeIsTighter(this.enclosingNode.loc)
+      ) {
+        this.enclosingNode = node;
+      }
+    }
 
-    if (cursorInLocationRange(this.position, range) &&
-      nodeRangeIsTighter(node, this.tightestWrappingNode)
-    ) {
-      this.tightestWrappingNode = node;
-    } else if (
-      nodeRangeIsCloser(this.position, node, this.tightestWrappingNode)
-    ) {
-      this.tightestWrappingNode = node;
+    if (nodeEnd.afterRangeOrEqual(this.terminalNode.loc)) {
+      this.terminalNode = node;
+    }
+
+    if (nodeEnd.line === this.cursor.line) {
+      if (this.terminalNodeOnCursorLine == null) {
+        this.terminalNodeOnCursorLine = node;
+      } else if (nodeEnd.afterRangeOrEqual(this.terminalNodeOnCursorLine.loc)) {
+        this.terminalNodeOnCursorLine = node;
+      }
     }
   }
-}
-
-const nodeRangeIsTighter = (
-  thisNode: ast.Node, thatNode: ast.Node
-): boolean => {
-  if (thatNode == null) {
-    return true;
-  }
-
-  const thisNodeBegin = new error.Location(
-    thisNode.loc.begin.line,
-    thisNode.loc.begin.column);
-  const thisNodeEnd = new error.Location(
-    thisNode.loc.end.line,
-    thisNode.loc.end.column);
-  const thatNodeRange = {
-    beginLine: thatNode.loc.begin.line,
-    endLine: thatNode.loc.end.line,
-    beginCol: thatNode.loc.begin.column,
-    endCol: thatNode.loc.end.column,
-  };
-  return cursorInLocationRange(thisNodeBegin, thatNodeRange) &&
-  cursorInLocationRange(thisNodeEnd, thatNodeRange);
 }
 
 // nodeRangeIsCloser checks whether `thisNode` is closer to `pos` than
@@ -478,7 +567,12 @@ const nodeRangeIsCloser = (
     if (thatLoc.begin.line == pos.line && thatLoc.end.line == pos.line) {
       // `thisNode` and `thatNode` lie on the same line, and
       // `thisNode` begins closer to the position.
-      return Math.abs(thisLoc.begin.column - pos.column) <
+      //
+      // NOTE: We use <= here so that we always choose the last node
+      // that begins at a point. For example, a `Var` and `Identifier`
+      // might begin in the same place, but we'd like to choose the
+      // `Identifier`, as it would be a child of the `Var`.
+      return Math.abs(thisLoc.begin.column - pos.column) <=
         Math.abs(thatLoc.begin.column - pos.column)
     } else {
       return true;
@@ -487,27 +581,3 @@ const nodeRangeIsCloser = (
 
   return false;
 }
-
-const cursorInLocationRange = (
-  cursor: error.Location,
-  range: {beginLine: number, endLine: number, beginCol: number, endCol: number},
-): boolean => {
-
-  if (range.beginLine == cursor.line && cursor.line == range.endLine &&
-  range.beginCol <= cursor.column && cursor.column <= range.endCol
-  ) {
-    return true;
-  } else if (range.beginLine < cursor.line && cursor.line == range.endLine &&
-  cursor.column <= range.endCol
-  ) {
-    return true;
-  } else if (range.beginLine == cursor.line && cursor.line < range.endLine &&
-  cursor.column >= range.beginCol
-  ) {
-    return true;
-  } else if (range.beginLine < cursor.line && cursor.line < range.endLine) {
-    return true;
-  } else {
-    return false;
-  }
-};

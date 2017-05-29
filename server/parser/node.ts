@@ -145,6 +145,19 @@ export type NodeKind =
   "UnaryNode" |
   "VarNode";
 
+// isValueType returns true if the node is a computed value literal
+// (e.g., a string literal, an object literal, and so on).
+//
+// Notably, this explicitly omits structures whose value must be
+// computed at runtime: particularly object comprehension, array
+// comprehension, self, super, and function types (whose value depends
+// on parameter binds).
+export const isValueType = (node: Node): boolean => {
+  // TODO(hausdorff): Consider adding object comprehension here, too.
+  return isLiteralBoolean(node) || isLiteralNull(node) ||
+    isLiteralNumber(node) || isLiteralString(node) || isObjectNode(node);
+}
+
 // ---------------------------------------------------------------------------
 
 export interface Node {
@@ -185,7 +198,7 @@ abstract class NodeBase implements Node {
 export interface Resolvable extends NodeBase {
   resolve(
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | null
+  ): Node | IndexedObjectFields | ResolveFailure
 }
 
 export const isResolvable = (node: NodeBase): node is Resolvable => {
@@ -195,7 +208,7 @@ export const isResolvable = (node: NodeBase): node is Resolvable => {
 export interface FieldsResolvable extends NodeBase {
   resolveFields(
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): IndexedObjectFields | null
+  ): IndexedObjectFields | ResolveFailure
 }
 
 export const isFieldsResolvable = (
@@ -227,18 +240,13 @@ export class Identifier extends NodeBase  {
 
   public resolve = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | null => {
+  ): Node | IndexedObjectFields | ResolveFailure => {
     if (this.parent == null) {
       // An identifier with no parent is not a valid Jsonnet file.
-      return null;
+      return Unresolved.Instance;
     }
 
-    if (isResolvable(this.parent)) {
-      // Usually this should be a `Var` or `Index` node.
-      return this.parent.resolve(compiler, documents);
-    }
-
-    return null;
+    return tryResolve(this.parent, compiler, documents)
   }
 }
 
@@ -597,24 +605,39 @@ export class Binary extends NodeBase implements FieldsResolvable {
 
   public resolveFields = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): IndexedObjectFields | null => {
+  ): IndexedObjectFields | ResolveFailure => {
     // Recursively merge fields if it's another mixin; if it's an
     // object, return fields; else, no fields to return.
     if (this.op !== "BopPlus") {
-      return null;
+      return Unresolved.Instance;
     }
 
-    const left = resolveIndirections(this.left, compiler, documents);
-    const leftFields = left && isFieldsResolvable(left)
-      ? left.resolveFields(compiler, documents)
-      : null;
+    const left = tryResolveIndirections(this.left, compiler, documents);
+    if (!isIndexedObjectFields(left)) {
+      return Unresolved.Instance;
+    }
 
-    const right = resolveIndirections(this.right, compiler, documents);
-    const rightFields = right && isFieldsResolvable(right)
-      ? right.resolveFields(compiler, documents)
-      : null;
+    const right = tryResolveIndirections(this.right, compiler, documents);
+    if (!isIndexedObjectFields(right)) {
+      return Unresolved.Instance;
+    }
 
-    return leftFields && rightFields && leftFields.merge(rightFields) || null;
+    let merged = left;
+    right.forEach(
+      (v: ObjectField, k: string) => {
+        // TODO(hausdorff): Account for syntax sugar here. For
+        // example:
+        //
+        //   `{foo: "bar"} + {foo+: "bar"}`
+        //
+        // should produce `{foo: "barbar"} but because we are merging
+        // naively, we will report the value as simply `"bar"`. The
+        // reason we have punted for now is mainly that we have to
+        // implement an ad hoc version of Jsonnet's type coercion.
+        merged = merged.set(k, v);
+      });
+
+    return merged;
   }
 }
 
@@ -692,7 +715,10 @@ export class Dollar extends NodeBase implements Resolvable {
 
   public resolve = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | null => {
+  ): Node | IndexedObjectFields | ResolveFailure => {
+    if (this.rootObject == null) {
+      return Unresolved.Instance;
+    }
     return this.rootObject;
   }
 };
@@ -788,7 +814,7 @@ export class Import extends NodeBase implements Resolvable {
   public resolve = (
     compilerService: compiler.CompilerService,
     documents: workspace.DocumentManager,
-  ): Node | null => {
+  ): Node | IndexedObjectFields | ResolveFailure => {
     const fileToImport =
       filePathToUri(this.file, this.loc.fileName);
     const {text: docText, version: version} =
@@ -796,7 +822,7 @@ export class Import extends NodeBase implements Resolvable {
     const cached =
       compilerService.cache(fileToImport, docText, version);
     if (compiler.isFailedParsedDocument(cached)) {
-      return null;
+      return Unresolved.Instance;
     }
 
     let resolved = cached.parse;
@@ -852,52 +878,43 @@ export interface Index extends Node, Resolvable {
 const resolveIndex = (
   index: Index, compilerService: compiler.CompilerService,
   documents: workspace.DocumentManager,
-): Node | null => {
+): Node | IndexedObjectFields | ResolveFailure => {
   if (index.target == null || !isResolvable(index.target)) {
     throw new Error(
       `INTERNAL ERROR: Index node must have a resolvable target:\n${renderAsJson(index)}`);
   } else if (index.id == null) {
-    return null;
+    return Unresolved.Instance;
   }
 
   // Find root target, look up in environment.
-  let resolvedTarget = index.target.resolve(compilerService, documents);
-  if (resolvedTarget == null) {
-    return null;
+  let resolvedTarget =
+    tryResolveIndirections(index.target, compilerService, documents);
+  if (isResolveFailure(resolvedTarget)) {
+    return resolvedTarget;
+  } else if (!isIndexedObjectFields(resolvedTarget)) {
+    return Unresolved.Instance;
   }
 
-  if (isVar(resolvedTarget)) {
-    resolvedTarget =
-      resolveIndirections(resolvedTarget, compilerService, documents);
-  }
-
-  if (resolvedTarget == null || !isFieldsResolvable(resolvedTarget)) {
-    return null;
-  }
-
-  const fields = resolvedTarget.resolveFields(compilerService, documents);
-  if (fields == null) {
-    return null;
-  }
-
-  const filtered = fields.filter((field: ObjectField) => {
+  const filtered = resolvedTarget.filter((field: ObjectField) => {
     return field.id != null && index.id != null &&
       field.id.name == index.id.name;
   });
 
   if (filtered.count() == 0) {
-    return null;
+    return Unresolved.Instance;
   } else if (filtered.count() != 1) {
     throw new Error(
-      `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}':\n${renderAsJson(resolvedTarget)}`);
+      `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}'}`);
   }
 
   const field = filtered.first();
   if (field.methodSugar) {
-    return null;
-  } else {
-    return field.expr2;
+    return new ResolvedFunction(field);
+  } else if (field.expr2 == null) {
+    throw new Error(
+      `INTERNAL ERROR: Object field can't have null property expr2:\n${renderAsJson(field)}'}`);
   }
+  return field.expr2;
 }
 
 export const isIndex = (node: Node): node is Index => {
@@ -921,7 +938,8 @@ export class IndexSubscript extends NodeBase implements Index {
 
   public resolve = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | null => resolveIndex(this, compiler, documents);
+  ): Node | IndexedObjectFields | ResolveFailure =>
+    resolveIndex(this, compiler, documents);
 }
 
 export const isIndexSubscript = (node): node is Index => {
@@ -944,7 +962,8 @@ export class IndexDot extends NodeBase implements Index {
 
   public resolve = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | null => resolveIndex(this, compiler, documents);
+  ): Node | IndexedObjectFields | ResolveFailure =>
+    resolveIndex(this, compiler, documents);
 }
 
 export const isIndexDot = (node): node is Index => {
@@ -1259,6 +1278,12 @@ const prettyPrintObjectLocal = (field: ObjectField): string => {
 export type ObjectFields = im.List<ObjectField>;
 export type IndexedObjectFields = im.Map<string, ObjectField>;
 
+// NOTE: Type parameters are erased at runtime, so we can't check them
+// here.
+export const isIndexedObjectFields = (thing): thing is IndexedObjectFields => {
+  return im.Map.isMap(thing);
+}
+
 export const indexFields = (fields: ObjectFields): IndexedObjectFields => {
   return fields
     .reduce((
@@ -1297,7 +1322,7 @@ export class ObjectNode extends NodeBase implements FieldsResolvable {
 
   public resolveFields = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): IndexedObjectFields | null => {
+  ): IndexedObjectFields | ResolveFailure => {
     return indexFields(this.fields);
   }
 }
@@ -1488,13 +1513,13 @@ export class Var extends NodeBase implements Resolvable {
 
   public resolve = (
     compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | null => {
+  ): Node | IndexedObjectFields | ResolveFailure => {
     // Look up in the environment, get docs for that definition.
     if (this.env == null) {
       throw new Error(
         `INTERNAL ERROR: AST improperly set up, property 'env' can't be null:\n${renderAsJson(this)}`);
     } else if (!this.env.has(this.id.name)) {
-      return null;
+      return Unresolved.Instance;
     }
 
     return resolveFromEnv(this.id.name, this.env, compiler, documents);
@@ -1510,27 +1535,24 @@ export const isVar = (node): node is Var => {
 const resolveFromEnv = (
   idName: string, env: Environment, compilerService: compiler.CompilerService,
   documents: workspace.DocumentManager,
-): Node | null => {
+): Node | IndexedObjectFields | ResolveFailure => {
   const bind = env.get(idName);
   if (bind == null) {
-    return null;
+    return Unresolved.Instance;
   }
 
   if (isFunctionParam(bind)) {
-    // A function param is either a free variable, or it has a
-    // default value. We return either way.
-    return bind;
+    // A function param is either a free variable, or it has a default
+    // value. We consider both of these to be free variables, since we
+    // would not know the value until the function was applied.
+    return new ResolvedFreeVar(bind);
   }
 
   if (bind.body == null) {
     throw new Error(`INTERNAL ERROR: Bind can't have null body:\n${bind}`);
   }
 
-  if (isResolvable(bind.body)) {
-    return bind.body.resolve(compilerService, documents);
-  }
-
-  return bind.body;
+  return tryResolve(bind.body, compilerService, documents);
 }
 
 // TODO: Replace this with some sort of URL provider.
@@ -1544,10 +1566,29 @@ const filePathToUri = (filePath: string, currentPath: string): string => {
   return `file://${resource}`;
 }
 
-export const resolveIndirections = (
+const tryResolve = (
   node: Node, compilerService: compiler.CompilerService,
   documents: workspace.DocumentManager,
-): Node | null => {
+): Node | IndexedObjectFields | ResolveFailure => {
+  if (isFunction(node)) {
+    return new ResolvedFunction(node);
+  } else if (isResolvable(node)) {
+    return node.resolve(compilerService, documents);
+  } else if (isFieldsResolvable(node)) {
+    // Found an object or perhaps an object mixin. Break.
+    return node.resolveFields(compilerService, documents);
+  } else if (isValueType(node)) {
+    return node;
+  } else {
+    return Unresolved.Instance;
+  }
+}
+
+
+export const tryResolveIndirections = (
+  node: Node, compilerService: compiler.CompilerService,
+  documents: workspace.DocumentManager,
+): Node | IndexedObjectFields | ResolveFailure => {
   // This loop will try to "strip out the indirections" of an
   // argument to a mixin. For example, consider the expression
   // `foo1.bar + foo2.bar` in the following example:
@@ -1566,28 +1607,73 @@ export const resolveIndirections = (
   // `foo1.bar`, and then `bar1`, before encountering an object
   // and stopping.
 
-  let resolved: Node | null = node;
+  let resolved: Node | IndexedObjectFields | ResolveFailure = node;
   while (true) {
-    if (isObjectNode(resolved)) {
-      // Found an object. Break.
-      break;
-    } else if (isBinary(resolved)) {
-      // May have found an object mixin. Break.
-      break;
-    } else if (isVar(resolved)) {
+    if (isResolveFailure(resolved)) {
+      return resolved;
+    } else if (isIndexedObjectFields(resolved)) {
+      return resolved;
+    } else if (isResolvable(resolved)) {
       resolved = resolved.resolve(compilerService, documents);
-    } else if (isIndex(resolved)) {
-      resolved = resolved.resolve(compilerService, documents);
-    } else if (isIdentifier(resolved)) {
-      resolved = resolved.resolve(compilerService, documents);
+    } else if (isFieldsResolvable(resolved)) {
+      resolved = resolved.resolveFields(compilerService, documents);
     } else {
-      return null;
-    }
-
-    if (resolved == null) {
-      return null;
+      return Unresolved.Instance;
     }
   }
+}
 
-  return resolved;
+// ---------------------------------------------------------------------------
+
+// ResolveFailure represents a failure to resolve a symbol to a "value
+// type", for our particular definition of that term, which is
+// captured by `isValueType`.
+//
+// For example, a symbol might refer to a function, which we would not
+// consider a "value type", and hence we would return a
+// `ResolveFailure`.
+export type ResolveFailure = ResolvedFunction | ResolvedFreeVar | Unresolved;
+
+export const isResolveFailure = (thing): thing is ResolveFailure => {
+  return thing instanceof ResolvedFunction ||
+    thing instanceof ResolvedFreeVar ||
+    thing instanceof Unresolved;
+}
+
+// ResolvedFunction represents the event that we have tried to resolve
+// a symbol to a "value type" (as defined by `isValueType`), but
+// failed since that value depends on the resolution of a function,
+// which cannot be resolved to a value type without binding the
+// parameters.
+export class ResolvedFunction {
+  constructor(
+    public readonly functionNode: Function | ObjectField | LocalBind
+  ) {}
+};
+
+// ResolvedFreeVar represents the event that we have tried to resolve
+// a value to a "value type" (as defined by `isValueType`), but failed
+// since that value is a free parameter, and must be bound at runtime
+// to be computed.
+//
+// A good example of such a situation is `self`, `super`, and
+// function parameters.
+export class ResolvedFreeVar {
+  constructor(public readonly variable: Var | FunctionParam) {}
+};
+
+// Unresolved represents a miscelleneous failure to resolve a symbol.
+// Typically this occurs the structure of the AST is not amenable to
+// static analysis, and we simply punt.
+//
+// TODO: Expand this to more cases as `onComplete` features require it.
+export class Unresolved {
+  public static readonly Instance = new Unresolved();
+
+  // NOTE: This is a work around for a bug in the TypeScript type
+  // checker. We have not had time to report this bug, but when this
+  // line is commented out, then use of `isResolveFailure` will cause
+  // the type we're checking to resolve to `never` (TypeScript's
+  // bottom type), which causes compile to fail.
+  private readonly foo = "foo";
 }

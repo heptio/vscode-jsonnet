@@ -52,6 +52,9 @@ export class Analyzer implements EventedAnalyzer {
 
     // Get symbol we're hovering over.
     const nodeAtPos = this.getNodeAtPosition(fileUri, cursorLoc);
+    if (astVisitor.isFindFailure(nodeAtPos)) {
+      return Promise.resolve().then(() => {return {contents:[]}});
+    }
     if (nodeAtPos.parent != null && ast.isFunctionParam(nodeAtPos.parent)) {
       // A function parameter is a free variable, so we can't resolve
       // it. Simply return.
@@ -123,8 +126,15 @@ export class Analyzer implements EventedAnalyzer {
               return [];
             }
 
-            const nodeAtPos = this.getNodeAtPositionFromAst(
+            let nodeAtPos = this.getNodeAtPositionFromAst(
               lastParse.parse, cursorLoc);
+            if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+              nodeAtPos = nodeAtPos.tightestEnclosingNode;
+            } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+              // TODO(hausdorff): Revisit this when we revamp the
+              // `onComplete` abstractions.
+              return [];
+            }
 
             const rest = parse.parse.parseError.rest;
 
@@ -135,42 +145,56 @@ export class Analyzer implements EventedAnalyzer {
               : <ast.Environment>nodeAtPos.env;
             new astVisitor.InitializingVisitor(rest, nodeAtPos, env).visit();
 
-            const resolved = ast.resolveIndirections(
+            const resolved = ast.tryResolveIndirections(
               rest, this.compilerService, this.documents);
-            if (resolved == null) {
-              if (ast.isVar(rest)) {
-                return this.completionsFromIdentifier(rest.id);
-              }
-              return [];
-            } else {
+            if (ast.isIndexedObjectFields(resolved)) {
               return this.completableFields(resolved);
+            } else if (ast.isResolveFailure(resolved) && ast.isVar(rest)) {
+              return this.completionsFromIdentifier(rest.id);
             }
+            return [];
           } else if (c === ".") {
             const lastParse = this.compilerService.getLastSuccess(fileUri);
             if (lastParse == null) {
               return [];
             }
-            const nodeAtPos = this.getNodeAtPositionFromAst(
+            let nodeAtPos = this.getNodeAtPositionFromAst(
               lastParse.parse, cursorLoc);
-
-            const resolved = ast.resolveIndirections(
-              nodeAtPos, this.compilerService, this.documents);
-            if (resolved == null) {
+            if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+              nodeAtPos = nodeAtPos.tightestEnclosingNode;
+            } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+              // TODO(hausdorff): Revisit this when we revamp the
+              // `onComplete` abstractions.
               return [];
             }
 
-            return this.completableFields(resolved);
+            const resolved = ast.tryResolveIndirections(
+              nodeAtPos, this.compilerService, this.documents);
+            if (ast.isIndexedObjectFields(resolved)) {
+              return this.completableFields(resolved)
+            }
+            return [];
           } else {
-            const nodeAtPos = this.getNodeAtPositionFromAst(
+            let nodeAtPos = this.getNodeAtPositionFromAst(
               parse.parse, cursorLoc);
+            if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+              nodeAtPos = nodeAtPos.tightestEnclosingNode;
+            } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+              // TODO(hausdorff): Revisit this when we revamp the
+              // `onComplete` abstractions.
+              return [];
+            }
 
             if (!ast.isIdentifier(nodeAtPos)) {
               // Attempt to resolve the node.
-              const resolved = ast.resolveIndirections(
+              const resolved = ast.tryResolveIndirections(
                 nodeAtPos, this.compilerService, this.documents);
-              if (resolved != null) {
+              if (ast.isIndexedObjectFields(resolved)) {
                 return this.completableFields(resolved);
               }
+              // TODO(hausdorff): Revisit this when we revamp the
+              // `onComplete` abstractions.
+               return [];
             }
 
             // Fallback on completing the identifier.
@@ -241,16 +265,17 @@ export class Analyzer implements EventedAnalyzer {
       return node.env && envToSuggestions(node.env) || [];
     }
 
-    let resolved: ast.Node | null = null;
+    let resolved: ast.Node | ast.IndexedObjectFields | ast.ResolveFailure =
+      ast.Unresolved.Instance;
     if (ast.isIndex(parent)) {
-      resolved = ast.resolveIndirections(
+      resolved = ast.tryResolveIndirections(
         parent.target, this.compilerService, this.documents);
     } else {
-      resolved = ast.resolveIndirections(
+      resolved = ast.tryResolveIndirections(
         parent, this.compilerService, this.documents);
     }
 
-    if (resolved != null) {
+    if (ast.isIndexedObjectFields(resolved)) {
       return this.completableFields(resolved);
     }
 
@@ -259,21 +284,14 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   private completableFields = (
-    resolved: ast.Node
+    fieldSet: ast.IndexedObjectFields
   ): service.CompletionInfo[] => {
     // Attempt to get all the possible fields we could suggest. If the
     // resolved item is an `ObjectNode`, just use its fields; if it's
     // a mixin of two objects, merge them and use the merged fields
     // instead.
-    const fieldSet = ast.isFieldsResolvable(resolved)
-      ? resolved.resolveFields(this.compilerService, this.documents)
-      : immutable.Map<string, ast.ObjectField>();
 
-    const fields = fieldSet == null
-      ? immutable.List()
-      : immutable.List(fieldSet.values())
-
-    return fields
+    return immutable.List(fieldSet.values())
       .filter((field: ast.ObjectField) =>
         field != null && field.id != null && field.expr2 != null && field.kind !== "ObjectLocal")
       .map((field: ast.ObjectField) => {
@@ -304,14 +322,24 @@ export class Analyzer implements EventedAnalyzer {
   public resolveSymbolAtPosition = (
     fileUri: string, pos: error.Location,
   ): ast.Node | null => {
-    const nodeAtPos = this.getNodeAtPosition(fileUri, pos);
+    let nodeAtPos = this.getNodeAtPosition(fileUri, pos);
+    if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+      nodeAtPos = nodeAtPos.tightestEnclosingNode;
+    } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+      return null;
+    }
     return this.resolveSymbol(nodeAtPos);
   }
 
   public resolveSymbolAtPositionFromAst = (
     rootNode: ast.Node, pos: error.Location,
   ): ast.Node | null => {
-    const nodeAtPos = this.getNodeAtPositionFromAst(rootNode, pos);
+    let nodeAtPos = this.getNodeAtPositionFromAst(rootNode, pos);
+    if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+      nodeAtPos = nodeAtPos.tightestEnclosingNode;
+    } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+      return null;
+    }
     return this.resolveSymbol(nodeAtPos);
   }
 
@@ -344,18 +372,18 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   private resolveSymbol = (node: ast.Node): ast.Node | null => {
-    if (node == null ) {
-      return null;
-    }
-
     if (node.parent && ast.isObjectField(node.parent)) {
       return node.parent;
     }
 
     switch(node.type) {
       case "IdentifierNode": {
-        return (<ast.Identifier>node).resolve(
+        const resolved = (<ast.Identifier>node).resolve(
           this.compilerService, this.documents);
+        if (ast.isIndexedObjectFields(resolved) || ast.isResolveFailure(resolved)) {
+          return null;
+        }
+        return resolved;
       }
       case "LocalNode": {
         return node;
@@ -390,7 +418,7 @@ export class Analyzer implements EventedAnalyzer {
 
   public getNodeAtPosition = (
     fileUri: string, pos: error.Location,
-  ): ast.Node => {
+  ): ast.Node | astVisitor.FindFailure => {
     const {text: docText, version: version} = this.documents.get(fileUri);
     const cached = this.compilerService.cache(fileUri, docText, version);
     if (compiler.isFailedParsedDocument(cached)) {
@@ -407,7 +435,7 @@ export class Analyzer implements EventedAnalyzer {
 
   public getNodeAtPositionFromAst = (
     rootNode: ast.Node, pos: error.Location
-  ): ast.Node => {
+  ): ast.Node | astVisitor.FindFailure => {
     // Special case. Make sure that if the cursor is beyond the range
     // of text of the last good parse, we just return the last node.
     // For example, if the user types a `.` character at the end of
@@ -420,7 +448,8 @@ export class Analyzer implements EventedAnalyzer {
 
     const visitor = new astVisitor.CursorVisitor(pos, rootNode);
     visitor.visit();
-    return visitor.NodeAtPosition;
+    const tightestNode = visitor.nodeAtPosition;
+    return tightestNode;
   }
 }
 

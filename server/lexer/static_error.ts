@@ -18,6 +18,76 @@ export class Location {
   public String = (): string => {
     return `${this.line}:${this.column}`;
   };
+
+  public beforeRangeOrEqual = (range: LocationRange): boolean => {
+    const begin = range.begin;
+    if (this.line < begin.line) {
+      return true;
+    } else if (this.line == begin.line && this.column <= begin.column) {
+      return true;
+    }
+    return false;
+  }
+
+  public strictlyBeforeRange = (range: LocationRange): boolean => {
+    const begin = range.begin;
+    if (this.line < begin.line) {
+      return true;
+    } else if (this.line == begin.line && this.column < begin.column) {
+      return true;
+    }
+    return false;
+  }
+
+  public afterRangeOrEqual = (range: LocationRange): boolean => {
+    const end = range.end;
+    if (this.line > end.line) {
+      return true;
+    } else if (this.line == end.line && this.column >= end.column) {
+      return true;
+    }
+    return false;
+  }
+
+  public strictlyAfterRange = (range: LocationRange): boolean => {
+    const end = range.end;
+    if (this.line > end.line) {
+      return true;
+    } else if (this.line == end.line && this.column > end.column) {
+      return true;
+    }
+    return false;
+  }
+
+  public inRange = (loc: LocationRange): boolean => {
+    const range = {
+      beginLine: loc.begin.line,
+      endLine: loc.end.line,
+      beginCol: loc.begin.column,
+      endCol: loc.end.column,
+    }
+
+    if (
+      range.beginLine == this.line && this.line == range.endLine &&
+      range.beginCol <= this.column && this.column <= range.endCol
+    ) {
+      return true;
+    } else if (
+      range.beginLine < this.line && this.line == range.endLine &&
+      this.column <= range.endCol
+    ) {
+      return true;
+    } else if (
+      range.beginLine == this.line && this.line < range.endLine &&
+      this.column >= range.beginCol
+    ) {
+      return true;
+    } else if (range.beginLine < this.line && this.line < range.endLine) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 }
 
 const emptyLocation = () => new Location(0, 0);
@@ -55,6 +125,10 @@ export class LocationRange {
     }
 
     return `${filePrefix}(${this.begin.String()})-(${this.end.String()})`;
+  }
+
+  public rangeIsTighter = (thatRange: LocationRange): boolean => {
+    return this.begin.inRange(thatRange) && this.end.inRange(thatRange);
   }
 }
 
