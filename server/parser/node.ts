@@ -242,7 +242,7 @@ export class Identifier extends NodeBase  {
   }
 }
 
-export const isIdentifier = (node: Node): node is Identifier => {
+export const isIdentifier = (node): node is Identifier => {
   return node instanceof Identifier;
 }
 
@@ -284,7 +284,7 @@ export class CppComment extends NodeBase implements Comment {
   }
 }
 
-export const isCppComment = (node: Node): node is Identifier => {
+export const isCppComment = (node): node is Identifier => {
   return node instanceof CppComment;
 }
 
@@ -323,7 +323,7 @@ export class CompSpecIf extends NodeBase implements CompSpec {
   }
 }
 
-export const isCompSpecIf = (node: Node): node is CompSpec => {
+export const isCompSpecIf = (node): node is CompSpec => {
   return node instanceof CompSpecIf;
 }
 
@@ -342,7 +342,7 @@ export class CompSpecFor extends NodeBase implements CompSpec {
   }
 }
 
-export const isCompSpecFor = (node: Node): node is CompSpec => {
+export const isCompSpecFor = (node): node is CompSpec => {
   return node instanceof CompSpecFor;
 }
 
@@ -374,7 +374,7 @@ export class Apply extends NodeBase  {
   }
 }
 
-export const isApply = (node: Node): node is Apply => {
+export const isApply = (node): node is Apply => {
   return node instanceof Apply;
 }
 
@@ -393,9 +393,7 @@ export class ApplyParamAssignment extends NodeBase {
 }
 export type ApplyParamAssignments = im.List<ApplyParamAssignment>
 
-export const isApplyParamAssignment = (
-  node: Node
-): node is ApplyParamAssignment => {
+export const isApplyParamAssignment = (node): node is ApplyParamAssignment => {
   return node instanceof ApplyParamAssignment;
 };
 
@@ -416,7 +414,7 @@ export class ApplyBrace extends NodeBase {
   }
 }
 
-export const isApplyBrace = (node: Node): node is ApplyBrace => {
+export const isApplyBrace = (node): node is ApplyBrace => {
   return node instanceof ApplyBrace;
 }
 
@@ -442,7 +440,7 @@ export class Array extends NodeBase {
   }
 }
 
-export const isArray = (node: Node): node is Array => {
+export const isArray = (node): node is Array => {
   return node instanceof Array;
 }
 
@@ -468,7 +466,7 @@ export class ArrayComp extends NodeBase {
   }
 }
 
-export const isArrayComp = (node: Node): node is ArrayComp => {
+export const isArrayComp = (node): node is ArrayComp => {
   return node instanceof ArrayComp;
 }
 
@@ -493,7 +491,7 @@ export class Assert extends NodeBase {
   }
 }
 
-export const isAssert = (node: Node): node is Assert => {
+export const isAssert = (node): node is Assert => {
   return node instanceof Assert;
 }
 
@@ -620,7 +618,7 @@ export class Binary extends NodeBase implements FieldsResolvable {
   }
 }
 
-export const isBinary = (node: Node): node is Binary => {
+export const isBinary = (node): node is Binary => {
   return node instanceof Binary;
 }
 
@@ -645,7 +643,7 @@ export class Builtin extends NodeBase {
   }
 }
 
-export const isBuiltin = (node: Node): node is Builtin => {
+export const isBuiltin = (node): node is Builtin => {
   return node instanceof Builtin;
 }
 
@@ -674,7 +672,7 @@ export class Conditional extends NodeBase {
   }
 }
 
-export const isConditional = (node: Node): node is Conditional => {
+export const isConditional = (node): node is Conditional => {
   return node instanceof Conditional;
 }
 
@@ -699,7 +697,7 @@ export class Dollar extends NodeBase implements Resolvable {
   }
 };
 
-export const isDollar = (node: Node): node is Dollar => {
+export const isDollar = (node): node is Dollar => {
   return node instanceof Dollar;
 }
 
@@ -719,7 +717,7 @@ export class ErrorNode extends NodeBase {
   }
 }
 
-export const isError = (node: Node): node is ErrorNode => {
+export const isError = (node): node is ErrorNode => {
   return node instanceof ErrorNode;
 }
 
@@ -746,7 +744,7 @@ export class Function extends NodeBase {
   }
 }
 
-export const isFunction = (node: Node): node is Function => {
+export const isFunction = (node): node is Function => {
   return node instanceof Function;
 }
 
@@ -768,7 +766,7 @@ export class FunctionParam extends NodeBase {
 }
 export type FunctionParams = im.List<FunctionParam>
 
-export const isFunctionParam = (node: any): node is FunctionParam => {
+export const isFunctionParam = (node): node is FunctionParam => {
   return node instanceof FunctionParam;
 }
 
@@ -814,7 +812,7 @@ export class Import extends NodeBase implements Resolvable {
   }
 }
 
-export const isImport = (node: Node): node is Import => {
+export const isImport = (node): node is Import => {
   return node instanceof Import;
 }
 
@@ -834,7 +832,7 @@ export class ImportStr extends NodeBase {
   }
 }
 
-export const isImportStr = (node: Node): node is ImportStr => {
+export const isImportStr = (node): node is ImportStr => {
   return node instanceof ImportStr;
 }
 
@@ -926,7 +924,7 @@ export class IndexSubscript extends NodeBase implements Index {
   ): Node | null => resolveIndex(this, compiler, documents);
 }
 
-export const isIndexSubscript = (node: Node): node is Index => {
+export const isIndexSubscript = (node): node is Index => {
   return node instanceof IndexSubscript;
 }
 
@@ -949,7 +947,7 @@ export class IndexDot extends NodeBase implements Index {
   ): Node | null => resolveIndex(this, compiler, documents);
 }
 
-export const isIndexDot = (node: Node): node is Index => {
+export const isIndexDot = (node): node is Index => {
   return node instanceof IndexDot;
 }
 
@@ -1006,7 +1004,7 @@ export class Local extends NodeBase {
   }
 }
 
-export const isLocal = (node: Node): node is Local => {
+export const isLocal = (node): node is Local => {
   return node instanceof Local;
 }
 
@@ -1026,7 +1024,7 @@ export class LiteralBoolean extends NodeBase {
   }
 }
 
-export const isLiteralBoolean = (node: Node): node is LiteralBoolean => {
+export const isLiteralBoolean = (node): node is LiteralBoolean => {
   return node instanceof LiteralBoolean;
 }
 
@@ -1045,7 +1043,7 @@ export class LiteralNull extends NodeBase {
   }
 }
 
-export const isLiteralNull = (node: Node): node is LiteralNull => {
+export const isLiteralNull = (node): node is LiteralNull => {
   return node instanceof LiteralNull;
 }
 
@@ -1066,7 +1064,7 @@ export class LiteralNumber extends NodeBase {
   }
 }
 
-export const isLiteralNumber = (node: Node): node is LiteralNumber => {
+export const isLiteralNumber = (node): node is LiteralNumber => {
   return node instanceof LiteralNumber;
 }
 
@@ -1105,9 +1103,7 @@ export class LiteralStringSingle extends NodeBase implements LiteralString {
   }
 }
 
-export const isLiteralStringSingle = (
-  node: Node
-): node is LiteralStringSingle => {
+export const isLiteralStringSingle = (node): node is LiteralStringSingle => {
   return node instanceof LiteralStringSingle;
 }
 
@@ -1126,7 +1122,7 @@ export class LiteralStringDouble extends NodeBase implements LiteralString {
   }
 }
 
-export const isLiteralStringDouble = (node: Node): node is LiteralString => {
+export const isLiteralStringDouble = (node): node is LiteralString => {
   return node instanceof LiteralStringDouble;
 }
 
@@ -1145,7 +1141,7 @@ export class LiteralStringBlock extends NodeBase implements LiteralString {
   }
 }
 
-export const isLiteralStringBlock = (node: Node): node is LiteralStringBlock => {
+export const isLiteralStringBlock = (node): node is LiteralStringBlock => {
   return node instanceof LiteralStringBlock;
 }
 
@@ -1214,7 +1210,7 @@ export class ObjectField extends NodeBase {
   }
 }
 
-export const isObjectField = (node: Node): node is ObjectField => {
+export const isObjectField = (node): node is ObjectField => {
   return node instanceof ObjectField;
 }
 
@@ -1306,7 +1302,7 @@ export class ObjectNode extends NodeBase implements FieldsResolvable {
   }
 }
 
-export const isObjectNode = (node: Node): node is ObjectNode => {
+export const isObjectNode = (node): node is ObjectNode => {
   return node instanceof ObjectNode;
 }
 
@@ -1361,7 +1357,7 @@ export class ObjectComp extends NodeBase {
   }
 }
 
-export const isObjectComp = (node: Node): node is ObjectComp => {
+export const isObjectComp = (node): node is ObjectComp => {
   return node instanceof ObjectComp;
 }
 
@@ -1401,7 +1397,7 @@ export class Self extends NodeBase {
   }
 };
 
-export const isSelf = (node: Node): node is Self => {
+export const isSelf = (node): node is Self => {
   return node instanceof Self;
 }
 
@@ -1430,7 +1426,7 @@ export class SuperIndex extends NodeBase {
   }
 }
 
-export const isSuperIndex = (node: Node): node is SuperIndex => {
+export const isSuperIndex = (node): node is SuperIndex => {
   return node instanceof SuperIndex;
 }
 
@@ -1471,7 +1467,7 @@ export class Unary extends NodeBase {
   }
 }
 
-export const isUnary = (node: Node): node is Unary => {
+export const isUnary = (node): node is Unary => {
   return node instanceof Unary;
 }
 
@@ -1505,7 +1501,7 @@ export class Var extends NodeBase implements Resolvable {
   }
 }
 
-export const isVar = (node: Node): node is Var => {
+export const isVar = (node): node is Var => {
   return node instanceof Var;
 }
 
