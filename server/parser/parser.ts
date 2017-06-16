@@ -2,6 +2,7 @@
 import * as im from 'immutable';
 
 import * as ast from '../parser/node';
+import * as astVisitor from '../ast/visitor';
 import * as error from '../lexer/static_error';
 import * as lexer from '../lexer/lexer';
 
@@ -483,7 +484,7 @@ class parser {
   // object, as an object field. `assertToken` is required to allow the
   // object to create an appropriate location range for the field.
   public parseObjectLocal = (
-    assertToken: lexer.Token, binds: ast.IdentifierSet,
+    localToken: lexer.Token, binds: ast.IdentifierSet,
   ): {field: ast.ObjectField, binds: ast.IdentifierSet} | error.StaticError => {
     const varID = this.popExpect("TokenIdentifier");
     if (error.isStaticError(varID)) {
@@ -532,13 +533,13 @@ class parser {
         body,
         null,
         im.List<ast.Comment>(),
-        locFromTokenAST(assertToken, body),
+        locFromTokenAST(localToken, body),
       ),
       binds: binds,
     };
   };
 
-  // parseObjectLocal parses an `assert` that appears as an object
+  // parseObjectAssert parses an `assert` that appears as an object
   // field. `localToken` is required to allow the object to create an
   // appropriate location range for the field.
   public parseObjectAssert = (
@@ -1310,6 +1311,7 @@ export const Parse = (
   if (p.peek().kind !== "TokenEndOfFile") {
     return error.MakeStaticError(`Did not expect: ${p.peek()}`, p.peek().loc);
   }
+  new astVisitor.InitializingVisitor(expr).visit();
 
   return expr;
 }

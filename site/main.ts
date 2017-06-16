@@ -111,8 +111,6 @@ export class BrowserCompilerService implements compiler.CompilerService {
       const fail = new compiler.ParseFailure(lex, parse);
       return new compiler.FailedParsedDocument(text, fail, version);
     }
-    new astVisitor.DeserializingVisitor()
-      .Visit(parse, null, ast.emptyEnvironment);
 
     const parsedDoc = new compiler.ParsedDocument(text, lex, parse, version);
     this.docCache = this.docCache.set(fileUri, parsedDoc);
