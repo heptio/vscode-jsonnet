@@ -7,28 +7,18 @@ import * as url from 'url';
 
 import * as analyze from '../../server/ast/analyzer';
 import * as ast from '../../server/parser/node';
+import * as astVisitor from '../../server/ast/visitor';
 import * as compiler from "../../server/ast/compiler";
 import * as error from '../../server/lexer/static_error';
 import * as lexer from '../../server/lexer/lexer';
 import * as local from '../../server/local';
+import * as testWorkspace from './test_workspace';
 import * as workspace from '../../server/ast/workspace';
 
 const dataDir = `${__dirname}/../../../test/data`;
 
 const makeLocation = (line: number, column: number): error.Location => {
   return new error.Location(line, column);
-}
-
-class FsDocumentManager implements workspace.DocumentManager {
-  public get = (fileUri: string) => {
-      const parsed = url.parse(fileUri);
-      if (parsed && parsed.path) {
-        // TODO: Perhaps make this a promise?
-        return {text: fs.readFileSync(parsed.path).toString(), version: -1};
-      }
-
-      throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
-  }
 }
 
 const assertLocationRange = (
@@ -150,7 +140,7 @@ describe("Compiler service", () => {
 
 describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
-  const documents = new FsDocumentManager()
+  const documents = new testWorkspace.FsDocumentManager()
   const analyzer = new analyze.Analyzer(documents, compilerService);
 
   const file = `${dataDir}/simple-nodes.jsonnet`;
@@ -203,10 +193,13 @@ describe("Searching an AST by position", () => {
 
   it("Object field assigned literal number", () => {
     // Target.
+    const found =
+      <astVisitor.AnalyzableFindFailure>analyzer.getNodeAtPositionFromAst(
+        rootNode, makeLocation(3, 15));
+    assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
+    assert.equal(found.kind, "NotIdentifier");
 
-    const target2Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
-      rootNode, makeLocation(3, 15));
-    assert.isNotNull(target2Id);
+    const target2Id = <ast.LiteralNumber>found.tightestEnclosingNode;
     assert.equal(target2Id.type, "LiteralNumberNode");
     assert.equal(target2Id.originalString, "2");
     assert.isNotNull(target2Id.parent);
@@ -237,8 +230,13 @@ describe("Searching an AST by position", () => {
 
     // Target.
     {
-      const target3Id = <ast.LiteralNumber>analyzer.getNodeAtPositionFromAst(
-        rootNode, makeLocation(4, 15));
+      const found =
+        <astVisitor.AnalyzableFindFailure>analyzer.getNodeAtPositionFromAst(
+          rootNode, makeLocation(4, 15));
+      assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
+      assert.equal(found.kind, "NotIdentifier");
+
+      const target3Id = <ast.LiteralNumber>found.tightestEnclosingNode;
       assert.isNotNull(target3Id);
       assert.equal(target3Id.type, "LiteralNumberNode");
       assert.equal(target3Id.originalString, "3");
@@ -369,7 +367,7 @@ describe("Searching an AST by position", () => {
 
 describe("Imported symbol resolution", () => {
   const compilerService = new local.VsCompilerService();
-  const documents = new FsDocumentManager();
+  const documents = new testWorkspace.FsDocumentManager();
   const analyzer = new analyze.Analyzer(documents, compilerService);
 
   const file = `${dataDir}/simple-import.jsonnet`;
