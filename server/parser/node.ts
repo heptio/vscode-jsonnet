@@ -193,6 +193,11 @@ abstract class NodeBase implements Node {
   env: Environment | null; // Filled in by the visitor.
 }
 
+export const isNode = (thing): thing is Node => {
+  // TODO: Probably want to check the types of the properties instead.
+  return thing instanceof NodeBase;
+}
+
 // ---------------------------------------------------------------------------
 
 export interface Resolvable extends NodeBase {
@@ -890,9 +895,9 @@ const resolveIndex = (
   let resolvedTarget =
     tryResolveIndirections(index.target, compilerService, documents);
   if (isResolveFailure(resolvedTarget)) {
-    return resolvedTarget;
+    return new UnresolvedIndexTarget(index);
   } else if (!isIndexedObjectFields(resolvedTarget)) {
-    return Unresolved.Instance;
+    return new UnresolvedIndexTarget(index);
   }
 
   const filtered = resolvedTarget.filter((field: ObjectField) => {
@@ -901,7 +906,7 @@ const resolveIndex = (
   });
 
   if (filtered.count() == 0) {
-    return Unresolved.Instance;
+    return new UnresolvedIndexId(index, resolvedTarget);
   } else if (filtered.count() != 1) {
     throw new Error(
       `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}'}`);
@@ -1612,11 +1617,15 @@ export const tryResolveIndirections = (
     if (isResolveFailure(resolved)) {
       return resolved;
     } else if (isIndexedObjectFields(resolved)) {
+      // We've resolved to a set of fields. Return.
       return resolved;
     } else if (isResolvable(resolved)) {
       resolved = resolved.resolve(compilerService, documents);
     } else if (isFieldsResolvable(resolved)) {
       resolved = resolved.resolveFields(compilerService, documents);
+    } else if (isValueType(resolved)) {
+      // We've resolved to a value. Return.
+      return node;
     } else {
       return Unresolved.Instance;
     }
@@ -1632,11 +1641,16 @@ export const tryResolveIndirections = (
 // For example, a symbol might refer to a function, which we would not
 // consider a "value type", and hence we would return a
 // `ResolveFailure`.
-export type ResolveFailure = ResolvedFunction | ResolvedFreeVar | Unresolved;
+export type ResolveFailure =
+  ResolvedFunction | ResolvedFreeVar |        // Resolved to uncompletable nodes.
+  UnresolvedIndexId | UnresolvedIndexTarget | // Failed to resolve `Index` node.
+  Unresolved;                                 // Misc.
 
 export const isResolveFailure = (thing): thing is ResolveFailure => {
   return thing instanceof ResolvedFunction ||
     thing instanceof ResolvedFreeVar ||
+    thing instanceof UnresolvedIndexId ||
+    thing instanceof UnresolvedIndexTarget ||
     thing instanceof Unresolved;
 }
 
@@ -1651,6 +1665,10 @@ export class ResolvedFunction {
   ) {}
 };
 
+export const isResolvedFunction = (thing): thing is ResolvedFunction => {
+  return thing instanceof ResolvedFunction;
+}
+
 // ResolvedFreeVar represents the event that we have tried to resolve
 // a value to a "value type" (as defined by `isValueType`), but failed
 // since that value is a free parameter, and must be bound at runtime
@@ -1661,6 +1679,48 @@ export class ResolvedFunction {
 export class ResolvedFreeVar {
   constructor(public readonly variable: Var | FunctionParam) {}
 };
+
+export const isResolvedFreeVar = (thing): thing is ResolvedFreeVar => {
+  return thing instanceof ResolvedFreeVar;
+}
+
+// UnresolvedIndexTarget represents a failure to resolve an `Index`
+// node because the target has failed to resolve.
+//
+// For example, in `foo.bar.baz`, failure to resolve either `foo` or
+// `bar`, would result in an `UnresolvedIndexTarget`.
+//
+// NOTE: If `bar` fails to resolve, then we will still report an
+// `UnresolvedIndexTarget`, since `bar` is the target of `bar.baz`.
+export class UnresolvedIndexTarget {
+  constructor(
+    public readonly index: Index,
+  ) {}
+}
+
+export const isUnresolvedIndexTarget = (thing): thing is UnresolvedIndexTarget => {
+  return thing instanceof UnresolvedIndexTarget;
+}
+
+// UnresolvedIndexId represents a failure to resolve the ID of an
+// `Index` node.
+//
+// For example, in `foo.bar.baz`, `baz` is the ID, hence failing to
+// resolve `baz` will result in this error.
+//
+// NOTE: Only `baz` can cause an `UnresolvedIndexId` failure in this
+// example. The reason failing to resolve `bar` doesn't cause an
+// `UnresolvedIndexId` is because `bar` is the target in `bar.baz`.
+export class UnresolvedIndexId {
+  constructor(
+    public readonly index: Index,
+    public readonly resolvedTarget: IndexedObjectFields,
+  ) {}
+}
+
+export const isUnresolvedIndexId = (thing): thing is UnresolvedIndexId => {
+  return thing instanceof UnresolvedIndexId;
+}
 
 // Unresolved represents a miscelleneous failure to resolve a symbol.
 // Typically this occurs the structure of the AST is not amenable to
@@ -1676,4 +1736,8 @@ export class Unresolved {
   // the type we're checking to resolve to `never` (TypeScript's
   // bottom type), which causes compile to fail.
   private readonly foo = "foo";
+}
+
+export const isUnresolved = (thing): thing is Unresolved => {
+  return thing instanceof Unresolved;
 }
