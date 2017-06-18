@@ -349,7 +349,8 @@ export class lexer {
   // next.
   public backup = () => {
     if (this.prevPos === LexEOFPos) {
-      throw new Error("backup called with no valid previous rune");
+      throw new Error(
+        "INTERNAL ERROR: backup called with no valid previous rune");
     }
     if ((this.prevPos - this.lineStart) < 0) {
       this.lineNumber = this.prevLineNumber;
@@ -365,7 +366,8 @@ export class lexer {
 
   public prevLocation = (): error.Location => {
     if (this.prevPos == LexEOFPos) {
-      throw new Error("prevLocation called with no valid previous rune");
+      throw new Error(
+        "INTERNAL ERROR: prevLocation called with no valid previous rune");
     }
     return new error.Location(
       this.prevLineNumber, this.prevPos - this.prevLineStart + 1);
@@ -461,7 +463,7 @@ export class lexer {
             state = "numAfterOneToNine";
           } else {
             // The caller should ensure the first rune is a digit.
-            throw new Error("Couldn't lex number");
+            throw new Error("INTERNAL ERROR: Couldn't lex number");
           }
           break;
         }
@@ -554,7 +556,7 @@ export class lexer {
   public lexIdentifier = () => {
     let r = this.next();
     if (!isIdentifierFirst(r)) {
-      throw new Error("Unexpected character in lexIdentifier");
+      throw new Error("INTERNAL ERROR: Unexpected character in lexIdentifier");
     }
     for (; r.codePoint != LexEOF.codePoint; r = this.next()) {
       if (!isIdentifier(r)) {
@@ -686,7 +688,7 @@ export class lexer {
 
       while (true) {
         if (numWhiteSpace <= 0) {
-          throw new Error("Unexpected value for numWhiteSpace");
+          throw new Error("INTERNAL ERROR: Unexpected value for numWhiteSpace");
         }
         this.acceptN(numWhiteSpace);
         for (r = this.next(); r.data !== '\n'; r = this.next()) {
@@ -723,10 +725,7 @@ export class lexer {
           }
           this.acceptN(3) // Skip '|||'
           const tokenData = cb
-            .map(rune => {
-              if (rune === undefined) {
-                throw new Error(`INTERNAL ERROR: Tried to \`map\` over rune list, but found a rune that was undefined:\n  runes:${cb}`);
-              }
+            .map((rune: rune) => {
               return rune.data;
             })
             .join("");

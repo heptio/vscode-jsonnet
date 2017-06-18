@@ -240,10 +240,7 @@ export abstract class VisitorBase implements Visitor {
           castedNode.expr2, castedNode, envWithParams);
         castedNode.expr3 != null && this.visitHelper(
           castedNode.expr3, castedNode, envWithParams);
-        castedNode.headingComments.forEach(comment => {
-          if (comment == undefined) {
-            throw new Error(`INTERNAL ERROR: element was undefined during a forEach call`);
-          }
+        castedNode.headingComments.forEach((comment: ast.Comment) => {
           this.visitHelper(comment, castedNode, currEnv);
         });
         return;
@@ -510,7 +507,8 @@ export class CursorVisitor extends VisitorBase {
       } else if (this.cursor.strictlyAfterRange(this.terminalNode.loc)) {
         return new UnanalyzableFindFailure("AfterDocEnd");
       }
-      throw new Error("INTERNAL ERROR: No wrapping identifier was found, but node didn't lie outside of document range");
+      throw new Error(
+        "INTERNAL ERROR: No wrapping identifier was found, but node didn't lie outside of document range");
     } else if (!ast.isIdentifier(this.enclosingNode)) {
       if (
         this.terminalNodeOnCursorLine != null &&

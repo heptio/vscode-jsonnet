@@ -20,10 +20,7 @@ export const envFromLocalBinds = (
     const defaultLocal: {[key: string]: LocalBind} = {};
     const binds = local.binds
       .reduce(
-        (acc, bind) => {
-          if (acc == undefined || bind == undefined) {
-            throw new Error(`INTERNAL ERROR: Local binds can't be undefined during a \`reduce\``);
-          }
+        (acc: {[key: string]: LocalBind}, bind: LocalBind) => {
           acc[bind.variable.name] = bind;
           return acc;
         },

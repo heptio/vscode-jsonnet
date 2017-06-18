@@ -1261,7 +1261,8 @@ class parser {
                 return rhs;
               }
               if (bop == null) {
-                throw new Error("INTERNAL ERROR: `parse` can't return a null node unless an `error` is populated");
+                throw new Error(
+                  "INTERNAL ERROR: `parse` can't return a null node unless an `error` is populated");
               }
               lhs = new ast.Binary(lhs, bop, rhs, locFromTokenAST(begin, rhs));
               break;

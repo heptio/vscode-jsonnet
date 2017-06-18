@@ -484,7 +484,7 @@ export class Analyzer implements EventedAnalyzer {
       // TODO: Handle this error without an exception.
       const err = compiler.isLexFailure(cached.parse)
         ? cached.parse.lexError.Error()
-        : cached.parse.parseError.Error()
+        : cached.parse.parseError.Error();
       throw new Error(
         `INTERNAL ERROR: Could not cache analysis of file ${fileUri}:\b${err}`);
     }
@@ -517,14 +517,13 @@ export class Analyzer implements EventedAnalyzer {
 //
 
 const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
-    return env.map((value, key) => {
-      if (value == null) {
-        throw new Error(`INTERNAL ERROR: Value in environment is null`);
-      }
+    return env.map((value: ast.LocalBind | ast.FunctionParam, key: string) => {
+      // TODO: Fill in documentation later. This might involve trying
+      // to parse function comment to get comments about different
+      // parameters.
       return <service.CompletionInfo>{
         label: key,
         kind: "Variable",
-        // TODO: Fill in documentaiton later.
       };
     })
     .toArray();
