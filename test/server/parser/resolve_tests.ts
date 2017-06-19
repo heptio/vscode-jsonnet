@@ -93,7 +93,7 @@ class RangeSpec<TLocated extends ast.Node, TResolved extends ast.Node> {
       const coords = `(line: ${this.line}, col: ${col})`;
 
       const spec = this.spec;
-      let found = analyzer.getNodeAtPositionFromAst(
+      let found = analyze.getNodeAtPositionFromAst(
         root, new error.Location(this.line, col));
 
       if (isAnalyzableFailedLocatedSpec(spec)) {
@@ -298,7 +298,7 @@ const resolveAt = (
   root: ast.Node, line: number, column: number
 ): ast.Node | null => {
   const loc = new error.Location(line, column);
-  let node = analyzer.getNodeAtPositionFromAst(root, loc);
+  let node = analyze.getNodeAtPositionFromAst(root, loc);
   if (astVisitor.isAnalyzableFindFailure(node)) {
     node = node.tightestEnclosingNode;
   } else if (astVisitor.isUnanalyzableFindFailure(node)) {

@@ -52,13 +52,16 @@ export class Analyzer implements EventedAnalyzer {
         });
     }
 
+    const {text: docText, version: version} = this.documents.get(fileUri);
+    const cached = this.compilerService.cache(fileUri, docText, version);
+    if (compiler.isFailedParsedDocument(cached)) {
+      return onHoverPromise(null);
+    }
+
     try {
       // Get symbol we're hovering over.
-      const nodeAtPos = this.getNodeAtPosition(fileUri, cursorLoc);
-      if (
-        astVisitor.isFindFailure(nodeAtPos) ||
-        compiler.isFailedParsedDocument(nodeAtPos)
-      ) {
+      const nodeAtPos = getNodeAtPositionFromAst(cached.parse, cursorLoc);
+      if (astVisitor.isFindFailure(nodeAtPos)) {
         return onHoverPromise(null);
       }
 
@@ -151,9 +154,9 @@ export class Analyzer implements EventedAnalyzer {
       });
   }
 
-  //
+  // --------------------------------------------------------------------------
   // Completion methods.
-  //
+  // --------------------------------------------------------------------------
 
   // completionsFromParse takes a `ParsedDocument` (i.e., a
   // successfully-parsed document), a cursor location, and an
@@ -167,7 +170,7 @@ export class Analyzer implements EventedAnalyzer {
     // of calls to `this` so that we don't have to mock out more of
     // the analyzer to test it.
 
-    let foundNode = this.getNodeAtPositionFromAst(
+    let foundNode = getNodeAtPositionFromAst(
       compiled.parse, cursorLoc);
     if (astVisitor.isAnalyzableFindFailure(foundNode)) {
       if (foundNode.kind === "NotIdentifier") {
@@ -235,7 +238,7 @@ export class Analyzer implements EventedAnalyzer {
     }
 
     // Step 2, try to find the "best guess".
-    let foundNode = this.getNodeAtPositionFromAst(
+    let foundNode = getNodeAtPositionFromAst(
       lastParse.parse, cursorLoc);
     if (astVisitor.isAnalyzableFindFailure(foundNode)) {
       if (foundNode.terminalNodeOnCursorLine != null) {
@@ -321,9 +324,41 @@ export class Analyzer implements EventedAnalyzer {
     return [];
   }
 
-  //
-  // Utilities.
-  //
+  private completionsFromFields = (
+    fieldSet: ast.IndexedObjectFields
+  ): service.CompletionInfo[] => {
+    // Attempt to get all the possible fields we could suggest. If the
+    // resolved item is an `ObjectNode`, just use its fields; if it's
+    // a mixin of two objects, merge them and use the merged fields
+    // instead.
+
+    return immutable.List(fieldSet.values())
+      .filter((field: ast.ObjectField) =>
+        field != null && field.id != null && field.expr2 != null && field.kind !== "ObjectLocal")
+      .map((field: ast.ObjectField) => {
+        if (field == null || field.id == null || field.expr2 == null) {
+          throw new Error(
+            `INTERNAL ERROR: Filtered out null fields, but found field null`);
+        }
+
+        let kind: service.CompletionType = "Field";
+        if (field.methodSugar) {
+          kind = "Method";
+        }
+
+        const comments = this.getComments(field);
+        return {
+          label: field.id.name,
+          kind: kind,
+          documentation: comments || undefined,
+        };
+      })
+      .toArray();
+  }
+
+  // --------------------------------------------------------------------------
+  // Completion methods.
+  // --------------------------------------------------------------------------
 
   private renderOnhoverMessage = (
     node: ast.Node | ast.IndexedObjectFields,
@@ -362,41 +397,9 @@ export class Analyzer implements EventedAnalyzer {
     ];
   }
 
-  private completionsFromFields = (
-    fieldSet: ast.IndexedObjectFields
-  ): service.CompletionInfo[] => {
-    // Attempt to get all the possible fields we could suggest. If the
-    // resolved item is an `ObjectNode`, just use its fields; if it's
-    // a mixin of two objects, merge them and use the merged fields
-    // instead.
-
-    return immutable.List(fieldSet.values())
-      .filter((field: ast.ObjectField) =>
-        field != null && field.id != null && field.expr2 != null && field.kind !== "ObjectLocal")
-      .map((field: ast.ObjectField) => {
-        if (field == null || field.id == null || field.expr2 == null) {
-          throw new Error(
-            `INTERNAL ERROR: Filtered out null fields, but found field null`);
-        }
-
-        let kind: service.CompletionType = "Field";
-        if (field.methodSugar) {
-          kind = "Method";
-        }
-
-        const comments = this.getComments(field);
-        return {
-          label: field.id.name,
-          kind: kind,
-          documentation: comments || undefined,
-        };
-      })
-      .toArray();
-  }
-
-  //
-  // Symbol resolution.
-  //
+  // --------------------------------------------------------------------------
+  // Comment resolution.
+  // --------------------------------------------------------------------------
 
   // resolveComments takes a node as argument, and attempts to find the
   // comments that correspond to that node. For example, if the node
@@ -426,10 +429,6 @@ export class Analyzer implements EventedAnalyzer {
     }
   }
 
-  //
-  // Utilities.
-  //
-
   private getComments = (field: ast.ObjectField): string | null => {
     // Convert to field object, pull comments out.
     const comments = field.headingComments;
@@ -447,42 +446,30 @@ export class Analyzer implements EventedAnalyzer {
       }, [])
       .join("\n");
   }
-
-  public getNodeAtPosition = (
-    fileUri: string, pos: error.Location,
-  ): ast.Node | astVisitor.FindFailure | compiler.FailedParsedDocument => {
-    const {text: docText, version: version} = this.documents.get(fileUri);
-    const cached = this.compilerService.cache(fileUri, docText, version);
-    if (compiler.isFailedParsedDocument(cached)) {
-      return cached;
-    }
-
-    return this.getNodeAtPositionFromAst(cached.parse, pos);
-  }
-
-  public getNodeAtPositionFromAst = (
-    rootNode: ast.Node, pos: error.Location
-  ): ast.Node | astVisitor.FindFailure => {
-    // Special case. Make sure that if the cursor is beyond the range
-    // of text of the last good parse, we just return the last node.
-    // For example, if the user types a `.` character at the end of
-    // the document, the document now fails to parse, and the cursor
-    // is beyond the range of text of the last good parse.
-    const endLoc = rootNode.loc.end;
-    if (endLoc.line < pos.line || (endLoc.line == pos.line && endLoc.column < pos.column)) {
-      pos = endLoc;
-    }
-
-    const visitor = new astVisitor.CursorVisitor(pos, rootNode);
-    visitor.visit();
-    const tightestNode = visitor.nodeAtPosition;
-    return tightestNode;
-  }
 }
 
 //
 // Utilities.
 //
+
+export const getNodeAtPositionFromAst = (
+  rootNode: ast.Node, pos: error.Location
+): ast.Node | astVisitor.FindFailure => {
+  // Special case. Make sure that if the cursor is beyond the range
+  // of text of the last good parse, we just return the last node.
+  // For example, if the user types a `.` character at the end of
+  // the document, the document now fails to parse, and the cursor
+  // is beyond the range of text of the last good parse.
+  const endLoc = rootNode.loc.end;
+  if (endLoc.line < pos.line || (endLoc.line == pos.line && endLoc.column < pos.column)) {
+    pos = endLoc;
+  }
+
+  const visitor = new astVisitor.CursorVisitor(pos, rootNode);
+  visitor.visit();
+  const tightestNode = visitor.nodeAtPosition;
+  return tightestNode;
+}
 
 const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
     return env.map((value: ast.LocalBind | ast.FunctionParam, key: string) => {

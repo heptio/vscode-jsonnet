@@ -35,7 +35,7 @@ const resolveSymbolAtPositionFromAst = (
   analyzer: analyze.Analyzer, compilerService: compiler.CompilerService,
   documents: workspace.DocumentManager, rootNode: ast.Node, pos: error.Location,
 ): ast.Node | null => {
-  let nodeAtPos = analyzer.getNodeAtPositionFromAst(rootNode, pos);
+  let nodeAtPos = analyze.getNodeAtPositionFromAst(rootNode, pos);
   if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
     nodeAtPos = nodeAtPos.tightestEnclosingNode;
   } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
@@ -177,7 +177,7 @@ describe("Searching an AST by position", () => {
   it("Object field assigned value of `local` symbol", () => {
     // Property.
     {
-      const property1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const property1Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 5));
       assert.isNotNull(property1Id);
       assert.equal(property1Id.type, "IdentifierNode");
@@ -193,7 +193,7 @@ describe("Searching an AST by position", () => {
 
     // Target.
     {
-      const target1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const target1Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 14));
       assert.isNotNull(target1Id);
       assert.equal(target1Id.type, "IdentifierNode");
@@ -216,7 +216,7 @@ describe("Searching an AST by position", () => {
   it("Object field assigned literal number", () => {
     // Target.
     const found =
-      <astVisitor.AnalyzableFindFailure>analyzer.getNodeAtPositionFromAst(
+      <astVisitor.AnalyzableFindFailure>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(3, 15));
     assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
     assert.equal(found.kind, "NotIdentifier");
@@ -236,7 +236,7 @@ describe("Searching an AST by position", () => {
   it("`local` object field assigned value", () => {
     // Property.
     {
-      const property3Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const property3Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 9));
       assert.isNotNull(property3Id);
       assert.equal(property3Id.type, "IdentifierNode");
@@ -253,7 +253,7 @@ describe("Searching an AST by position", () => {
     // Target.
     {
       const found =
-        <astVisitor.AnalyzableFindFailure>analyzer.getNodeAtPositionFromAst(
+        <astVisitor.AnalyzableFindFailure>analyze.getNodeAtPositionFromAst(
           rootNode, makeLocation(4, 15));
       assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
       assert.equal(found.kind, "NotIdentifier");
@@ -278,7 +278,7 @@ describe("Searching an AST by position", () => {
     // the current field. This tests that we correctly resolve that
     // reference, even though it occurs after the current object
     // field.
-    const property4Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+    const property4Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
       rootNode, makeLocation(5, 20));
     assert.isNotNull(property4Id);
     assert.equal(property4Id.type, "IdentifierNode");
@@ -294,7 +294,7 @@ describe("Searching an AST by position", () => {
   it("Can resolve identifiers that refer to mixins", () => {
     // merged1.b
     {
-      const merged1 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged1 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 23));
       assert.isNotNull(merged1);
       assert.equal(merged1.type, "IdentifierNode");
@@ -309,7 +309,7 @@ describe("Searching an AST by position", () => {
 
     // merged2.a
     {
-      const merged2 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged2 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 34));
       assert.isNotNull(merged2);
       assert.equal(merged2.type, "IdentifierNode");
@@ -324,7 +324,7 @@ describe("Searching an AST by position", () => {
 
     // merged3.a
     {
-      const merged3 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged3 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 45));
       assert.isNotNull(merged3);
       assert.equal(merged3.type, "IdentifierNode");
@@ -339,7 +339,7 @@ describe("Searching an AST by position", () => {
 
     // merged4.a
     {
-      const merged4 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged4 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 56));
       assert.isNotNull(merged4);
       assert.equal(merged4.type, "IdentifierNode");
@@ -354,7 +354,7 @@ describe("Searching an AST by position", () => {
 
     // merged4.a
     {
-      const merged5 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged5 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(15, 28));
       assert.isNotNull(merged5);
       assert.equal(merged5.type, "IdentifierNode");
@@ -373,7 +373,7 @@ describe("Searching an AST by position", () => {
     // points to another variable. In this case, `numberVal2` refers
     // to `numberVal1`.
 
-    const node = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+    const node = <ast.Identifier>analyze.getNodeAtPositionFromAst(
       rootNode, makeLocation(18, 19));
     assert.isNotNull(node);
     assert.equal(node.type, "IdentifierNode");
