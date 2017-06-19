@@ -1680,6 +1680,13 @@ export const isResolvedFreeVar = (thing): thing is ResolvedFreeVar => {
   return thing instanceof ResolvedFreeVar;
 }
 
+export type UnresolvedIndex = UnresolvedIndexTarget | UnresolvedIndexId;
+
+export const isUnresolvedIndex = (thing): thing is UnresolvedIndex => {
+  return thing instanceof UnresolvedIndexTarget ||
+    thing instanceof UnresolvedIndexId;
+}
+
 // UnresolvedIndexTarget represents a failure to resolve an `Index`
 // node because the target has failed to resolve.
 //

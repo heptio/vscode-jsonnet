@@ -31,6 +31,28 @@ const assertLocationRange = (
   assert.equal(lr.end.column, endCol);
 }
 
+const resolveSymbolAtPositionFromAst = (
+  analyzer: analyze.Analyzer, compilerService: compiler.CompilerService,
+  documents: workspace.DocumentManager, rootNode: ast.Node, pos: error.Location,
+): ast.Node | null => {
+  let nodeAtPos = analyzer.getNodeAtPositionFromAst(rootNode, pos);
+  if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+    nodeAtPos = nodeAtPos.tightestEnclosingNode;
+  } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+    return null;
+  }
+
+  if (!ast.isResolvable(nodeAtPos)) {
+    return null;
+  }
+
+  const resolved = nodeAtPos.resolve(compilerService, documents);
+
+  return !ast.isNode(resolved)
+    ? null
+    : resolved;
+}
+
 describe("Compiler service", () => {
   const mockFilename = "mockFile.jsonnet";
   const mockDocumentText1 = "{}";
@@ -382,8 +404,8 @@ describe("Imported symbol resolution", () => {
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
-      <ast.Local>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(4, 8));
+      <ast.Local>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
     assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNotNull(importedSymbol.parent);
@@ -396,8 +418,8 @@ describe("Imported symbol resolution", () => {
     // `fooModule` symbol as an import, then load the relevant file,
     // then resolve the `foo` symbol.
     const valueofObjectField =
-      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(5, 19));
+      <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(5, 19));
     assert.isNotNull(valueofObjectField);
     assert.equal(valueofObjectField.type, "LiteralNumberNode");
     assert.equal(valueofObjectField.originalString, "99");
@@ -410,8 +432,8 @@ describe("Imported symbol resolution", () => {
     // tests that we can correctly obtain the documentation for this
     // symbol.
     const valueOfObjectField =
-      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(5, 19));
+      <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(5, 19));
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNotNull(comments);
@@ -425,8 +447,8 @@ describe("Imported symbol resolution", () => {
     // This tests that we can correctly obtain the documentation for
     // a symbol that lies in a multiply-nested index node.
     const valueOfObjectField =
-      <ast.LiteralString>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(7, 23));
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(7, 23));
     assert.isNotNull(valueOfObjectField);
     assert.equal(valueOfObjectField.type, "LiteralStringNode");
     assert.equal(valueOfObjectField.value, "batVal");
@@ -442,8 +464,8 @@ describe("Imported symbol resolution", () => {
     // tests that we do not report documentation for this symbol, as
     // it is a `local` field.
     const valueOfObjectField =
-      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(6, 10));
+      <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(6, 10));
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNull(comments);

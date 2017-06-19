@@ -43,51 +43,58 @@ export class Analyzer implements EventedAnalyzer {
   public onHover = (
     fileUri: string, cursorLoc: error.Location
   ): Promise<service.HoverInfo> => {
-    const onHoverPromise = (node: ast.Node): Promise<service.HoverInfo> => {
+    const onHoverPromise = (
+      node: ast.Node | ast.IndexedObjectFields | null,
+    ): Promise<service.HoverInfo> => {
       return Promise.resolve().then(
         () => <service.HoverInfo> {
-          contents: this.renderOnhoverMessage(node),
+          contents: node == null ? [] : this.renderOnhoverMessage(node),
         });
     }
 
-    // Get symbol we're hovering over.
-    const nodeAtPos = this.getNodeAtPosition(fileUri, cursorLoc);
-    if (astVisitor.isFindFailure(nodeAtPos)) {
-      return Promise.resolve().then(() => {return {contents:[]}});
-    }
-    if (nodeAtPos.parent != null && ast.isFunctionParam(nodeAtPos.parent)) {
-      // A function parameter is a free variable, so we can't resolve
-      // it. Simply return.
-      return onHoverPromise(nodeAtPos.parent);
-    }
-
-    const resolved = this.resolveSymbol(nodeAtPos);
-    if (resolved == null) {
-      return Promise.resolve().then(
-        () => <service.HoverInfo> {
-          contents: [],
-        });
-    }
-
-    // Handle the special cases. If we hover over a symbol that points
-    // at a function of some sort (i.e., a `function` literal, a
-    // `local` that has a bind that is a function, or an object field
-    // that is a function), then we want to render the name and
-    // parameters that function takes, rather than the definition of
-    // the function itself.
-    if (ast.isFunctionParam(resolved) || resolved.parent == null) {
-      return onHoverPromise(resolved);
-    } else {
-      switch (resolved.parent.type) {
-        case "FunctionNode":
-        case "LocalNode":
-        case "ObjectFieldNode": {
-          return onHoverPromise(resolved.parent);
-        }
-        default: {
-          return onHoverPromise(resolved);
-        }
+    try {
+      // Get symbol we're hovering over.
+      const nodeAtPos = this.getNodeAtPosition(fileUri, cursorLoc);
+      if (
+        astVisitor.isFindFailure(nodeAtPos) ||
+        compiler.isFailedParsedDocument(nodeAtPos)
+      ) {
+        return onHoverPromise(null);
       }
+
+      if (nodeAtPos.parent != null && ast.isFunctionParam(nodeAtPos.parent)) {
+        // A function parameter is a free variable, so we can't resolve
+        // it. Simply return.
+        return onHoverPromise(nodeAtPos.parent);
+      }
+
+      if (!ast.isResolvable(nodeAtPos)) {
+        return onHoverPromise(null);
+      }
+
+      const resolved = ast.tryResolveIndirections(
+        nodeAtPos, this.compilerService, this.documents);
+
+      // Handle the special cases. If we hover over a symbol that points
+      // at a function of some sort (i.e., a `function` literal, a
+      // `local` that has a bind that is a function, or an object field
+      // that is a function), then we want to render the name and
+      // parameters that function takes, rather than the definition of
+      // the function itself.
+      if (ast.isUnresolved(resolved) || ast.isUnresolvedIndex(resolved)) {
+        return onHoverPromise(null);
+      } else if (ast.isIndexedObjectFields(resolved)) {
+        return onHoverPromise(resolved);
+      } else if (ast.isResolvedFreeVar(resolved)) {
+        return onHoverPromise(resolved.variable);
+      } else if (ast.isResolvedFunction(resolved)) {
+        return onHoverPromise(resolved.functionNode);
+      } else {
+        return onHoverPromise(resolved);
+      }
+    } catch (err) {
+      console.log(err);
+      return onHoverPromise(null);
     }
   }
 
@@ -318,7 +325,21 @@ export class Analyzer implements EventedAnalyzer {
   // Utilities.
   //
 
-  private renderOnhoverMessage = (node: ast.Node): service.LanguageString[] => {
+  private renderOnhoverMessage = (
+    node: ast.Node | ast.IndexedObjectFields,
+  ): service.LanguageString[] => {
+    if (ast.isIndexedObjectFields(node)) {
+      if (node.count() === 0) {
+        return [];
+      }
+
+      const first = node.first();
+      if (first.parent == null) {
+        return [];
+      }
+      node = first.parent;
+    }
+
     const commentText: string | null = this.resolveComments(node);
 
     const doc = this.documents.get(node.loc.fileName);
@@ -377,30 +398,6 @@ export class Analyzer implements EventedAnalyzer {
   // Symbol resolution.
   //
 
-  public resolveSymbolAtPosition = (
-    fileUri: string, pos: error.Location,
-  ): ast.Node | null => {
-    let nodeAtPos = this.getNodeAtPosition(fileUri, pos);
-    if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
-      nodeAtPos = nodeAtPos.tightestEnclosingNode;
-    } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
-      return null;
-    }
-    return this.resolveSymbol(nodeAtPos);
-  }
-
-  public resolveSymbolAtPositionFromAst = (
-    rootNode: ast.Node, pos: error.Location,
-  ): ast.Node | null => {
-    let nodeAtPos = this.getNodeAtPositionFromAst(rootNode, pos);
-    if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
-      nodeAtPos = nodeAtPos.tightestEnclosingNode;
-    } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
-      return null;
-    }
-    return this.resolveSymbol(nodeAtPos);
-  }
-
   // resolveComments takes a node as argument, and attempts to find the
   // comments that correspond to that node. For example, if the node
   // passed in exists inside an object field, we will explore the parent
@@ -429,29 +426,6 @@ export class Analyzer implements EventedAnalyzer {
     }
   }
 
-  private resolveSymbol = (node: ast.Node): ast.Node | null => {
-    if (node.parent && ast.isObjectField(node.parent)) {
-      return node.parent;
-    }
-
-    switch(node.type) {
-      case "IdentifierNode": {
-        const resolved = (<ast.Identifier>node).resolve(
-          this.compilerService, this.documents);
-        if (ast.isIndexedObjectFields(resolved) || ast.isResolveFailure(resolved)) {
-          return null;
-        }
-        return resolved;
-      }
-      case "LocalNode": {
-        return node;
-      }
-      default: {
-        return null;
-      }
-    }
-  }
-
   //
   // Utilities.
   //
@@ -476,16 +450,11 @@ export class Analyzer implements EventedAnalyzer {
 
   public getNodeAtPosition = (
     fileUri: string, pos: error.Location,
-  ): ast.Node | astVisitor.FindFailure => {
+  ): ast.Node | astVisitor.FindFailure | compiler.FailedParsedDocument => {
     const {text: docText, version: version} = this.documents.get(fileUri);
     const cached = this.compilerService.cache(fileUri, docText, version);
     if (compiler.isFailedParsedDocument(cached)) {
-      // TODO: Handle this error without an exception.
-      const err = compiler.isLexFailure(cached.parse)
-        ? cached.parse.lexError.Error()
-        : cached.parse.parseError.Error();
-      throw new Error(
-        `INTERNAL ERROR: Could not cache analysis of file ${fileUri}:\b${err}`);
+      return cached;
     }
 
     return this.getNodeAtPositionFromAst(cached.parse, pos);
