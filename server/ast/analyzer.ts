@@ -243,13 +243,12 @@ export class Analyzer implements EventedAnalyzer {
     // Step 3, combine the partial parse and the environment
     // of the "best guess" to attempt to create meaningful
     // suggestions for the user.
-    //
-    // NOTE: Local binds don't inherit from `node`, so this is
-    // a special case.
-    const env = ast.isLocal(foundNode)
-      ? <ast.Environment>foundNode.body.env
-      : <ast.Environment>foundNode.env;
-    new astVisitor.InitializingVisitor(rest, foundNode, env).visit();
+    if (foundNode.env == null) {
+      throw new Error("INTERNAL ERROR: Node environment can't be null");
+    }
+    new astVisitor
+      .InitializingVisitor(rest, foundNode, foundNode.env)
+      .visit();
 
     // Create suggestions.
     return this.completionsFromNode(rest, cursorLoc, lastCharIsDot);

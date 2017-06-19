@@ -179,26 +179,33 @@ export abstract class VisitorBase implements Visitor {
           castedNode.index, castedNode, currEnv);
         return;
       }
-      // // case "LocalBindNode": return this.VisitLocalBind(<ast.LocalBind>node);
+      case "LocalBindNode": {
+        const castedNode = <ast.LocalBind>node;
+        this.visitLocalBind(<ast.LocalBind>node);
+
+        // NOTE: If `functionSugar` is false, the params will be
+        // empty.
+        const envWithParams = currEnv.merge(
+          ast.envFromParams(castedNode.params));
+
+        castedNode.params.forEach((param: ast.FunctionParam) => {
+          this.visitHelper(param, castedNode, envWithParams)
+        });
+
+        this.visitHelper(castedNode.body, castedNode, envWithParams);
+        return;
+      }
       case "LocalNode": {
         const castedNode = <ast.Local>node;
         this.visitLocal(castedNode);
 
+        // NOTE: The binds of a `local` are in scope for both the
+        // binds themselves, as well as the body of the `local`.
         const envWithBinds = currEnv.merge(ast.envFromLocalBinds(castedNode));
+        castedNode.env = envWithBinds;
+
         castedNode.binds.forEach((bind: ast.LocalBind) => {
-          // NOTE: If `functionSugar` is false, the params will be
-          // empty.
-          const envWithParams = envWithBinds.merge(
-              ast.envFromParams(bind.params));
-
-          // TODO: `castedNode` is marked as parent here because
-          // `LocalBind` currently does not implement `Node`. We
-          // should decide whether that should change.
-          bind.params.forEach((param: ast.FunctionParam) => {
-            this.visitHelper(param, castedNode, envWithParams)
-          });
-
-          this.visitHelper(bind.body, castedNode, envWithParams);
+          this.visitHelper(bind, castedNode, envWithBinds);
         });
 
         this.visitHelper(castedNode.body, castedNode, envWithBinds);
@@ -367,7 +374,7 @@ export abstract class VisitorBase implements Visitor {
   protected visitImport = (node: ast.Import): void => {}
   protected visitImportStr = (node: ast.ImportStr): void => {}
   protected visitIndex = (node: ast.Index): void => {}
-  // // public abstract VisitLocalBind(node: ast.LocalBind): void
+  protected visitLocalBind = (node: ast.LocalBind): void => {}
   protected visitLocal = (node: ast.Local): void => {}
 
   protected visitLiteralBoolean = (node: ast.LiteralBoolean): void => {}

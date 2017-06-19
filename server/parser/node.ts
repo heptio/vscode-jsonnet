@@ -31,13 +31,14 @@ export const envFromLocalBinds = (
       throw new Error(`INTERNAL ERROR: Object local fields can't have a null expr2 or id field`);
     }
 
-    const bind: LocalBind = {
-      variable:      local.id,
-      body:          local.expr2,
-      functionSugar: local.methodSugar,
-      params:        local.ids,
-      trailingComma: local.trailingComma,
-    };
+    const bind: LocalBind = new LocalBind(
+      local.id,
+      local.expr2,
+      local.methodSugar,
+      local.ids,
+      local.trailingComma,
+      local.loc,
+    );
     return im.Map<string, LocalBind>().set(local.id.name, bind);
   }
 
@@ -975,27 +976,34 @@ export const isIndexDot = (node): node is Index => {
 // ---------------------------------------------------------------------------
 
 // LocalBind is a helper struct for Local
-export interface LocalBind {
-  readonly variable:      Identifier
-  readonly body:          Node
-  readonly functionSugar: boolean
-  readonly params:        FunctionParams // if functionSugar is true
-  readonly trailingComma: boolean
+export class LocalBind extends NodeBase {
+  readonly type: "LocalBindNode" = "LocalBindNode";
+
+  constructor(
+    readonly variable:      Identifier,
+    readonly body:          Node,
+    readonly functionSugar: boolean,
+    readonly params:        FunctionParams, // if functionSugar is true
+    readonly trailingComma: boolean,
+    readonly loc:           error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    const idString = this.variable.prettyPrint();
+    if (this.functionSugar) {
+      const paramsString = this.params
+        .map((param: FunctionParam) => param.id)
+        .join(", ");
+      return `${idString}(${paramsString})`;
+    }
+    return `${idString} = ${this.body.prettyPrint()}`;
+  }
 }
 export type LocalBinds = im.List<LocalBind>
 
-export const makeLocalBind = (
-  variable: Identifier, body: Node, functionSugar: boolean,
-  params: FunctionParams, trailingComma: boolean,
-): LocalBind => {
-  return {
-    variable:      variable,
-    body:          body,
-    functionSugar: functionSugar,
-    params:        params, // if functionSugar is true
-    trailingComma: trailingComma,
-  }
-};
+export const isLocalBind = (node): node is LocalBind => {
+  return node instanceof LocalBind;
+}
 
 // Local represents local x = e; e.  After desugaring, functionSugar is false.
 export class Local extends NodeBase {
@@ -1009,16 +1017,7 @@ export class Local extends NodeBase {
 
   public prettyPrint = (): string => {
     const bindsString = this.binds
-      .map((bind: LocalBind) => {
-        const idString = bind.variable.prettyPrint();
-        if (bind.functionSugar) {
-          const paramsString = bind.params
-            .map((param: FunctionParam) => param.id)
-            .join(", ");
-          return `${idString}(${paramsString})`;
-        }
-        return `${idString} = ${bind.body.prettyPrint()}`;
-      })
+      .map((bind: LocalBind) => bind.prettyPrint())
       .join(",\n  ");
 
     return `local ${bindsString}`;
