@@ -223,7 +223,7 @@ class parser {
   }
 
   public parseBind = (
-    binds: ast.LocalBinds
+    localToken: lexer.Token, binds: ast.LocalBinds
   ): ast.LocalBinds | error.StaticError => {
     const varID = this.popExpect("TokenIdentifier");
     if (error.isStaticError(varID)) {
@@ -255,7 +255,9 @@ class parser {
       }
       const id = new ast.Identifier(varID.data, varID.loc);
       const {params: params, gotComma: gotComma} = result;
-      const bind = ast.makeLocalBind(id, body, true, params, gotComma);
+      const location = locFromTokenAST(localToken, body);
+      const bind = new ast.LocalBind(
+        id, body, true, params, gotComma, location);
       binds = binds.push(bind);
     } else {
       const pop = this.popExpectOp("=");
@@ -267,8 +269,9 @@ class parser {
         return body;
       }
       const id = new ast.Identifier(varID.data, varID.loc);
-      const bind = ast.makeLocalBind(
-        id, body, false, im.List<ast.FunctionParam>(), false);
+      const location = locFromTokenAST(localToken, body);
+      const bind = new ast.LocalBind(
+        id, body, false, im.List<ast.FunctionParam>(), false, location);
       binds = binds.push(bind);
     }
 
@@ -1100,7 +1103,7 @@ class parser {
         this.pop();
         let binds = im.List<ast.LocalBind>();
         while (true) {
-          const newBinds = this.parseBind(binds);
+          const newBinds = this.parseBind(begin, binds);
           if (error.isStaticError(newBinds)) {
             return newBinds;
           }
@@ -1261,7 +1264,8 @@ class parser {
                 return rhs;
               }
               if (bop == null) {
-                throw new Error("INTERNAL ERROR: `parse` can't return a null node unless an `error` is populated");
+                throw new Error(
+                  "INTERNAL ERROR: `parse` can't return a null node unless an `error` is populated");
               }
               lhs = new ast.Binary(lhs, bop, rhs, locFromTokenAST(begin, rhs));
               break;

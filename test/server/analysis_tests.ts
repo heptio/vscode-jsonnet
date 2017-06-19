@@ -31,6 +31,28 @@ const assertLocationRange = (
   assert.equal(lr.end.column, endCol);
 }
 
+const resolveSymbolAtPositionFromAst = (
+  analyzer: analyze.Analyzer, compilerService: compiler.CompilerService,
+  documents: workspace.DocumentManager, rootNode: ast.Node, pos: error.Location,
+): ast.Node | null => {
+  let nodeAtPos = analyze.getNodeAtPositionFromAst(rootNode, pos);
+  if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+    nodeAtPos = nodeAtPos.tightestEnclosingNode;
+  } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+    return null;
+  }
+
+  if (!ast.isResolvable(nodeAtPos)) {
+    return null;
+  }
+
+  const resolved = nodeAtPos.resolve(compilerService, documents);
+
+  return !ast.isNode(resolved)
+    ? null
+    : resolved;
+}
+
 describe("Compiler service", () => {
   const mockFilename = "mockFile.jsonnet";
   const mockDocumentText1 = "{}";
@@ -155,7 +177,7 @@ describe("Searching an AST by position", () => {
   it("Object field assigned value of `local` symbol", () => {
     // Property.
     {
-      const property1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const property1Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 5));
       assert.isNotNull(property1Id);
       assert.equal(property1Id.type, "IdentifierNode");
@@ -171,7 +193,7 @@ describe("Searching an AST by position", () => {
 
     // Target.
     {
-      const target1Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const target1Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 14));
       assert.isNotNull(target1Id);
       assert.equal(target1Id.type, "IdentifierNode");
@@ -194,7 +216,7 @@ describe("Searching an AST by position", () => {
   it("Object field assigned literal number", () => {
     // Target.
     const found =
-      <astVisitor.AnalyzableFindFailure>analyzer.getNodeAtPositionFromAst(
+      <astVisitor.AnalyzableFindFailure>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(3, 15));
     assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
     assert.equal(found.kind, "NotIdentifier");
@@ -214,7 +236,7 @@ describe("Searching an AST by position", () => {
   it("`local` object field assigned value", () => {
     // Property.
     {
-      const property3Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const property3Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 9));
       assert.isNotNull(property3Id);
       assert.equal(property3Id.type, "IdentifierNode");
@@ -231,7 +253,7 @@ describe("Searching an AST by position", () => {
     // Target.
     {
       const found =
-        <astVisitor.AnalyzableFindFailure>analyzer.getNodeAtPositionFromAst(
+        <astVisitor.AnalyzableFindFailure>analyze.getNodeAtPositionFromAst(
           rootNode, makeLocation(4, 15));
       assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
       assert.equal(found.kind, "NotIdentifier");
@@ -256,7 +278,7 @@ describe("Searching an AST by position", () => {
     // the current field. This tests that we correctly resolve that
     // reference, even though it occurs after the current object
     // field.
-    const property4Id = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+    const property4Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
       rootNode, makeLocation(5, 20));
     assert.isNotNull(property4Id);
     assert.equal(property4Id.type, "IdentifierNode");
@@ -272,7 +294,7 @@ describe("Searching an AST by position", () => {
   it("Can resolve identifiers that refer to mixins", () => {
     // merged1.b
     {
-      const merged1 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged1 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 23));
       assert.isNotNull(merged1);
       assert.equal(merged1.type, "IdentifierNode");
@@ -287,7 +309,7 @@ describe("Searching an AST by position", () => {
 
     // merged2.a
     {
-      const merged2 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged2 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 34));
       assert.isNotNull(merged2);
       assert.equal(merged2.type, "IdentifierNode");
@@ -302,7 +324,7 @@ describe("Searching an AST by position", () => {
 
     // merged3.a
     {
-      const merged3 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged3 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 45));
       assert.isNotNull(merged3);
       assert.equal(merged3.type, "IdentifierNode");
@@ -317,7 +339,7 @@ describe("Searching an AST by position", () => {
 
     // merged4.a
     {
-      const merged4 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged4 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 56));
       assert.isNotNull(merged4);
       assert.equal(merged4.type, "IdentifierNode");
@@ -332,7 +354,7 @@ describe("Searching an AST by position", () => {
 
     // merged4.a
     {
-      const merged5 = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+      const merged5 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
         rootNode, makeLocation(15, 28));
       assert.isNotNull(merged5);
       assert.equal(merged5.type, "IdentifierNode");
@@ -351,7 +373,7 @@ describe("Searching an AST by position", () => {
     // points to another variable. In this case, `numberVal2` refers
     // to `numberVal1`.
 
-    const node = <ast.Identifier>analyzer.getNodeAtPositionFromAst(
+    const node = <ast.Identifier>analyze.getNodeAtPositionFromAst(
       rootNode, makeLocation(18, 19));
     assert.isNotNull(node);
     assert.equal(node.type, "IdentifierNode");
@@ -382,8 +404,8 @@ describe("Imported symbol resolution", () => {
 
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
-      <ast.Local>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(4, 8));
+      <ast.Local>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
     assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNotNull(importedSymbol.parent);
@@ -396,8 +418,8 @@ describe("Imported symbol resolution", () => {
     // `fooModule` symbol as an import, then load the relevant file,
     // then resolve the `foo` symbol.
     const valueofObjectField =
-      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(5, 19));
+      <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(5, 19));
     assert.isNotNull(valueofObjectField);
     assert.equal(valueofObjectField.type, "LiteralNumberNode");
     assert.equal(valueofObjectField.originalString, "99");
@@ -410,8 +432,8 @@ describe("Imported symbol resolution", () => {
     // tests that we can correctly obtain the documentation for this
     // symbol.
     const valueOfObjectField =
-      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(5, 19));
+      <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(5, 19));
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNotNull(comments);
@@ -425,8 +447,8 @@ describe("Imported symbol resolution", () => {
     // This tests that we can correctly obtain the documentation for
     // a symbol that lies in a multiply-nested index node.
     const valueOfObjectField =
-      <ast.LiteralString>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(7, 23));
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(7, 23));
     assert.isNotNull(valueOfObjectField);
     assert.equal(valueOfObjectField.type, "LiteralStringNode");
     assert.equal(valueOfObjectField.value, "batVal");
@@ -442,8 +464,8 @@ describe("Imported symbol resolution", () => {
     // tests that we do not report documentation for this symbol, as
     // it is a `local` field.
     const valueOfObjectField =
-      <ast.LiteralNumber>analyzer.resolveSymbolAtPositionFromAst(
-        rootNode, makeLocation(6, 10));
+      <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
+        analyzer, compilerService, documents, rootNode, makeLocation(6, 10));
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNull(comments);
