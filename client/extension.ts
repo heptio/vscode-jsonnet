@@ -43,14 +43,41 @@ export const activate = (context: vs.ExtensionContext) => {
 export const deactivate = () => { }
 
 namespace workspace {
+  const extStrsProp = "extStrs";
+  const execPathProp = "executablePath";
+
   export const extStrs = (): string => {
-    const extStrsObj =
-    vs.workspace.getConfiguration('jsonnet')["extStrs"];
+    const extStrsObj = vs.workspace.getConfiguration('jsonnet')[extStrsProp];
     return extStrsObj == null
-    ? ""
-    : Object.keys(extStrsObj)
-    .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
-    .join(" ");
+      ? ""
+      : Object.keys(extStrsObj)
+          .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
+          .join(" ");
+  }
+
+  export const libPaths = (): string => {
+    const libPaths = vs.workspace.getConfiguration('jsonnet')["libPaths"];
+    if (libPaths == null) {
+       return "";
+    }
+
+    // Add executable to the beginning of the library paths, because
+    // the Jsonnet CLI will look there first.
+    //
+    // TODO(hausdorff): Consider adding support for Jsonnet's
+    // (undocumented) search paths `/usr/share/{jsonnet version}` and
+    // `/usr/local/share/{jsonnet version}`. We don't support them
+    // currently because (1) they're undocumented and therefore not
+    // widely-used, and (2) it requires shelling out to the Jsonnet
+    // command line, which complicates the extension.
+    const jsonnetExecutable = vs.workspace.getConfiguration[execPathProp];
+    if (jsonnetExecutable != null) {
+      (<string[]>libPaths).unshift(jsonnetExecutable);
+    }
+
+    return libPaths
+      .map(path => `-J ${path}`)
+      .join(" ");
   }
 
   export const outputFormat = (): "json" | "yaml" => {
@@ -66,8 +93,8 @@ namespace workspace {
   }
 
   const configureUnix = (config: vs.WorkspaceConfiguration): boolean => {
-    if (config["executablePath"] != null) {
-      jsonnet.executable = config["executablePath"];
+    if (config[execPathProp] != null) {
+      jsonnet.executable = config[execPathProp];
     } else {
       try {
         // If this doesn't throw, 'jsonnet' was found on
@@ -86,12 +113,12 @@ namespace workspace {
   }
 
   const configureWindows = (config: vs.WorkspaceConfiguration): boolean => {
-    if (config["executablePath"] == null) {
+    if (config[execPathProp] == null) {
       alert.jsonnetCommandIsNull();
       return false;
     }
 
-    jsonnet.executable = config["executablePath"];
+    jsonnet.executable = config[execPathProp];
     return true;
   }
 }
@@ -226,9 +253,10 @@ namespace jsonnet {
     private renderDocument = (document: vs.TextDocument): string => {
       try {
         const extStrs = workspace.extStrs();
+        const libPaths = workspace.libPaths();
         const outputFormat = workspace.outputFormat();
         const jsonOutput = execSync(
-        `${jsonnet.executable} ${extStrs} ${document.fileName}`
+        `${jsonnet.executable} ${libPaths} ${extStrs} ${document.fileName}`
         ).toString();
         return html.body(html.prettyPrintObject(jsonOutput, outputFormat));
       } catch (e) {

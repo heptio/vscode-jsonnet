@@ -88,6 +88,14 @@
         },
       },
 
+      DefaultArrayProperty(property, description, default=[]):: {
+        [property]: {
+          type: "array",
+          default: default,
+          description: description,
+        },
+      },
+
       DefaultEnumProperty(property, description, enum=[], default=null):: {
        [property]: {
          default: default,

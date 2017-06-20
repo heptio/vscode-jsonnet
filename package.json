@@ -30,6 +30,11 @@
                "description": "External strings to pass to `jsonnet` executable.",
                "type": "object"
             },
+            "jsonnet.libPaths": {
+               "default": [ ],
+               "description": "Additional paths to search for libraries when compiling Jsonnet code.",
+               "type": "array"
+            },
             "jsonnet.outputFormat": {
                "default": "yaml",
                "description": "Preview output format (yaml / json)",

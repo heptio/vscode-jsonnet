@@ -25,9 +25,10 @@ const docs = new server.TextDocuments();
 
 const compiler = new local.VsCompilerService();
 
+const documentManager = new local.VsDocumentManager(docs);
+
 const analyzer: analyze.EventedAnalyzer = new analyze.Analyzer(
-  new local.VsDocumentManager(docs),
-  compiler);
+  documentManager, compiler);
 
 const failureToDiagnostic = (
   error: compile.LexFailure | compile.ParseFailure
@@ -142,7 +143,6 @@ export const initializer = (
   documents: server.TextDocuments,
   params: server.InitializeParams,
 ): server.InitializeResult => {
-  let workspaceRoot = params.rootPath;
   return {
     capabilities: {
       // Tell the client that the server works in FULL text
@@ -161,7 +161,20 @@ export const initializer = (
 export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
-  // TODO: Update location of Jsonnet variable, etc.
+  if (
+    change.settings == null || change.settings.jsonnet == null ||
+    change.settings.jsonnet.libPaths == null
+  ) {
+    return;
+  }
+
+  const jsonnet = change.settings.jsonnet;
+
+  if (jsonnet.executablePath != null) {
+    jsonnet.libPaths.unshift(jsonnet.executablePath);
+  }
+
+  documentManager.setLibPaths(jsonnet.libPaths);
 }
 
 const positionToLocation = (
