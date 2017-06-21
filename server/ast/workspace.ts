@@ -42,7 +42,9 @@ export type FileUri = string;
 //   to actually implement this functionality and hook it up
 //   correctly to the `DocumentEventListener`.
 export interface DocumentManager {
-  get: (fileUri: string) => {text: string, version?: number}
+  get: (
+    fileSpec: FileUri | ast.Import | ast.ImportStr,
+  ) => {text: string, version?: number, resolvedPath: string}
 }
 
 // LibPathResolver searches a set of library paths for a Jsonnet

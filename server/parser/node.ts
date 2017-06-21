@@ -818,12 +818,10 @@ export class Import extends NodeBase implements Resolvable {
     compilerService: compiler.CompilerService,
     documents: workspace.DocumentManager,
   ): Node | IndexedObjectFields | ResolveFailure => {
-    const fileToImport =
-      filePathToUri(this.file, this.loc.fileName);
-    const {text: docText, version: version} =
-      documents.get(fileToImport);
+    const {text: docText, version: version, resolvedPath: fileUri} =
+      documents.get(this);
     const cached =
-      compilerService.cache(fileToImport, docText, version);
+      compilerService.cache(fileUri, docText, version);
     if (compiler.isFailedParsedDocument(cached)) {
       return Unresolved.Instance;
     }
@@ -1556,17 +1554,6 @@ const resolveFromEnv = (
   return tryResolve(bind.body, compilerService, documents);
 }
 
-// TODO: Replace this with some sort of URL provider.
-const filePathToUri = (filePath: string, currentPath: string): string => {
-  let resource = filePath;
-  if (!path.isAbsolute(resource)) {
-    const resolved = path.resolve(currentPath);
-    const absDir = path.dirname(resolved);
-    resource = path.join(absDir, filePath);
-  }
-  return `file://${resource}`;
-}
-
 const tryResolve = (
   node: Node, compilerService: compiler.CompilerService,
   documents: workspace.DocumentManager,
@@ -1628,6 +1615,8 @@ export const tryResolveIndirections = (
   }
 }
 
+// ---------------------------------------------------------------------------
+// Failures.
 // ---------------------------------------------------------------------------
 
 // ResolveFailure represents a failure to resolve a symbol to a "value

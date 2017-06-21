@@ -52,13 +52,13 @@ export class Analyzer implements EventedAnalyzer {
         });
     }
 
-    const {text: docText, version: version} = this.documents.get(fileUri);
-    const cached = this.compilerService.cache(fileUri, docText, version);
-    if (compiler.isFailedParsedDocument(cached)) {
-      return onHoverPromise(null);
-    }
-
     try {
+      const {text: docText, version: version} = this.documents.get(fileUri);
+      const cached = this.compilerService.cache(fileUri, docText, version);
+      if (compiler.isFailedParsedDocument(cached)) {
+        return onHoverPromise(null);
+      }
+
       // Get symbol we're hovering over.
       const nodeAtPos = getNodeAtPositionFromAst(cached.parse, cursorLoc);
       if (astVisitor.isFindFailure(nodeAtPos)) {

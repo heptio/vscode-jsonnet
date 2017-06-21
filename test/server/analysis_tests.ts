@@ -162,10 +162,11 @@ describe("Compiler service", () => {
 
 describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
-  const documents = new testWorkspace.FsDocumentManager()
+  const documents =
+    new testWorkspace.FsDocumentManager(new local.VsPathResolver());
   const analyzer = new analyze.Analyzer(documents, compilerService);
 
-  const file = `${dataDir}/simple-nodes.jsonnet`;
+  const file = `file://${dataDir}/simple-nodes.jsonnet`;
   const doc = documents.get(file);
   const compiled = compilerService.cache(file, doc.text, doc.version);
   if (compiler.isFailedParsedDocument(compiled)) {
@@ -389,10 +390,11 @@ describe("Searching an AST by position", () => {
 
 describe("Imported symbol resolution", () => {
   const compilerService = new local.VsCompilerService();
-  const documents = new testWorkspace.FsDocumentManager();
+  const documents =
+    new testWorkspace.FsDocumentManager(new local.VsPathResolver());
   const analyzer = new analyze.Analyzer(documents, compilerService);
 
-  const file = `${dataDir}/simple-import.jsonnet`;
+  const file = `file://${dataDir}/simple-import.jsonnet`;
   const document = documents.get(file);
   const compile = compilerService.cache(file, document.text, document.version);
 

@@ -264,7 +264,8 @@ const ranges = [
 // Setup.
 //
 
-const documents = new testWorkspace.FsDocumentManager()
+const documents =
+  new testWorkspace.FsDocumentManager(new local.VsPathResolver());
 const compiler = new local.VsCompilerService();
 const analyzer = new analyze.Analyzer(documents, compiler)
 

@@ -26,7 +26,8 @@ class SuccessfulParseCompletionTest {
   }
 
   public runTest = async () => {
-    const documents = new testWorkspace.FsDocumentManager()
+    const documents =
+      new testWorkspace.FsDocumentManager(new local.VsPathResolver())
     const compiler = new local.VsCompilerService();
     const analyzer = new analyze.Analyzer(documents, compiler)
 
@@ -174,9 +175,10 @@ const parsedCompletionTests = [
 // Setup.
 //
 
-const documents = new testWorkspace.FsDocumentManager()
+const documents =
+  new testWorkspace.FsDocumentManager(new local.VsPathResolver());
 const compiler = new local.VsCompilerService();
-const analyzer = new analyze.Analyzer(documents, compiler)
+const analyzer = new analyze.Analyzer(documents, compiler);
 
 //
 // Tests
