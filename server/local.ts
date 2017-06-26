@@ -160,3 +160,13 @@ export class VsCompilerService implements compiler.CompilerService {
 
   private docCache = immutable.Map<string, compiler.ParsedDocument>();
 }
+
+export class VsPathResolver extends workspace.LibPathResolver {
+  protected pathExists = (path: string): boolean => {
+    try {
+      return fs.existsSync(path);
+    } catch (err) {
+      return false;
+    }
+  }
+}
