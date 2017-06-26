@@ -32,8 +32,8 @@ const assertLocationRange = (
 }
 
 const resolveSymbolAtPositionFromAst = (
-  analyzer: analyze.Analyzer, compilerService: compiler.CompilerService,
-  documents: workspace.DocumentManager, rootNode: ast.Node, pos: error.Location,
+  analyzer: analyze.Analyzer, context: ast.ResolutionContext,
+  rootNode: ast.Node, pos: error.Location,
 ): ast.Node | null => {
   let nodeAtPos = analyze.getNodeAtPositionFromAst(rootNode, pos);
   if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
@@ -46,11 +46,11 @@ const resolveSymbolAtPositionFromAst = (
     return null;
   }
 
-  const resolved = nodeAtPos.resolve(compilerService, documents);
+  const resolved = nodeAtPos.resolve(context);
 
-  return !ast.isNode(resolved)
+  return !ast.isResolve(resolved) || !ast.isNode(resolved.value)
     ? null
-    : resolved;
+    : resolved.value;
 }
 
 describe("Compiler service", () => {
@@ -167,6 +167,7 @@ describe("Searching an AST by position", () => {
   const analyzer = new analyze.Analyzer(documents, compilerService);
 
   const file = `file://${dataDir}/simple-nodes.jsonnet`;
+  const ctx = new ast.ResolutionContext(compilerService, documents, file);
   const doc = documents.get(file);
   const compiled = compilerService.cache(file, doc.text, doc.version);
   if (compiler.isFailedParsedDocument(compiled)) {
@@ -285,9 +286,7 @@ describe("Searching an AST by position", () => {
     assert.equal(property4Id.type, "IdentifierNode");
     assert.equal(property4Id.name, "baz");
 
-    const resolved = <ast.LiteralNumber>property4Id.resolve(
-      compilerService, documents);
-    assert.isNotNull(resolved);
+    const resolved = <ast.LiteralNumber>(<ast.Resolve>property4Id.resolve(ctx)).value;
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "3");
   });
@@ -301,8 +300,7 @@ describe("Searching an AST by position", () => {
       assert.equal(merged1.type, "IdentifierNode");
       assert.equal(merged1.name, "b");
 
-      const resolved = <ast.LiteralNumber>merged1.resolve(
-        compilerService, documents);
+      const resolved = <ast.LiteralNumber>(<ast.Resolve>merged1.resolve(ctx)).value;
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "3");
@@ -316,9 +314,7 @@ describe("Searching an AST by position", () => {
       assert.equal(merged2.type, "IdentifierNode");
       assert.equal(merged2.name, "a");
 
-      const resolved = <ast.LiteralNumber>merged2.resolve(
-        compilerService, documents);
-      assert.isNotNull(resolved);
+      const resolved = <ast.LiteralNumber>(<ast.Resolve>merged2.resolve(ctx)).value;
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
     }
@@ -331,9 +327,7 @@ describe("Searching an AST by position", () => {
       assert.equal(merged3.type, "IdentifierNode");
       assert.equal(merged3.name, "a");
 
-      const resolved = <ast.LiteralNumber>merged3.resolve(
-        compilerService, documents);
-      assert.isNotNull(resolved);
+      const resolved = <ast.LiteralNumber>(<ast.Resolve>merged3.resolve(ctx)).value;
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "1");
     }
@@ -346,8 +340,7 @@ describe("Searching an AST by position", () => {
       assert.equal(merged4.type, "IdentifierNode");
       assert.equal(merged4.name, "a");
 
-      const resolved = <ast.LiteralNumber>merged4.resolve(
-        compilerService, documents);
+      const resolved = <ast.LiteralNumber>(<ast.Resolve>merged4.resolve(ctx)).value;
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -361,8 +354,7 @@ describe("Searching an AST by position", () => {
       assert.equal(merged5.type, "IdentifierNode");
       assert.equal(merged5.name, "a");
 
-      const resolved = <ast.LiteralNumber>merged5.resolve(
-        compilerService, documents);
+      const resolved = <ast.LiteralNumber>(<ast.Resolve>merged5.resolve(ctx)).value;
       assert.isNotNull(resolved);
       assert.equal(resolved.type, "LiteralNumberNode");
       assert.equal(resolved.originalString, "99");
@@ -380,8 +372,7 @@ describe("Searching an AST by position", () => {
     assert.equal(node.type, "IdentifierNode");
     assert.equal(node.name, "numberVal2");
 
-    const resolved = <ast.LiteralNumber>node.resolve(
-      compilerService, documents);
+    const resolved = <ast.LiteralNumber>(<ast.Resolve>node.resolve(ctx)).value;
     assert.isNotNull(resolved);
     assert.equal(resolved.type, "LiteralNumberNode");
     assert.equal(resolved.originalString, "1");
@@ -398,6 +389,8 @@ describe("Imported symbol resolution", () => {
   const document = documents.get(file);
   const compile = compilerService.cache(file, document.text, document.version);
 
+  const ctx = new ast.ResolutionContext(compilerService, documents, file);
+
   if (compiler.isFailedParsedDocument(compile)) {
     throw new Error(`Failed to parse document '${file}'`);
   }
@@ -407,7 +400,7 @@ describe("Imported symbol resolution", () => {
   it("Can dereference the object that is imported", () => {
     const importedSymbol =
       <ast.Local>resolveSymbolAtPositionFromAst(
-        analyzer, compilerService, documents, rootNode, makeLocation(4, 8));
+        analyzer, ctx, rootNode, makeLocation(4, 8));
     assert.isNotNull(importedSymbol);
     assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNotNull(importedSymbol.parent);
@@ -421,7 +414,7 @@ describe("Imported symbol resolution", () => {
     // then resolve the `foo` symbol.
     const valueofObjectField =
       <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
-        analyzer, compilerService, documents, rootNode, makeLocation(5, 19));
+        analyzer, ctx, rootNode, makeLocation(5, 19));
     assert.isNotNull(valueofObjectField);
     assert.equal(valueofObjectField.type, "LiteralNumberNode");
     assert.equal(valueofObjectField.originalString, "99");
@@ -435,7 +428,7 @@ describe("Imported symbol resolution", () => {
     // symbol.
     const valueOfObjectField =
       <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
-        analyzer, compilerService, documents, rootNode, makeLocation(5, 19));
+        analyzer, ctx, rootNode, makeLocation(5, 19));
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNotNull(comments);
@@ -450,7 +443,7 @@ describe("Imported symbol resolution", () => {
     // a symbol that lies in a multiply-nested index node.
     const valueOfObjectField =
       <ast.LiteralString>resolveSymbolAtPositionFromAst(
-        analyzer, compilerService, documents, rootNode, makeLocation(7, 23));
+        analyzer, ctx, rootNode, makeLocation(7, 23));
     assert.isNotNull(valueOfObjectField);
     assert.equal(valueOfObjectField.type, "LiteralStringNode");
     assert.equal(valueOfObjectField.value, "batVal");
@@ -467,7 +460,7 @@ describe("Imported symbol resolution", () => {
     // it is a `local` field.
     const valueOfObjectField =
       <ast.LiteralNumber>resolveSymbolAtPositionFromAst(
-        analyzer, compilerService, documents, rootNode, makeLocation(6, 10));
+        analyzer, ctx, rootNode, makeLocation(6, 10));
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNull(comments);

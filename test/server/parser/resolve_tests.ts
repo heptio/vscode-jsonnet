@@ -124,18 +124,18 @@ class RangeSpec<TLocated extends ast.Node, TResolved extends ast.Node> {
         if (!ast.isResolvable(found)) {
           throw new Error(`Expected to resolve node, but was not resolvable ${coords}`);
         }
-        const resolved = found.resolve(compiler, documents);
+        const resolved = found.resolve(ctx);
         if (ast.isResolveFailure(resolved)) {
           throw new Error(`Expected to resolve node, but failed ${coords}`);
         }
 
         if (spec.resolvedTypeCheck != null) {
-          if (ast.isIndexedObjectFields(resolved)) {
+          if (ast.isIndexedObjectFields(resolved.value)) {
             throw new Error(`Expected to resolve to node, but resolved object fields failed ${coords}`);
           }
-          assert.equal(resolved.type, spec.resolvedTypeCheck);
+          assert.equal(resolved.value.type, spec.resolvedTypeCheck);
         }
-        spec.assertions(resolved)
+        spec.assertions(resolved.value)
       } else if (isFailedResolvedSpec(spec)) {
         if (astVisitor.isFindFailure(found)) {
           throw new Error(`Expected to resolve node, but could not locate ${coords}`);
@@ -144,7 +144,7 @@ class RangeSpec<TLocated extends ast.Node, TResolved extends ast.Node> {
           throw new Error(`Expected to find resolvable node, whose resolution fails, but node was not resolvable ${coords}`);
         }
 
-        const resolved = found.resolve(compiler, documents);
+        const resolved = found.resolve(ctx);
         if (!ast.isResolveFailure(resolved)) {
           throw new Error(`Expected to fail to resolve node, but resolve succeeded ${coords}`);
         }
@@ -267,7 +267,8 @@ const ranges = [
 const documents =
   new testWorkspace.FsDocumentManager(new local.VsPathResolver());
 const compiler = new local.VsCompilerService();
-const analyzer = new analyze.Analyzer(documents, compiler)
+const analyzer = new analyze.Analyzer(documents, compiler);
+const ctx = new ast.ResolutionContext(compiler, documents, "");
 
 const tokens = lexer.Lex("test string", source);
 if (error.isStaticError(tokens)) {
@@ -307,11 +308,14 @@ const resolveAt = (
   }
 
   if (ast.isResolvable(node)) {
-    const resolved = node.resolve(compiler, documents);
-    if (ast.isIndexedObjectFields(resolved) || ast.isResolveFailure(resolved)) {
+    const resolved = node.resolve(ctx);
+    if (
+      ast.isResolveFailure(resolved) ||
+      ast.isIndexedObjectFields(resolved.value)
+    ) {
       return null;
     }
-    return resolved;
+    return resolved.value;
   }
   return null;
 }

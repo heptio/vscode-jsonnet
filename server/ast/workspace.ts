@@ -95,6 +95,10 @@ export abstract class LibPathResolver {
         // 2. relative to one of the `libPaths`.
         //
         // If neither is true, fail.
+        //
+        // TODO(hausdorff): I think this might be a bug. The filename
+        // might not be relative to workspace root, in which case
+        // `resolve` seems like it should fail.
         const pathToImportedFile =
           path.dirname(path.resolve(fileSpec.loc.fileName));
 
@@ -136,7 +140,7 @@ export abstract class LibPathResolver {
 
   private searchPaths = (
     importPath: string, paths: im.List<string>,
-  ): string | null => {
+  ): FileUri | null => {
     for (let libPath of paths.toArray()) {
       try {
         const resolvedPath = path.join(libPath, importPath);

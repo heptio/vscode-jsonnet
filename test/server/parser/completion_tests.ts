@@ -44,7 +44,7 @@ class SuccessfulParseCompletionTest {
     const parse = new compilerService.ParsedDocument(
       this.source, tokens, root, 0);
 
-    const cis = await analyzer.completionsFromParse(parse, this.loc, false);
+    const cis = await analyzer.completionsFromParse("", parse, this.loc, false);
     const completionSet = cis.reduce(
       (acc, ci): im.Set<string> => {
         return acc.add(ci.label);

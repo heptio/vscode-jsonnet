@@ -198,10 +198,40 @@ export const isNode = (thing): thing is Node => {
 
 // ---------------------------------------------------------------------------
 
+// Resolve represents a resolved node, including a fully-qualified RFC
+// 1630/1738-compliant URI representing the absolute location of the
+// Jsonnet file the symbol occurs in.
+export class Resolve {
+  constructor(
+    public readonly fileUri:  workspace.FileUri,
+    public readonly value: Node | IndexedObjectFields,
+  ) {}
+}
+
+export const isResolve = (thing): thing is Resolve => {
+  return thing instanceof Resolve;
+}
+
+// ResolutionContext represents the context we carry along as we
+// attempt to resolve symbols. For example, an `import` node will have
+// a filename, and to locate it, we will need to (1) search for the
+// import path relative to the current path, or (2) look in the
+// `libPaths` for it if necessary. This "context" is carried along in
+// this object.
+export class ResolutionContext {
+  constructor (
+    public readonly compiler: compiler.CompilerService,
+    public readonly documents: workspace.DocumentManager,
+    public readonly currFile: workspace.FileUri,
+  ) {}
+
+  public withUri = (currFile: workspace.FileUri): ResolutionContext => {
+    return new ResolutionContext(this.compiler, this.documents, currFile);
+  }
+}
+
 export interface Resolvable extends NodeBase {
-  resolve(
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure
+  resolve(context: ResolutionContext): Resolve | ResolveFailure
 }
 
 export const isResolvable = (node: NodeBase): node is Resolvable => {
@@ -209,9 +239,7 @@ export const isResolvable = (node: NodeBase): node is Resolvable => {
 }
 
 export interface FieldsResolvable extends NodeBase {
-  resolveFields(
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): IndexedObjectFields | ResolveFailure
+  resolveFields(context: ResolutionContext): Resolve | ResolveFailure
 }
 
 export const isFieldsResolvable = (
@@ -241,15 +269,13 @@ export class Identifier extends NodeBase  {
     return this.name;
   }
 
-  public resolve = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure => {
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure => {
     if (this.parent == null) {
       // An identifier with no parent is not a valid Jsonnet file.
       return Unresolved.Instance;
     }
 
-    return tryResolve(this.parent, compiler, documents)
+    return tryResolve(this.parent, context)
   }
 }
 
@@ -607,26 +633,26 @@ export class Binary extends NodeBase implements FieldsResolvable {
   }
 
   public resolveFields = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): IndexedObjectFields | ResolveFailure => {
+    context: ResolutionContext,
+  ): Resolve | ResolveFailure => {
     // Recursively merge fields if it's another mixin; if it's an
     // object, return fields; else, no fields to return.
     if (this.op !== "BopPlus") {
       return Unresolved.Instance;
     }
 
-    const left = tryResolveIndirections(this.left, compiler, documents);
-    if (!isIndexedObjectFields(left)) {
+    const left = tryResolveIndirections(this.left, context);
+    if (isResolveFailure(left) || !isIndexedObjectFields(left.value)) {
       return Unresolved.Instance;
     }
 
-    const right = tryResolveIndirections(this.right, compiler, documents);
-    if (!isIndexedObjectFields(right)) {
+    const right = tryResolveIndirections(this.right, context);
+    if (isResolveFailure(right) || !isIndexedObjectFields(right.value)) {
       return Unresolved.Instance;
     }
 
-    let merged = left;
-    right.forEach(
+    let merged = left.value;
+    right.value.forEach(
       (v: ObjectField, k: string) => {
         // TODO(hausdorff): Account for syntax sugar here. For
         // example:
@@ -640,7 +666,7 @@ export class Binary extends NodeBase implements FieldsResolvable {
         merged = merged.set(k, v);
       });
 
-    return merged;
+    return new Resolve(context.currFile, merged);
   }
 }
 
@@ -716,13 +742,11 @@ export class Dollar extends NodeBase implements Resolvable {
     return `$`;
   }
 
-  public resolve = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure => {
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure => {
     if (this.rootObject == null) {
       return Unresolved.Instance;
     }
-    return this.rootObject;
+    return new Resolve(context.currFile, this.rootObject);
   }
 };
 
@@ -814,14 +838,11 @@ export class Import extends NodeBase implements Resolvable {
     return `import "${this.file}"`;
   }
 
-  public resolve = (
-    compilerService: compiler.CompilerService,
-    documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure => {
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure => {
     const {text: docText, version: version, resolvedPath: fileUri} =
-      documents.get(this);
+      context.documents.get(this);
     const cached =
-      compilerService.cache(fileUri, docText, version);
+      context.compiler.cache(fileUri, docText, version);
     if (compiler.isFailedParsedDocument(cached)) {
       return Unresolved.Instance;
     }
@@ -835,7 +856,7 @@ export class Import extends NodeBase implements Resolvable {
       resolved = resolved.body;
     }
 
-    return resolved;
+    return new Resolve(fileUri, resolved);
   }
 }
 
@@ -877,9 +898,8 @@ export interface Index extends Node, Resolvable {
 }
 
 const resolveIndex = (
-  index: Index, compilerService: compiler.CompilerService,
-  documents: workspace.DocumentManager,
-): Node | IndexedObjectFields | ResolveFailure => {
+  index: Index, context: ResolutionContext,
+): Resolve | ResolveFailure => {
   if (index.target == null || !isResolvable(index.target)) {
     throw new Error(
       `INTERNAL ERROR: Index node must have a resolvable target:\n${renderAsJson(index)}`);
@@ -888,21 +908,20 @@ const resolveIndex = (
   }
 
   // Find root target, look up in environment.
-  let resolvedTarget =
-    tryResolveIndirections(index.target, compilerService, documents);
+  let resolvedTarget = tryResolveIndirections(index.target, context);
   if (isResolveFailure(resolvedTarget)) {
     return new UnresolvedIndexTarget(index);
-  } else if (!isIndexedObjectFields(resolvedTarget)) {
+  } else if (!isIndexedObjectFields(resolvedTarget.value)) {
     return new UnresolvedIndexTarget(index);
   }
 
-  const filtered = resolvedTarget.filter((field: ObjectField) => {
+  const filtered = resolvedTarget.value.filter((field: ObjectField) => {
     return field.id != null && index.id != null &&
       field.id.name == index.id.name;
   });
 
   if (filtered.count() == 0) {
-    return new UnresolvedIndexId(index, resolvedTarget);
+    return new UnresolvedIndexId(index, resolvedTarget.value);
   } else if (filtered.count() != 1) {
     throw new Error(
       `INTERNAL ERROR: Object contained multiple fields with name '${index.id.name}'}`);
@@ -915,7 +934,7 @@ const resolveIndex = (
     throw new Error(
       `INTERNAL ERROR: Object field can't have null property expr2:\n${renderAsJson(field)}'}`);
   }
-  return field.expr2;
+  return new Resolve(context.currFile, field.expr2);
 }
 
 export const isIndex = (node: Node): node is Index => {
@@ -937,10 +956,8 @@ export class IndexSubscript extends NodeBase implements Index {
     return `${this.target.prettyPrint()}[${this.index.prettyPrint()}]`;
   }
 
-  public resolve = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure =>
-    resolveIndex(this, compiler, documents);
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure =>
+    resolveIndex(this, context);
 }
 
 export const isIndexSubscript = (node): node is Index => {
@@ -961,10 +978,8 @@ export class IndexDot extends NodeBase implements Index {
     return `${this.target.prettyPrint()}.${this.id.prettyPrint()}`;
   }
 
-  public resolve = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure =>
-    resolveIndex(this, compiler, documents);
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure =>
+    resolveIndex(this, context);
 }
 
 export const isIndexDot = (node): node is Index => {
@@ -1320,9 +1335,9 @@ export class ObjectNode extends NodeBase implements FieldsResolvable {
   }
 
   public resolveFields = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): IndexedObjectFields | ResolveFailure => {
-    return indexFields(this.fields);
+    context: ResolutionContext,
+  ): Resolve | ResolveFailure => {
+    return new Resolve(context.currFile, indexFields(this.fields));
   }
 }
 
@@ -1510,9 +1525,7 @@ export class Var extends NodeBase implements Resolvable {
     return this.id.prettyPrint();
   }
 
-  public resolve = (
-    compiler: compiler.CompilerService, documents: workspace.DocumentManager,
-  ): Node | IndexedObjectFields | ResolveFailure => {
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure => {
     // Look up in the environment, get docs for that definition.
     if (this.env == null) {
       throw new Error(
@@ -1521,7 +1534,7 @@ export class Var extends NodeBase implements Resolvable {
       return Unresolved.Instance;
     }
 
-    return resolveFromEnv(this.id.name, this.env, compiler, documents);
+    return resolveFromEnv(this.id.name, this.env, context);
   }
 }
 
@@ -1532,9 +1545,8 @@ export const isVar = (node): node is Var => {
 // ---------------------------------------------------------------------------
 
 const resolveFromEnv = (
-  idName: string, env: Environment, compilerService: compiler.CompilerService,
-  documents: workspace.DocumentManager,
-): Node | IndexedObjectFields | ResolveFailure => {
+  idName: string, env: Environment, context: ResolutionContext,
+): Resolve | ResolveFailure => {
   const bind = env.get(idName);
   if (bind == null) {
     return Unresolved.Instance;
@@ -1551,22 +1563,21 @@ const resolveFromEnv = (
     throw new Error(`INTERNAL ERROR: Bind can't have null body:\n${bind}`);
   }
 
-  return tryResolve(bind.body, compilerService, documents);
+  return tryResolve(bind.body, context);
 }
 
 const tryResolve = (
-  node: Node, compilerService: compiler.CompilerService,
-  documents: workspace.DocumentManager,
-): Node | IndexedObjectFields | ResolveFailure => {
+  node: Node, context: ResolutionContext,
+): Resolve | ResolveFailure => {
   if (isFunction(node)) {
     return new ResolvedFunction(node);
   } else if (isResolvable(node)) {
-    return node.resolve(compilerService, documents);
+    return node.resolve(context);
   } else if (isFieldsResolvable(node)) {
     // Found an object or perhaps an object mixin. Break.
-    return node.resolveFields(compilerService, documents);
+    return node.resolveFields(context);
   } else if (isValueType(node)) {
-    return node;
+    return new Resolve(context.currFile, node);
   } else {
     return Unresolved.Instance;
   }
@@ -1574,9 +1585,8 @@ const tryResolve = (
 
 
 export const tryResolveIndirections = (
-  node: Node, compilerService: compiler.CompilerService,
-  documents: workspace.DocumentManager,
-): Node | IndexedObjectFields | ResolveFailure => {
+  node: Node, context: ResolutionContext,
+): Resolve | ResolveFailure => {
   // This loop will try to "strip out the indirections" of an
   // argument to a mixin. For example, consider the expression
   // `foo1.bar + foo2.bar` in the following example:
@@ -1595,20 +1605,20 @@ export const tryResolveIndirections = (
   // `foo1.bar`, and then `bar1`, before encountering an object
   // and stopping.
 
-  let resolved: Node | IndexedObjectFields | ResolveFailure = node;
+  let resolved: Resolve | ResolveFailure = new Resolve(context.currFile, node);
   while (true) {
     if (isResolveFailure(resolved)) {
       return resolved;
-    } else if (isIndexedObjectFields(resolved)) {
+    } else if (isIndexedObjectFields(resolved.value)) {
       // We've resolved to a set of fields. Return.
       return resolved;
-    } else if (isResolvable(resolved)) {
-      resolved = resolved.resolve(compilerService, documents);
-    } else if (isFieldsResolvable(resolved)) {
-      resolved = resolved.resolveFields(compilerService, documents);
-    } else if (isValueType(resolved)) {
+    } else if (isResolvable(resolved.value)) {
+      resolved = resolved.value.resolve(context.withUri(resolved.fileUri));
+    } else if (isFieldsResolvable(resolved.value)) {
+      resolved = resolved.value.resolveFields(context.withUri(resolved.fileUri));
+    } else if (isValueType(resolved.value)) {
       // We've resolved to a value. Return.
-      return node;
+      return resolved;
     } else {
       return Unresolved.Instance;
     }

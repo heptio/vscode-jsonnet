@@ -43,26 +43,42 @@ export class Analyzer implements EventedAnalyzer {
   public onHover = (
     fileUri: string, cursorLoc: error.Location
   ): Promise<service.HoverInfo> => {
+    const emptyOnHover = Promise.resolve().then(
+      () => <service.HoverInfo>{
+        contents: [],
+      });
+
     const onHoverPromise = (
-      node: ast.Node | ast.IndexedObjectFields | null,
+      node: ast.Node | ast.IndexedObjectFields,
     ): Promise<service.HoverInfo> => {
-      return Promise.resolve().then(
-        () => <service.HoverInfo> {
-          contents: node == null ? [] : this.renderOnhoverMessage(node),
-        });
+      if (node == null) {
+        return emptyOnHover;
+      }
+
+      try {
+        const msg = this.renderOnhoverMessage(fileUri, node);
+        return Promise.resolve().then(
+          () => <service.HoverInfo> {
+            contents: msg,
+          });
+      } catch(err) {
+        console.log(err);
+        return emptyOnHover;
+      }
     }
 
     try {
-      const {text: docText, version: version} = this.documents.get(fileUri);
+      const {text: docText, version: version, resolvedPath: resolvedUri} =
+        this.documents.get(fileUri);
       const cached = this.compilerService.cache(fileUri, docText, version);
       if (compiler.isFailedParsedDocument(cached)) {
-        return onHoverPromise(null);
+        return emptyOnHover;
       }
 
       // Get symbol we're hovering over.
       const nodeAtPos = getNodeAtPositionFromAst(cached.parse, cursorLoc);
       if (astVisitor.isFindFailure(nodeAtPos)) {
-        return onHoverPromise(null);
+        return emptyOnHover;
       }
 
       if (nodeAtPos.parent != null && ast.isFunctionParam(nodeAtPos.parent)) {
@@ -72,11 +88,12 @@ export class Analyzer implements EventedAnalyzer {
       }
 
       if (!ast.isResolvable(nodeAtPos)) {
-        return onHoverPromise(null);
+        return emptyOnHover;
       }
 
-      const resolved = ast.tryResolveIndirections(
-        nodeAtPos, this.compilerService, this.documents);
+      const ctx = new ast.ResolutionContext(
+        this.compilerService, this.documents, resolvedUri);
+      const resolved = ast.tryResolveIndirections(nodeAtPos, ctx);
 
       // Handle the special cases. If we hover over a symbol that points
       // at a function of some sort (i.e., a `function` literal, a
@@ -84,25 +101,27 @@ export class Analyzer implements EventedAnalyzer {
       // that is a function), then we want to render the name and
       // parameters that function takes, rather than the definition of
       // the function itself.
-      if (ast.isUnresolved(resolved) || ast.isUnresolvedIndex(resolved)) {
-        return onHoverPromise(null);
-      } else if (ast.isIndexedObjectFields(resolved)) {
-        return onHoverPromise(resolved);
-      } else if (ast.isResolvedFreeVar(resolved)) {
-        return onHoverPromise(resolved.variable);
-      } else if (ast.isResolvedFunction(resolved)) {
-        return onHoverPromise(resolved.functionNode);
+      if (ast.isResolveFailure(resolved)) {
+        if (ast.isUnresolved(resolved) || ast.isUnresolvedIndex(resolved)) {
+          return emptyOnHover;
+        } else if (ast.isResolvedFreeVar(resolved)) {
+          return onHoverPromise(resolved.variable);
+        } else if (ast.isResolvedFunction(resolved)) {
+          return onHoverPromise(resolved.functionNode);
+        } else {
+          return onHoverPromise(resolved);
+        }
       } else {
-        return onHoverPromise(resolved);
+        return onHoverPromise(resolved.value);
       }
     } catch (err) {
       console.log(err);
-      return onHoverPromise(null);
+      return emptyOnHover;
     }
   }
 
   public onComplete = (
-    fileUri: string, cursorLoc: error.Location
+    fileUri: workspace.FileUri, cursorLoc: error.Location
   ): Promise<service.CompletionInfo[]> => {
     const doc = this.documents.get(fileUri);
 
@@ -137,7 +156,7 @@ export class Analyzer implements EventedAnalyzer {
             // suggestions from a well-formed document.
 
             return this.completionsFromParse(
-              compiled, cursorLoc, lastCharIsDot);
+              fileUri, compiled, cursorLoc, lastCharIsDot);
           } else {
             const lastParse = this.compilerService.getLastSuccess(fileUri);
             if (lastParse == null) {
@@ -145,7 +164,7 @@ export class Analyzer implements EventedAnalyzer {
             }
 
             return this.completionsFromFailedParse(
-              compiled, lastParse, cursorLoc, lastCharIsDot);
+              fileUri, compiled, lastParse, cursorLoc, lastCharIsDot);
           }
         } catch (err) {
           console.log(err);
@@ -163,7 +182,8 @@ export class Analyzer implements EventedAnalyzer {
   // indication of whether the user is "dotting in" to a property, and
   // produces a list of autocomplete suggestions.
   public completionsFromParse = (
-    compiled: compiler.ParsedDocument, cursorLoc: error.Location,
+    fileUri: workspace.FileUri, compiled: compiler.ParsedDocument,
+    cursorLoc: error.Location,
     lastCharIsDot: boolean,
   ): service.CompletionInfo[] => {
     // IMPLEMENTATION NOTES: We have kept this method relatively free
@@ -185,7 +205,8 @@ export class Analyzer implements EventedAnalyzer {
       return [];
     }
 
-    return this.completionsFromNode(foundNode, cursorLoc, lastCharIsDot);
+    return this.completionsFromNode(
+      fileUri, foundNode, cursorLoc, lastCharIsDot);
   }
 
   // completionsFromFailedParse takes a `FailedParsedDocument` (i.e.,
@@ -194,7 +215,8 @@ export class Analyzer implements EventedAnalyzer {
   // an indication of whether the user is "dotting in" to a property,
   // and produces a list of autocomplete suggestions.
   public completionsFromFailedParse = (
-    compiled: compiler.FailedParsedDocument, lastParse: compiler.ParsedDocument,
+    fileUri: workspace.FileUri, compiled: compiler.FailedParsedDocument,
+    lastParse: compiler.ParsedDocument,
     cursorLoc: error.Location, lastCharIsDot: boolean,
   ): service.CompletionInfo[] => {
     // IMPLEMENTATION NOTES: We have kept this method relatively free
@@ -261,18 +283,20 @@ export class Analyzer implements EventedAnalyzer {
       .visit();
 
     // Create suggestions.
-    return this.completionsFromNode(rest, cursorLoc, lastCharIsDot);
+    return this.completionsFromNode(fileUri, rest, cursorLoc, lastCharIsDot);
   }
 
   // completionsFromNode takes a `Node`, a cursor location, and an
   // indication of whether the user is "dotting in" to a property, and
   // produces a list of autocomplete suggestions.
   private completionsFromNode = (
-    node: ast.Node, cursorLoc: error.Location, lastCharIsDot: boolean,
+    fileUri: workspace.FileUri, node: ast.Node, cursorLoc: error.Location,
+    lastCharIsDot: boolean,
   ): service.CompletionInfo[] => {
     // Attempt to resolve the node.
-    const resolved = ast.tryResolveIndirections(
-      node, this.compilerService, this.documents);
+    const ctx = new ast.ResolutionContext(
+      this.compilerService, this.documents, fileUri);
+    const resolved = ast.tryResolveIndirections(node, ctx);
 
     if (ast.isUnresolved(resolved)) {
       // If we could not even partially resolve a node (as we do,
@@ -296,7 +320,8 @@ export class Analyzer implements EventedAnalyzer {
     } else if (
       ast.isResolvedFunction(resolved) ||
       ast.isResolvedFreeVar(resolved) ||
-      (!lastCharIsDot && ast.isIndexedObjectFields(resolved) || ast.isNode(resolved))
+      (!lastCharIsDot && ast.isIndexedObjectFields(resolved.value) ||
+      ast.isNode(resolved.value))
     ) {
       // Our most complex case. One of two things is true:
       //
@@ -312,12 +337,12 @@ export class Analyzer implements EventedAnalyzer {
       //    to suggest anything; if they wanted to see the members of
       //    `foo`, they should type `foo.`.
       return [];
-    } else if (lastCharIsDot && ast.isIndexedObjectFields(resolved)) {
+    } else if (lastCharIsDot && ast.isIndexedObjectFields(resolved.value)) {
       // User has typed a dot, and the resolved symbol is
       // fields-resolvable, so we can return the fields of the
       // expression. For example, if the user types `foo.`, then we
       // can suggest the members of `foo`.
-      return this.completionsFromFields(resolved);
+      return this.completionsFromFields(resolved.value);
     }
 
     // Catch-all case. Suggest nothing.
@@ -361,7 +386,7 @@ export class Analyzer implements EventedAnalyzer {
   // --------------------------------------------------------------------------
 
   private renderOnhoverMessage = (
-    node: ast.Node | ast.IndexedObjectFields,
+    fileUri: workspace.FileUri, node: ast.Node | ast.IndexedObjectFields,
   ): service.LanguageString[] => {
     if (ast.isIndexedObjectFields(node)) {
       if (node.count() === 0) {
@@ -377,7 +402,7 @@ export class Analyzer implements EventedAnalyzer {
 
     const commentText: string | null = this.resolveComments(node);
 
-    const doc = this.documents.get(node.loc.fileName);
+    const doc = this.documents.get(fileUri);
     let line: string = doc.text.split(os.EOL)
       .slice(node.loc.begin.line - 1, node.loc.end.line)
       .join("\n");
