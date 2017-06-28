@@ -1,5 +1,7 @@
 'use strict';
+import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 import * as server from 'vscode-languageserver';
 import * as url from 'url';
 
@@ -7,6 +9,8 @@ import * as immutable from 'immutable';
 
 import * as analyze from './ast/analyzer';
 import * as ast from './parser/node';
+import * as astVisitor from './ast/visitor';
+import * as diagnostic from './diagnostic';
 import * as error from './lexer/static_error';
 import * as lexer from './lexer/lexer';
 import * as local from './local';
@@ -25,50 +29,25 @@ const docs = new server.TextDocuments();
 
 const compiler = new local.VsCompilerService();
 
+const libResolver = new local.VsPathResolver();
+const documentManager = new local.VsDocumentManager(docs, libResolver);
+
 const analyzer: analyze.EventedAnalyzer = new analyze.Analyzer(
-  new local.VsDocumentManager(docs),
-  compiler);
+  documentManager, compiler);
 
-const failureToDiagnostic = (
-  error: compile.LexFailure | compile.ParseFailure
-): server.Diagnostic => {
-  let begin: error.Location | null = null;
-  let end: error.Location | null = null;
-  let message: string | null = null;
-  if (compile.isLexFailure(error)) {
-    begin = error.lexError.loc.begin;
-    end = error.lexError.loc.end;
-    message = error.lexError.msg;
-  } else {
-    begin = error.parseError.loc.begin;
-    end = error.parseError.loc.end;
-    message = error.parseError.msg;
-  }
-
-  return {
-    severity: server.DiagnosticSeverity.Error,
-    range: {
-      start: {line: begin.line - 1, character: begin.column - 1},
-      end: {line: end.line - 1, character: end.column - 1},
-    },
-    message: `${message}`,
-    source: `Jsonnet`,
-  };
-}
-
-const generateDiagnostics = (doc: server.TextDocument) => {
+const reportDiagnostics = (doc: server.TextDocument) => {
   const text = doc.getText();
   const results = compiler.cache(doc.uri, text, doc.version);
 
   if (compile.isParsedDocument(results)) {
     connection.sendDiagnostics({
       uri: doc.uri,
-      diagnostics: [],
+      diagnostics: diagnostic.fromAst(results.parse, libResolver),
     });
   } else {
     connection.sendDiagnostics({
       uri: doc.uri,
-      diagnostics: [failureToDiagnostic(results.parse)],
+      diagnostics: [diagnostic.fromFailure(results.parse)],
     });
   }
 };
@@ -84,7 +63,7 @@ const generateDiagnostics = (doc: server.TextDocument) => {
 docs.onDidOpen(openEvent => {
   const doc = openEvent.document;
   if (doc.languageId === "jsonnet") {
-    generateDiagnostics(doc);
+    reportDiagnostics(doc);
     return analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
   }
 });
@@ -95,7 +74,7 @@ docs.onDidSave(saveEvent => {
   // that are single-line, and those that are multi-line.
   const doc = saveEvent.document;
   if (doc.languageId === "jsonnet") {
-    generateDiagnostics(doc);
+    reportDiagnostics(doc);
     return analyzer.onDocumentOpen(doc.uri, doc.getText(), doc.version);
   }
 });
@@ -109,7 +88,7 @@ docs.onDidClose(closeEvent => {
 });
 docs.onDidChangeContent(changeEvent => {
   if (changeEvent.document.languageId === "jsonnet") {
-    generateDiagnostics(changeEvent.document);
+    reportDiagnostics(changeEvent.document);
   }
 });
 
@@ -142,7 +121,6 @@ export const initializer = (
   documents: server.TextDocuments,
   params: server.InitializeParams,
 ): server.InitializeResult => {
-  let workspaceRoot = params.rootPath;
   return {
     capabilities: {
       // Tell the client that the server works in FULL text
@@ -161,7 +139,20 @@ export const initializer = (
 export const configUpdateProvider = (
   change: server.DidChangeConfigurationParams,
 ): void => {
-  // TODO: Update location of Jsonnet variable, etc.
+  if (
+    change.settings == null || change.settings.jsonnet == null ||
+    change.settings.jsonnet.libPaths == null
+  ) {
+    return;
+  }
+
+  const jsonnet = change.settings.jsonnet;
+
+  if (jsonnet.executablePath != null) {
+    jsonnet.libPaths.unshift(jsonnet.executablePath);
+  }
+
+  libResolver.libPaths = immutable.List<string>(jsonnet.libPaths);
 }
 
 const positionToLocation = (

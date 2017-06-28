@@ -16,29 +16,50 @@ import * as parser from './parser/parser';
 import * as workspace from './ast/workspace';
 
 export class VsDocumentManager implements workspace.DocumentManager {
-  constructor(private documents: server.TextDocuments) { }
+  constructor(
+    private readonly documents: server.TextDocuments,
+    private readonly libResolver: workspace.LibPathResolver,
+  ) { }
 
-  get = (fileUri: string): {text: string, version?: number} => {
+  get = (
+    fileSpec: workspace.FileUri | ast.Import | ast.ImportStr,
+  ): {text: string, version?: number, resolvedPath: string} => {
+    const parsedFileUri = this.libResolver.resolvePath(fileSpec);
+    if (parsedFileUri == null) {
+      throw new Error(`Could not open file`);
+    }
+
+    const fileUri = parsedFileUri.href;
+    const filePath = parsedFileUri.path;
+    if (fileUri == null || filePath == null) {
+      throw new Error(`INTERNAL ERROR: ill-formed, null href or path`);
+    }
+
     const doc = this.documents.get(fileUri);
     if (doc == null) {
       const doc = this.fsCache.get(fileUri);
       if (doc != null) {
-        return doc;
-      }
-
-      const parsed = url.parse(fileUri);
-      if (parsed && parsed.path) {
-        const stat = fs.statSync(parsed.path);
-
-        const cached = {
-          text: fs.readFileSync(parsed.path).toString(),
-          version: stat.atime.valueOf()
+        // TODO(hausdorff): Decide where to use fscache. This code
+        // assumes users are using vscode to change all Jsonnet
+        // library code, but it may be better to only assume this is
+        // true of the current workspace (and perhaps places like
+        // `/usr`).
+        return {
+          text: doc.text,
+          version: doc.version,
+          resolvedPath: fileUri,
         };
-        this.fsCache = this.fsCache.set(fileUri, cached);
-        return cached;
       }
 
-      throw new Error(`INTERNAL ERROR: Failed to parse URI '${fileUri}'`);
+      const text = fs.readFileSync(filePath).toString();
+      const stat = fs.statSync(filePath);
+      const cached = {
+        text: text,
+        version: stat.atime.valueOf(),
+        resolvedPath: fileUri
+      };
+      this.fsCache = this.fsCache.set(fileUri, cached);
+      return cached;
     } else {
       // Delete from `fsCache` just in case we were `import`'ing a
       // file and have since opened it.
@@ -46,13 +67,10 @@ export class VsDocumentManager implements workspace.DocumentManager {
       return {
         text: doc.getText(),
         version: doc.version,
+        resolvedPath: fileUri,
       }
     }
   }
-
-  //
-  // Private members.
-  //
 
   private fsCache = immutable.Map<string, {text: string, version: number}>();
 }
@@ -123,4 +141,14 @@ export class VsCompilerService implements compiler.CompilerService {
   //
 
   private docCache = immutable.Map<string, compiler.ParsedDocument>();
+}
+
+export class VsPathResolver extends workspace.LibPathResolver {
+  protected pathExists = (path: string): boolean => {
+    try {
+      return fs.existsSync(path);
+    } catch (err) {
+      return false;
+    }
+  }
 }

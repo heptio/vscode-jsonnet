@@ -26,7 +26,8 @@ class SuccessfulParseCompletionTest {
   }
 
   public runTest = async () => {
-    const documents = new testWorkspace.FsDocumentManager()
+    const documents =
+      new testWorkspace.FsDocumentManager(new local.VsPathResolver())
     const compiler = new local.VsCompilerService();
     const analyzer = new analyze.Analyzer(documents, compiler)
 
@@ -43,7 +44,7 @@ class SuccessfulParseCompletionTest {
     const parse = new compilerService.ParsedDocument(
       this.source, tokens, root, 0);
 
-    const cis = await analyzer.completionsFromParse(parse, this.loc, false);
+    const cis = await analyzer.completionsFromParse("", parse, this.loc, false);
     const completionSet = cis.reduce(
       (acc, ci): im.Set<string> => {
         return acc.add(ci.label);
@@ -174,9 +175,10 @@ const parsedCompletionTests = [
 // Setup.
 //
 
-const documents = new testWorkspace.FsDocumentManager()
+const documents =
+  new testWorkspace.FsDocumentManager(new local.VsPathResolver());
 const compiler = new local.VsCompilerService();
-const analyzer = new analyze.Analyzer(documents, compiler)
+const analyzer = new analyze.Analyzer(documents, compiler);
 
 //
 // Tests
