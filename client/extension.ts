@@ -287,7 +287,7 @@ namespace display {
     'vscode.previewHtml',
     jsonnet.canonicalPreviewUri(editor.document.uri),
     getViewColumn(sideBySide),
-    "Jsonnet property preview"
+    `Jsonnet preview '${path.basename(editor.document.fileName)}'`
     ).then((success) => { }, (reason) => {
       alert.couldNotRenderJsonnet(reason);
     });
