@@ -63,6 +63,7 @@ export type TokenKind =
   "TokenStringDouble" |
   "TokenStringSingle" |
   "TokenCommentCpp" |
+  "TokenCommentC" |
 
   // Keywords
   "TokenAssert" |
@@ -108,6 +109,7 @@ export const TokenKindStrings = im.Map<TokenKind, string>({
   TokenStringDouble: "STRING_DOUBLE",
   TokenStringSingle: "STRING_SINGLE",
   TokenCommentCpp:   "CPP_COMMENT",
+  TokenCommentC:     "C_COMMENT",
 
   // Keywords
   TokenAssert:     "assert",
@@ -656,12 +658,12 @@ export class lexer {
         }
         if (r.data === '*' && this.peek().data === '/') {
           // Don't include trailing */
-          const commentData = stringSlice(
-            this.input, this.tokenStart, this.pos-1)
-          this.addFodder("FodderCommentC", commentData);
+          this.backup();
+          this.emitToken("TokenCommentC");
+          this.next();            // Skip past '*'
           this.next();            // Skip past '/'
           this.resetTokenStart(); // Start next token at this point
-          return null
+          return null;
         }
       }
     }

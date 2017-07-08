@@ -122,7 +122,7 @@ const lexTests = <lexTest[]>[
 
   makeLexTest("c++ comment", "// hi", [makeToken("TokenCommentCpp", " hi", makeLocRange(1, 3, 1, 6))], ""),          // This test doesn't look at fodder (yet?)
   makeLexTest("hash comment", "# hi", emptyTokenArray(), ""),                                                                     // This test doesn't look at fodder (yet?)
-  makeLexTest("c comment", "/* hi */", emptyTokenArray(), ""),                                                                    // This test doesn't look at fodder (yet?)
+  makeLexTest("c comment", "/* hi */", [makeToken("TokenCommentC", " hi ", makeLocRange(1, 3, 1, 7))], ""),                                                                    // This test doesn't look at fodder (yet?)
   makeLexTest("c comment no term", "/* hi", emptyTokenArray(), "c comment no term:1:1 Multi-line comment has no terminating */"), // This test doesn't look at fodder (yet?)
 
   makeLexTest(
