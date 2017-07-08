@@ -306,13 +306,11 @@ export class lexer {
 
   // next returns the next rune in the input.
   public next = (): rune => {
-    // TODO: We should not use this pattern, but we use it everywhere.
     if (this.pos >= this.input.count()) {
       this.prevPos = this.pos;
       return LexEOF;
     }
 
-    //
     const r = runeFromCodePoints(this.input, this.pos);
 
     // NOTE: Because `CodePoints` is essentially an array of distinct
@@ -340,8 +338,12 @@ export class lexer {
 
   // peek returns but does not consume the next rune in the input.
   public peek = (): rune => {
-    const r = this.next();
-    this.backup();
+    if (this.pos >= this.input.count()) {
+      this.prevPos = this.pos;
+      return LexEOF;
+    }
+
+    const r = runeFromCodePoints(this.input, this.pos);
     return r;
   };
 
