@@ -303,7 +303,7 @@ export interface Comment extends Node {
 };
 export type Comments = im.List<Comment>;
 
-export type BindingComment = CppComment | CComment | null;
+export type BindingComment = CppComment | CComment | HashComment | null;
 
 export const isBindingComment = (node): node is BindingComment => {
   return isCppComment(node) || isCComment(node);
@@ -350,6 +350,23 @@ export const isCComment = (node): node is CComment => {
   return node instanceof CComment;
 }
 
+export class HashComment extends NodeBase implements Comment {
+  readonly type: "CommentNode" = "CommentNode";
+  readonly kind: "HashStyle"    = "HashStyle";
+
+  constructor(
+    readonly text: im.List<string>,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return this.text.join(os.EOL);
+  }
+}
+
+export const isHashComment = (node): node is HashComment => {
+  return node instanceof HashComment;
+}
 
 // ---------------------------------------------------------------------------
 

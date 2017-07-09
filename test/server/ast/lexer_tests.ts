@@ -120,10 +120,10 @@ const lexTests = <lexTest[]>[
   makeLexTest("identifier", "foobar123", [makeToken("TokenIdentifier", "foobar123", makeLocRange(1, 1, 1, 10))], ""),
   makeLexTest("identifier", "foo bar123", [makeToken("TokenIdentifier", "foo", makeLocRange(1, 1, 1, 4)), makeToken("TokenIdentifier", "bar123", makeLocRange(1, 5, 1, 11))], ""),
 
-  makeLexTest("c++ comment", "// hi", [makeToken("TokenCommentCpp", " hi", makeLocRange(1, 3, 1, 6))], ""),          // This test doesn't look at fodder (yet?)
-  makeLexTest("hash comment", "# hi", emptyTokenArray(), ""),                                                                     // This test doesn't look at fodder (yet?)
-  makeLexTest("c comment", "/* hi */", [makeToken("TokenCommentC", " hi ", makeLocRange(1, 3, 1, 7))], ""),                                                                    // This test doesn't look at fodder (yet?)
-  makeLexTest("c comment no term", "/* hi", emptyTokenArray(), "c comment no term:1:1 Multi-line comment has no terminating */"), // This test doesn't look at fodder (yet?)
+  makeLexTest("c++ comment", "// hi", [makeToken("TokenCommentCpp", " hi", makeLocRange(1, 3, 1, 6))], ""),
+  makeLexTest("hash comment", "# hi", [makeToken("TokenCommentHash", " hi", makeLocRange(1, 2, 1, 5))], ""),
+  makeLexTest("c comment", "/* hi */", [makeToken("TokenCommentC", " hi ", makeLocRange(1, 3, 1, 7))], ""),
+  makeLexTest("c comment no term", "/* hi", emptyTokenArray(), "c comment no term:1:1 Multi-line comment has no terminating */"),
 
   makeLexTest(
     "block string spaces",

@@ -105,7 +105,8 @@ class parser {
   // parseOptionalComments parses a block of comments if they exist at
   // the current position in the token stream (as measured by
   // `this.peek()`), and has no effect if they don't.
-  public parseOptionalComments = (): ast.CppComment | ast.CComment | null => {
+  public parseOptionalComments = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
     const next = this.peek();
     switch (next.kind) {
       case "TokenCommentCpp": {
@@ -114,13 +115,17 @@ class parser {
       case "TokenCommentC": {
         return this.parseCComment();
       }
+      case "TokenCommentHash": {
+        return this.parseHashCommentBlock();
+      }
       default: {
         return null;
       }
     }
   };
 
-  public parseCppCommentBlock = (): ast.CppComment | ast.CComment | null => {
+  public parseCppCommentBlock = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
     let lines = im.List<string>();
     const first = this.peek();
     let curr = this.peek();
@@ -136,6 +141,9 @@ class parser {
         case "TokenCommentC": {
           return this.parseCComment();
         }
+        case "TokenCommentHash": {
+          return this.parseHashCommentBlock();
+        }
         default: {
           return lines.count() == 0
             ? null
@@ -145,7 +153,8 @@ class parser {
     }
   }
 
-  public parseCComment = (): ast.CppComment | ast.CComment | null => {
+  public parseCComment = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
     let lines = im.List<string>();
     let next = this.peek();
 
@@ -173,10 +182,42 @@ class parser {
           lines = im.List<string>(processedLines);
           break;
         }
+        case "TokenCommentHash": {
+          return this.parseHashCommentBlock();
+        }
         default: {
           return lines.count() == 0
             ? null
             : new ast.CComment(lines, next.loc);
+        }
+      }
+    }
+  }
+
+  public parseHashCommentBlock = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
+    let lines = im.List<string>();
+    const first = this.peek();
+    let curr = this.peek();
+
+    while (true) {
+      curr = this.peek();
+      switch (curr.kind) {
+        case "TokenCommentCpp": {
+          return this.parseCppCommentBlock();
+        }
+        case "TokenCommentC": {
+          return this.parseCComment();
+        }
+        case "TokenCommentHash": {
+          curr = this.pop();
+          lines = lines.push(curr.data);
+          break;
+        }
+        default: {
+          return lines.count() == 0
+            ? null
+            : new ast.HashComment(lines, locFromTokens(first, curr));
         }
       }
     }
@@ -694,7 +735,10 @@ class parser {
       }
 
       const thisKind = this.peek().kind;
-      if (thisKind === "TokenCommentCpp" || thisKind === "TokenCommentC") {
+      if (
+        thisKind === "TokenCommentCpp" || thisKind === "TokenCommentC" ||
+        thisKind === "TokenCommentHash"
+      ) {
         headingComments = this.parseOptionalComments();
       }
       next = this.pop();

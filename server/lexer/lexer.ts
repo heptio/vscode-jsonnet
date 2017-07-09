@@ -64,6 +64,7 @@ export type TokenKind =
   "TokenStringSingle" |
   "TokenCommentCpp" |
   "TokenCommentC" |
+  "TokenCommentHash" |
 
   // Keywords
   "TokenAssert" |
@@ -110,6 +111,7 @@ export const TokenKindStrings = im.Map<TokenKind, string>({
   TokenStringSingle: "STRING_SINGLE",
   TokenCommentCpp:   "CPP_COMMENT",
   TokenCommentC:     "C_COMMENT",
+  TokenCommentHash:  "HASH_COMMENT",
 
   // Keywords
   TokenAssert:     "assert",
@@ -1001,7 +1003,7 @@ export const LexRange = (
         }
         // Leave the '\n' in the lexer to be fodder for the next round
         l.backup();
-        l.addCommentFodder("FodderCommentHash");
+        l.emitToken("TokenCommentHash");
         break;
       }
 
