@@ -41,4 +41,12 @@ local f = "fakeImport";
   ,
   # A comment for `testField10`.
   testField10: "foo",
+  // Not a comment for `testField11`.
+
+  // A comment for `testField11`.
+  testField11: "foo",
+  # Not a comment for `testField12`.
+
+  # A comment for `testField12`.
+  testField12: "foo",
 }

@@ -15,4 +15,6 @@ local fooModule = import "./simple-import.libsonnet";
   field8: fooModule.testField8,
   field9: fooModule.testField9,
   field10: fooModule.testField10,
+  field11: fooModule.testField11,
+  field12: fooModule.testField12,
 }

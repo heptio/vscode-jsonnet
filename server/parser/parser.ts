@@ -134,6 +134,16 @@ class parser {
       curr = this.peek();
       switch (curr.kind) {
         case "TokenCommentCpp": {
+          if (curr.fodder != null) {
+            const anyNewlines = curr.fodder.filter(fodder =>
+              fodder.data.match(/^\n\s*\n/) != null);
+            if (anyNewlines.length) {
+              curr = this.pop();
+              lines = im.List<string>([curr.data]);
+              break;
+            }
+          }
+
           curr = this.pop();
           lines = lines.push(curr.data);
           break;
@@ -210,6 +220,16 @@ class parser {
           return this.parseCComment();
         }
         case "TokenCommentHash": {
+          if (curr.fodder != null) {
+            const anyNewlines = curr.fodder.filter(fodder =>
+              fodder.data.match(/^\n\s*\n/) != null);
+            if (anyNewlines.length) {
+              curr = this.pop();
+              lines = im.List<string>([curr.data]);
+              break;
+            }
+          }
+
           curr = this.pop();
           lines = lines.push(curr.data);
           break;
