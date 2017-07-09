@@ -1,5 +1,8 @@
 import * as ast from "../parser/node";
 
+export const staticErrorPrefix = "STATIC ERROR: ";
+export const runtimeErrorPrefix = "RUNTIME ERROR: ";
+
 //////////////////////////////////////////////////////////////////////////////
 // Location
 
@@ -18,6 +21,14 @@ export class Location {
   public String = (): string => {
     return `${this.line}:${this.column}`;
   };
+
+  public static fromString = (coord: string): Location | null => {
+    const nums = coord.split(":");
+    if (nums.length != 2) {
+      return null;
+    }
+    return new Location(parseInt(nums[0]), parseInt(nums[1]));
+  }
 
   public beforeRangeOrEqual = (range: LocationRange): boolean => {
     const begin = range.begin;
@@ -125,6 +136,44 @@ export class LocationRange {
     }
 
     return `${filePrefix}(${this.begin.String()})-(${this.end.String()})`;
+  }
+
+  public static fromString = (
+    filename: string, loc: string,
+  ): LocationRange | null => {
+    // NOTE: Use `g` to search the string for all coordinates
+    // formatted as `x:y`.
+    const coordinates = loc.match(/(\d+:\d+)+/g);
+
+    let start: Location | null = null;
+    let end: Location | null = null;
+    if (coordinates == null) {
+      console.log(`Could not parse coordinates '${loc}'`);
+      return null;
+    } else if (coordinates.length == 2) {
+      // Easy case. Of the form `(x1:y1)-(x2:y2)`.
+      start = Location.fromString(coordinates[0]);
+      end = Location.fromString(coordinates[1]);
+      return start != null && end != null && new LocationRange(filename, start, end) || null;
+    } else if (coordinates.length == 1) {
+      // One of two forms: `x1:y1` or `x1:y1-y2`.
+      start = Location.fromString(coordinates[0]);
+      if (start == null) {
+        return null;
+      }
+
+      const y2 = loc.match(/\-(\d+)/);
+      if (y2 == null) {
+        end = start;
+      } else {
+        end = new Location(start.line, parseInt(y2[1]));
+      }
+
+      return new LocationRange(filename, start, end);
+    } else {
+      console.log(`Could not parse coordinates '${loc}'`);
+      return null;
+    }
   }
 
   public rangeIsTighter = (thatRange: LocationRange): boolean => {
