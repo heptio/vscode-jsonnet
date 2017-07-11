@@ -404,7 +404,7 @@ describe("Imported symbol resolution", () => {
     assert.isNotNull(importedSymbol);
     assert.equal(importedSymbol.type, "ObjectNode");
     assert.isNotNull(importedSymbol.parent);
-    assertLocationRange(importedSymbol.loc, 2, 1, 12, 2);
+    assertLocationRange(importedSymbol.loc, 2, 1, 52, 2);
   });
 
   it("Can dereference fields from an imported module", () => {
@@ -464,5 +464,185 @@ describe("Imported symbol resolution", () => {
     assert.isNotNull(valueOfObjectField);
     const comments = analyzer.resolveComments(valueOfObjectField);
     assert.isNull(comments);
+  });
+
+  it("Can find C-style comments", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(8, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " This comment should appear over `testField1`. ");
+  });
+
+  it("Find multi-line C-style comments", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(9, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " Line 1 of a comment that appears over `testField2`.\n Line 2 of a comment that appears over `testField2`.\n   ");
+  });
+
+  it("Ignore C-style comments that come before the heading comment", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(10, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField3`.\n   ");
+  });
+
+  it("Find C-style comments that come before a comma", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(11, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField4`. ");
+  });
+
+  it("Find C-style comments that come before a comma", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(12, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField5`. ");
+  });
+
+  it("Find CPP-style comment after several other comment types", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(13, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField6`.");
+  });
+
+  it("Find simple Hash-style comment", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(14, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField7`.");
+  });
+
+  it("Find multi-line Hash-style comment", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(15, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " Line 1 of a comment for `testField8`.\n Line 2 of a comment for `testField8`.");
+  });
+
+  it("Find Hash-style comment before comma", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(16, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField9`.");
+  });
+
+  it("Ignore Hash-style comment before comma", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(17, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField10`.");
+  });
+
+  it("Ignore CPP-style comments separated by newlines", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(18, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField11`.");
+  });
+
+  it("Ignore Hash-style comments separated by newlines", () => {
+    // This location points at the `bat` symbol in the expression
+    // `fooModule.baz.bat`, where `fooModule` is an imported module.
+    // This tests that we can correctly obtain the documentation for
+    // a symbol that lies in a multiply-nested index node.
+    const valueOfObjectField =
+      <ast.LiteralString>resolveSymbolAtPositionFromAst(
+        analyzer, ctx, rootNode, makeLocation(19, 23));
+    assert.isNotNull(valueOfObjectField);
+
+    const comments = analyzer.resolveComments(valueOfObjectField);
+    assert.isNotNull(comments);
+    assert.equal(comments, " A comment for `testField12`.");
   });
 });

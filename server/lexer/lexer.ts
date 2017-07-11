@@ -63,6 +63,8 @@ export type TokenKind =
   "TokenStringDouble" |
   "TokenStringSingle" |
   "TokenCommentCpp" |
+  "TokenCommentC" |
+  "TokenCommentHash" |
 
   // Keywords
   "TokenAssert" |
@@ -108,6 +110,8 @@ export const TokenKindStrings = im.Map<TokenKind, string>({
   TokenStringDouble: "STRING_DOUBLE",
   TokenStringSingle: "STRING_SINGLE",
   TokenCommentCpp:   "CPP_COMMENT",
+  TokenCommentC:     "C_COMMENT",
+  TokenCommentHash:  "HASH_COMMENT",
 
   // Keywords
   TokenAssert:     "assert",
@@ -306,13 +310,11 @@ export class lexer {
 
   // next returns the next rune in the input.
   public next = (): rune => {
-    // TODO: We should not use this pattern, but we use it everywhere.
     if (this.pos >= this.input.count()) {
       this.prevPos = this.pos;
       return LexEOF;
     }
 
-    //
     const r = runeFromCodePoints(this.input, this.pos);
 
     // NOTE: Because `CodePoints` is essentially an array of distinct
@@ -340,8 +342,12 @@ export class lexer {
 
   // peek returns but does not consume the next rune in the input.
   public peek = (): rune => {
-    const r = this.next();
-    this.backup();
+    if (this.pos >= this.input.count()) {
+      this.prevPos = this.pos;
+      return LexEOF;
+    }
+
+    const r = runeFromCodePoints(this.input, this.pos);
     return r;
   };
 
@@ -654,12 +660,12 @@ export class lexer {
         }
         if (r.data === '*' && this.peek().data === '/') {
           // Don't include trailing */
-          const commentData = stringSlice(
-            this.input, this.tokenStart, this.pos-1)
-          this.addFodder("FodderCommentC", commentData);
+          this.backup();
+          this.emitToken("TokenCommentC");
+          this.next();            // Skip past '*'
           this.next();            // Skip past '/'
           this.resetTokenStart(); // Start next token at this point
-          return null
+          return null;
         }
       }
     }
@@ -997,7 +1003,7 @@ export const LexRange = (
         }
         // Leave the '\n' in the lexer to be fodder for the next round
         l.backup();
-        l.addCommentFodder("FodderCommentHash");
+        l.emitToken("TokenCommentHash");
         break;
       }
 

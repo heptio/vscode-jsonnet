@@ -131,9 +131,9 @@ export abstract class VisitorBase implements Visitor {
         const castedNode = <ast.Function>node;
         this.visitFunction(castedNode);
 
-        castedNode.headingComment.forEach((comment: ast.Comment) => {
-          this.visitHelper(comment, castedNode, currEnv);
-        });
+        if (castedNode.headingComment != null) {
+          this.visitHelper(castedNode.headingComment, castedNode, currEnv);
+        }
 
         // Add params to environment before visiting body.
         const envWithParams = currEnv.merge(
@@ -247,9 +247,9 @@ export abstract class VisitorBase implements Visitor {
           castedNode.expr2, castedNode, envWithParams);
         castedNode.expr3 != null && this.visitHelper(
           castedNode.expr3, castedNode, envWithParams);
-        castedNode.headingComments.forEach((comment: ast.Comment) => {
-          this.visitHelper(comment, castedNode, currEnv);
-        });
+        if (castedNode.headingComments != null) {
+          this.visitHelper(castedNode.headingComments, castedNode, currEnv);
+        }
         return;
       }
       case "ObjectNode": {

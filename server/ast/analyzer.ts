@@ -457,19 +457,11 @@ export class Analyzer implements EventedAnalyzer {
   private getComments = (field: ast.ObjectField): string | null => {
     // Convert to field object, pull comments out.
     const comments = field.headingComments;
-    if (comments == null || comments.count() == 0) {
+    if (comments == null) {
       return null;
     }
 
-    return comments
-      .reduce((acc: string[], curr) => {
-        if (curr == undefined) {
-          throw new Error(`INTERNAL ERROR: element was undefined during a reduce call`);
-        }
-        acc.push(curr.text);
-        return acc;
-      }, [])
-      .join("\n");
+    return comments.text.join(os.EOL);
   }
 }
 

@@ -1,4 +1,5 @@
 'use strict';
+import * as os from 'os';
 import * as path from 'path';
 
 import * as im from 'immutable';
@@ -298,9 +299,15 @@ export interface Comment extends Node {
   // `ObjectField`.
   readonly type: "CommentNode";
   readonly kind: CommentKind
-  readonly text: string
+  readonly text: im.List<string>
 };
 export type Comments = im.List<Comment>;
+
+export type BindingComment = CppComment | CComment | HashComment | null;
+
+export const isBindingComment = (node): node is BindingComment => {
+  return isCppComment(node) || isCComment(node);
+}
 
 export const isComment = (node: Node): node is Comment => {
   const nodeType: NodeKind = "CommentNode";
@@ -312,19 +319,54 @@ export class CppComment extends NodeBase implements Comment {
   readonly kind: "CppStyle"    = "CppStyle";
 
   constructor(
-    readonly text: string,
+    readonly text: im.List<string>,
     readonly loc:  error.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
-    return this.text;
+    return this.text.join(os.EOL);
   }
 }
 
-export const isCppComment = (node): node is Identifier => {
+export const isCppComment = (node): node is CppComment => {
   return node instanceof CppComment;
 }
 
+export class CComment extends NodeBase implements Comment {
+  readonly type: "CommentNode" = "CommentNode";
+  readonly kind: "CStyle"    = "CStyle";
+
+  constructor(
+    readonly text: im.List<string>,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return this.text.join(os.EOL);
+  }
+}
+
+export const isCComment = (node): node is CComment => {
+  return node instanceof CComment;
+}
+
+export class HashComment extends NodeBase implements Comment {
+  readonly type: "CommentNode" = "CommentNode";
+  readonly kind: "HashStyle"    = "HashStyle";
+
+  constructor(
+    readonly text: im.List<string>,
+    readonly loc:  error.LocationRange,
+  ) { super(); }
+
+  public prettyPrint = (): string => {
+    return this.text.join(os.EOL);
+  }
+}
+
+export const isHashComment = (node): node is HashComment => {
+  return node instanceof HashComment;
+}
 
 // ---------------------------------------------------------------------------
 
@@ -784,7 +826,7 @@ export class Function extends NodeBase {
     readonly parameters:      FunctionParams,
     readonly trailingComma:   boolean,
     readonly body:            Node,
-    readonly headingComment:  Comments,
+    readonly headingComment:  BindingComment,
     readonly trailingComment: Comments,
     readonly loc:             error.LocationRange,
   ) { super(); }
@@ -1227,7 +1269,7 @@ export class ObjectField extends NodeBase {
     readonly trailingComma:   boolean,         // If methodSugar == true then remembers the trailing comma
     readonly expr2:           Node | null,     // In scope of the object (can see self).
     readonly expr3:           Node | null,     // In scope of the object (can see self).
-    readonly headingComments: Comments,
+    readonly headingComments: BindingComment,
     readonly loc:  error.LocationRange,
   ) { super(); }
 
@@ -1321,7 +1363,7 @@ export class ObjectNode extends NodeBase implements FieldsResolvable {
   constructor(
     readonly fields:          ObjectFields,
     readonly trailingComma:   boolean,
-    readonly headingComments: Comments,
+    readonly headingComments: BindingComment,
     readonly loc:  error.LocationRange,
   ) { super(); }
 

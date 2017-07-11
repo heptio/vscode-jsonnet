@@ -1,4 +1,6 @@
 'use strict';
+import * as os from 'os';
+
 import * as im from 'immutable';
 
 import * as ast from '../parser/node';
@@ -103,20 +105,143 @@ class parser {
   // parseOptionalComments parses a block of comments if they exist at
   // the current position in the token stream (as measured by
   // `this.peek()`), and has no effect if they don't.
-  public parseOptionalComments = (): ast.Comments => {
-    let comments = im.List<ast.Comment>();
-    while (true) {
-      const next = this.peek();
-      if (next.kind === "TokenCommentCpp") {
-        this.pop();
-        comments = comments.push(new ast.CppComment(next.data, next.loc));
-      } else {
-        break;
+  public parseOptionalComments = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
+    const next = this.peek();
+    switch (next.kind) {
+      case "TokenCommentCpp": {
+        return this.parseCppCommentBlock();
+      }
+      case "TokenCommentC": {
+        return this.parseCComment();
+      }
+      case "TokenCommentHash": {
+        return this.parseHashCommentBlock();
+      }
+      default: {
+        return null;
       }
     }
-
-    return comments
   };
+
+  public parseCppCommentBlock = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
+    let lines = im.List<string>();
+    const first = this.peek();
+    let curr = this.peek();
+
+    while (true) {
+      curr = this.peek();
+      switch (curr.kind) {
+        case "TokenCommentCpp": {
+          if (curr.fodder != null) {
+            const anyNewlines = curr.fodder.filter(fodder =>
+              fodder.data.match(/^\n\s*\n/) != null);
+            if (anyNewlines.length) {
+              curr = this.pop();
+              lines = im.List<string>([curr.data]);
+              break;
+            }
+          }
+
+          curr = this.pop();
+          lines = lines.push(curr.data);
+          break;
+        }
+        case "TokenCommentC": {
+          return this.parseCComment();
+        }
+        case "TokenCommentHash": {
+          return this.parseHashCommentBlock();
+        }
+        default: {
+          return lines.count() == 0
+            ? null
+            : new ast.CppComment(lines, locFromTokens(first, curr));
+        }
+      }
+    }
+  }
+
+  public parseCComment = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
+    let lines = im.List<string>();
+    let next = this.peek();
+
+    while (true) {
+      next = this.peek();
+      switch (next.kind) {
+        case "TokenCommentCpp": {
+          return this.parseCppCommentBlock();
+        }
+        case "TokenCommentC": {
+          // NOTE: This does not trim the whitespace in the last line.
+          // For example, if a multi-line comment ends: `   */`, then
+          // the line will end with 3 space characters.
+          const processedLines = next.data
+            .split(os.EOL)
+            .map(line => {
+              const m = line.match(/^\s*\*/);
+              if (m == null) {
+                return line;
+              }
+              return line.slice(m[0].length);
+            });
+
+          next = this.pop();
+          lines = im.List<string>(processedLines);
+          break;
+        }
+        case "TokenCommentHash": {
+          return this.parseHashCommentBlock();
+        }
+        default: {
+          return lines.count() == 0
+            ? null
+            : new ast.CComment(lines, next.loc);
+        }
+      }
+    }
+  }
+
+  public parseHashCommentBlock = ()
+  : ast.CppComment | ast.CComment | ast.HashComment | null => {
+    let lines = im.List<string>();
+    const first = this.peek();
+    let curr = this.peek();
+
+    while (true) {
+      curr = this.peek();
+      switch (curr.kind) {
+        case "TokenCommentCpp": {
+          return this.parseCppCommentBlock();
+        }
+        case "TokenCommentC": {
+          return this.parseCComment();
+        }
+        case "TokenCommentHash": {
+          if (curr.fodder != null) {
+            const anyNewlines = curr.fodder.filter(fodder =>
+              fodder.data.match(/^\n\s*\n/) != null);
+            if (anyNewlines.length) {
+              curr = this.pop();
+              lines = im.List<string>([curr.data]);
+              break;
+            }
+          }
+
+          curr = this.pop();
+          lines = lines.push(curr.data);
+          break;
+        }
+        default: {
+          return lines.count() == 0
+            ? null
+            : new ast.HashComment(lines, locFromTokens(first, curr));
+        }
+      }
+    }
+  }
 
   public parseCommaList = <T extends ast.Node>(
     end: lexer.TokenKind, elementKind: string,
@@ -144,7 +269,7 @@ class parser {
           `Expected a comma before next ${elementKind}.`, next.loc);
       }
 
-      const expr = this.parse(maxPrecedence, im.List<ast.Comment>());
+      const expr = this.parse(maxPrecedence, null);
       if (error.isStaticError(expr)) {
         return expr;
       }
@@ -173,7 +298,7 @@ class parser {
             next.data === "="
         ) {
           this.pop();
-          const assignment = this.parse(maxPrecedence, im.List<ast.Comment>());
+          const assignment = this.parse(maxPrecedence, null);
           if (error.isStaticError(assignment)) {
             return assignment;
           }
@@ -207,7 +332,7 @@ class parser {
         let rhs: ast.Node | null = null;
         if (next.kind === "TokenOperator" && next.data === "=") {
           this.pop();
-          const assignment = this.parse(maxPrecedence, im.List<ast.Comment>());
+          const assignment = this.parse(maxPrecedence, null);
           if (error.isStaticError(assignment)) {
             return assignment;
           }
@@ -249,7 +374,7 @@ class parser {
         return pop;
       }
 
-      const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+      const body = this.parse(maxPrecedence, null);
       if (error.isStaticError(body)) {
         return body;
       }
@@ -264,7 +389,7 @@ class parser {
       if (error.isStaticError(pop)) {
         return pop;
       }
-      const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+      const body = this.parse(maxPrecedence, null);
       if (error.isStaticError(body)) {
         return body;
       }
@@ -381,7 +506,7 @@ class parser {
 
   // parseObjectField will parse a single field in an object.
   public parseObjectField = (
-    headingComments: ast.Comments, next: lexer.Token,
+    headingComments: ast.BindingComment, next: lexer.Token,
     literalFields: im.Set<literalField>,
   ): {field: ast.ObjectField, literals: im.Set<literalField>} | error.StaticError => {
     let kind: ast.ObjectFieldKind;
@@ -412,7 +537,7 @@ class parser {
       }
       default: {
         kind = "ObjectFieldExpr"
-        const expr1 = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const expr1 = this.parse(maxPrecedence, null);
         if (error.isStaticError(expr1)) {
           return expr1;
         }
@@ -455,7 +580,7 @@ class parser {
       literalFields = literalFields.add(next.data);
     }
 
-    const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+    const body = this.parse(maxPrecedence, null);
     if (error.isStaticError(body)) {
       return body;
     }
@@ -516,7 +641,7 @@ class parser {
       return pop;
     }
 
-    const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+    const body = this.parse(maxPrecedence, null);
     if (error.isStaticError(body)) {
       return body;
     }
@@ -535,7 +660,7 @@ class parser {
         funcComma,
         body,
         null,
-        im.List<ast.Comment>(),
+        null,
         locFromTokenAST(localToken, body),
       ),
       binds: binds,
@@ -548,14 +673,14 @@ class parser {
   public parseObjectAssert = (
     localToken: lexer.Token,
   ): ast.ObjectField | error.StaticError => {
-    const cond = this.parse(maxPrecedence, im.List<ast.Comment>())
+    const cond = this.parse(maxPrecedence, null)
     if (error.isStaticError(cond)) {
       return cond;
     }
     let msg: ast.Node | null = null;
     if (this.peek().kind === "TokenOperator" && this.peek().data == ":") {
       this.pop();
-      const result = this.parse(maxPrecedence, im.List<ast.Comment>());
+      const result = this.parse(maxPrecedence, null);
       if (error.isStaticError(result)) {
         return result;
       }
@@ -579,7 +704,7 @@ class parser {
       false,
       cond,
       msg,
-      im.List<ast.Comment>(),
+      null,
       loc,
     );
   };
@@ -587,7 +712,7 @@ class parser {
   // parseObjectRemainder parses "the rest" of an object, typically
   // immediately after we encounter the '{' character.
   public parseObjectRemainder = (
-    tok: lexer.Token, heading: im.List<ast.Comment>,
+    tok: lexer.Token, heading: ast.BindingComment,
   ): {objRemainder: ast.Node, next: lexer.Token} | error.StaticError => {
     let fields = im.List<ast.ObjectField>();
     let literalFields = im.Set<literalField>();
@@ -629,7 +754,11 @@ class parser {
         }
       }
 
-      if (this.peek().kind === "TokenCommentCpp") {
+      const thisKind = this.peek().kind;
+      if (
+        thisKind === "TokenCommentCpp" || thisKind === "TokenCommentC" ||
+        thisKind === "TokenCommentHash"
+      ) {
         headingComments = this.parseOptionalComments();
       }
       next = this.pop();
@@ -726,7 +855,7 @@ class parser {
       if (error.isStaticError(pop)) {
         return pop;
       }
-      const arr = this.parse(maxPrecedence, im.List<ast.Comment>());
+      const arr = this.parse(maxPrecedence, null);
       if (error.isStaticError(arr)) {
         return arr;
       }
@@ -735,7 +864,7 @@ class parser {
 
       let maybeIf = this.pop();
       for (; maybeIf.kind === "TokenIf"; maybeIf = this.pop()) {
-        const cond = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const cond = this.parse(maxPrecedence, null);
         if (error.isStaticError(cond)) {
           return cond;
         }
@@ -767,7 +896,7 @@ class parser {
         im.List<ast.Node>(), false, null, null, locFromTokens(tok, next));
     }
 
-    const first = this.parse(maxPrecedence, im.List<ast.Comment>());
+    const first = this.parse(maxPrecedence, null);
     if (error.isStaticError(first)) {
       return first;
     }
@@ -803,7 +932,7 @@ class parser {
         return error.MakeStaticError(
           "Expected a comma before next array element.", next.loc);
       }
-      const nextElem = this.parse(maxPrecedence, im.List<ast.Comment>());
+      const nextElem = this.parse(maxPrecedence, null);
       if (error.isStaticError(nextElem)) {
         return nextElem;
       }
@@ -834,7 +963,7 @@ class parser {
   };
 
   public parseTerminal = (
-    heading: im.List<ast.Comment>
+    heading: ast.BindingComment,
   ): ast.Node | error.StaticError => {
     let tok = this.pop();
     switch (tok.kind) {
@@ -874,7 +1003,7 @@ class parser {
         return this.parseArrayRemainder(tok);
 
       case "TokenParenL": {
-        const inner = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const inner = this.parse(maxPrecedence, null);
         if (error.isStaticError(inner)) {
           return inner;
         }
@@ -935,7 +1064,7 @@ class parser {
           }
           case "TokenBracketL": {
             let parseErr: error.StaticError | null;
-            const result = this.parse(maxPrecedence, im.List<ast.Comment>());
+            const result = this.parse(maxPrecedence, null);
             if (error.isStaticError(result)) {
               return result;
             }
@@ -960,41 +1089,26 @@ class parser {
 
   // parse is the main parsing routine.
   public parse = (
-    prec: precedence, heading: ast.Comments
+    prec: precedence, heading: ast.BindingComment
   ): ast.Node | error.StaticError => {
     let begin = this.peek();
 
-    if (begin.kind === "TokenCommentCpp") {
-      this.pop();
-
-      // Get the CPP comment block
-      heading = im.List<ast.Comment>([
-        new ast.CppComment(begin.data, begin.loc)
-      ]);
-      while (true) {
-        begin = this.peek();
-        if (begin.kind === "TokenCommentCpp") {
-          this.pop();
-          heading = heading.push(new ast.CppComment(begin.data, begin.loc));
-        } else {
-          break;
-        }
-      }
-    }
+    // Consume heading comments if they exist.
+    heading = this.parseOptionalComments();
 
     switch (begin.kind) {
       // These cases have effectively maxPrecedence as the first call
       // to parse will parse them.
       case "TokenAssert": {
         this.pop();
-        const cond = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const cond = this.parse(maxPrecedence, null);
         if (error.isStaticError(cond)) {
           return cond;
         }
         let msg: ast.Node | null = null;
         if (this.peek().kind === "TokenOperator" && this.peek().data === ":") {
           this.pop();
-          const result = this.parse(maxPrecedence, im.List<ast.Comment>());
+          const result = this.parse(maxPrecedence, null);
           if (error.isStaticError(result)) {
             return result;
           }
@@ -1004,7 +1118,7 @@ class parser {
         if (error.isStaticError(pop)) {
           return pop;
         }
-        const rest = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const rest = this.parse(maxPrecedence, null);
         if (error.isStaticError(rest)) {
           return rest;
         }
@@ -1013,7 +1127,7 @@ class parser {
 
       case "TokenError": {
         this.pop();
-        const expr = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const expr = this.parse(maxPrecedence, null);
         if (error.isStaticError(expr)) {
           return expr;
         }
@@ -1022,7 +1136,7 @@ class parser {
 
       case "TokenIf": {
         this.pop();
-        const cond = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const cond = this.parse(maxPrecedence, null);
         if (error.isStaticError(cond)) {
           return cond;
         }
@@ -1030,7 +1144,7 @@ class parser {
         if (error.isStaticError(pop)) {
           return pop;
         }
-        const branchTrue = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const branchTrue = this.parse(maxPrecedence, null);
         if (error.isStaticError(branchTrue)) {
           return branchTrue;
         }
@@ -1038,7 +1152,7 @@ class parser {
         let lr = locFromTokenAST(begin, branchTrue);
         if (this.peek().kind === "TokenElse") {
           this.pop();
-          const branchFalse = this.parse(maxPrecedence, im.List<ast.Comment>());
+          const branchFalse = this.parse(maxPrecedence, null);
           if (error.isStaticError(branchFalse)) {
             return branchFalse;
           }
@@ -1056,7 +1170,7 @@ class parser {
             return result;
           }
 
-          const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+          const body = this.parse(maxPrecedence, null);
           if (error.isStaticError(body)) {
             return body;
           }
@@ -1064,7 +1178,7 @@ class parser {
             result.params,
             result.gotComma,
             body,
-            im.List<ast.Comment>(),
+            null,
             im.List<ast.Comment>(),
             locFromTokenAST(begin, body),
           );
@@ -1075,7 +1189,7 @@ class parser {
 
       case "TokenImport": {
         this.pop();
-        const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const body = this.parse(maxPrecedence, null);
         if (error.isStaticError(body)) {
           return body;
         }
@@ -1088,7 +1202,7 @@ class parser {
 
       case "TokenImportStr": {
         this.pop();
-        const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const body = this.parse(maxPrecedence, null);
         if (error.isStaticError(body)) {
           return body;
         }
@@ -1122,7 +1236,7 @@ class parser {
             break;
           }
         }
-        const body = this.parse(maxPrecedence, im.List<ast.Comment>());
+        const body = this.parse(maxPrecedence, null);
         if (error.isStaticError(body)) {
           return body;
         }
@@ -1139,7 +1253,7 @@ class parser {
           }
           if (prec == unaryPrecedence) {
             const op = this.pop();
-            const expr = this.parse(prec, im.List<ast.Comment>());
+            const expr = this.parse(prec, null);
             if (error.isStaticError(expr)) {
               return expr;
             }
@@ -1205,7 +1319,7 @@ class parser {
           const op = this.pop();
           switch (op.kind) {
             case "TokenBracketL": {
-              const index = this.parse(maxPrecedence, im.List<ast.Comment>());
+              const index = this.parse(maxPrecedence, null);
               if (error.isStaticError(index)) {
                 return index;
               }
@@ -1259,7 +1373,7 @@ class parser {
               break;
             }
             default: {
-              const rhs = this.parse(prec-1, im.List<ast.Comment>());
+              const rhs = this.parse(prec-1, null);
               if (error.isStaticError(rhs)) {
                 return rhs;
               }
@@ -1304,7 +1418,7 @@ export const Parse = (
   t: lexer.Tokens
 ): ast.Node | error.StaticError => {
   const p = new parser(t);
-  const expr = p.parse(maxPrecedence, im.List<ast.Comment>());
+  const expr = p.parse(maxPrecedence, null);
   if (error.isStaticError(expr)) {
     return expr;
   }
