@@ -35,15 +35,12 @@ export class VsDocumentManager implements workspace.DocumentManager {
       throw new Error(`INTERNAL ERROR: ill-formed, null href or path`);
     }
 
+    const version = fs.statSync(filePath).mtime.valueOf();
     const doc = this.documents.get(fileUri);
     if (doc == null) {
       const doc = this.fsCache.get(fileUri);
-      if (doc != null) {
-        // TODO(hausdorff): Decide where to use fscache. This code
-        // assumes users are using vscode to change all Jsonnet
-        // library code, but it may be better to only assume this is
-        // true of the current workspace (and perhaps places like
-        // `/usr`).
+      if (doc != null && version == doc.version) {
+        // Return cached version if modified time is the same.
         return {
           text: doc.text,
           version: doc.version,
@@ -51,11 +48,11 @@ export class VsDocumentManager implements workspace.DocumentManager {
         };
       }
 
+      // Else, cache it.
       const text = fs.readFileSync(filePath).toString();
-      const stat = fs.statSync(filePath);
       const cached = {
         text: text,
-        version: stat.atime.valueOf(),
+        version: version,
         resolvedPath: fileUri
       };
       this.fsCache = this.fsCache.set(fileUri, cached);
