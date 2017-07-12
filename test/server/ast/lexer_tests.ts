@@ -464,4 +464,51 @@ describe("Lexer helper tests", () => {
   });
 });
 
-// TODO: test fodder, test position reporting
+describe("Jsonnet error location parsing", () => {
+  const testSuccessfulParse = (loc: string): error.LocationRange => {
+    const lr = error.LocationRange.fromString("", loc);
+    assert.isNotNull(lr);
+    return <error.LocationRange>lr;
+  }
+
+  const testFailedParse = (loc: string): void => {
+    const lr = error.LocationRange.fromString("", loc);
+    assert.isNull(lr);
+  }
+
+  it("Correctly parse simple range", () => {
+    const lr = testSuccessfulParse("(8:15)-(10:1)");
+    assert.isNotNull(lr);
+    assert.equal(lr.begin.line, 8);
+    assert.equal(lr.begin.column, 15);
+    assert.equal(lr.end.line, 10);
+    assert.equal(lr.end.column, 1);
+  });
+
+  it("Correctly parse simple single-line range", () => {
+    const lr = testSuccessfulParse("9:10-19");
+    assert.isNotNull(lr);
+    assert.equal(lr.begin.line, 9);
+    assert.equal(lr.begin.column, 10);
+    assert.equal(lr.end.line, 9);
+    assert.equal(lr.end.column, 19);
+  });
+
+  it("Correctly parse simple single-character range", () => {
+    const lr = testSuccessfulParse("100:2");
+    assert.isNotNull(lr);
+    assert.equal(lr.begin.line, 100);
+    assert.equal(lr.begin.column, 2);
+    assert.equal(lr.end.line, 100);
+    assert.equal(lr.end.column, 2);
+  });
+
+  it("Correctly parse simple single-character range with parens", () => {
+    const lr = testSuccessfulParse("(112:21)");
+    assert.isNotNull(lr);
+    assert.equal(lr.begin.line, 112);
+    assert.equal(lr.begin.column, 21);
+    assert.equal(lr.end.line, 112);
+    assert.equal(lr.end.column, 21);
+  });
+});
