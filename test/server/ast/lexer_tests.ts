@@ -1,10 +1,9 @@
-'use strict';
 import { expect, assert } from 'chai';
 
 import * as im from 'immutable';
 
-import * as error from '../../../server/lexer/static_error';
-import * as lexer from '../../../server/lexer/lexer';
+import * as lexical from '../../../compiler/lexical-analysis/lexical';
+import * as lexer from '../../../compiler/lexical-analysis/lexer';
 
 interface lexTest {
   name:      string
@@ -24,17 +23,17 @@ const makeLexTest =
 const emptyTokenArray = (): lexer.Token[] => [];
 
 const tEOF = new lexer.Token(
-  "TokenEndOfFile", [], "", "", "", error.MakeLocationRangeMessage(""));
+  "TokenEndOfFile", [], "", "", "", lexical.MakeLocationRangeMessage(""));
 
 const makeToken =
-  (kind: lexer.TokenKind, data: string, locRange: error.LocationRange) =>
+  (kind: lexer.TokenKind, data: string, locRange: lexical.LocationRange) =>
     new lexer.Token(kind, [], data, "", "", locRange);
 
 const makeLocRange =
   (beginLine: number, beginCol: number, endLine: number, endCol : number) =>
-    <error.LocationRange>{
-      begin: new error.Location(beginLine, beginCol),
-      end:   new error.Location(endLine, endCol),
+    <lexical.LocationRange>{
+      begin: new lexical.Location(beginLine, beginCol),
+      end:   new lexical.Location(endLine, endCol),
     }
 
 const lexTests = <lexTest[]>[
@@ -324,12 +323,12 @@ describe("Lexer tests", () => {
       const testTokens = im.List<lexer.Token>(test.tokens).push(tEOF);
       const tokens = lexer.Lex(test.name, test.input);
       var errString = "";
-      if (error.isStaticError(tokens)) {
+      if (lexical.isStaticError(tokens)) {
         errString = tokens.Error();
       }
       assert.equal(errString, test.errString);
 
-      if (!error.isStaticError(tokens)) {
+      if (!lexical.isStaticError(tokens)) {
         const tokenStreamText = tokens
           .map(token => {
             if (token === undefined) {
@@ -465,14 +464,14 @@ describe("Lexer helper tests", () => {
 });
 
 describe("Jsonnet error location parsing", () => {
-  const testSuccessfulParse = (loc: string): error.LocationRange => {
-    const lr = error.LocationRange.fromString("", loc);
+  const testSuccessfulParse = (loc: string): lexical.LocationRange => {
+    const lr = lexical.LocationRange.fromString("", loc);
     assert.isNotNull(lr);
-    return <error.LocationRange>lr;
+    return <lexical.LocationRange>lr;
   }
 
   const testFailedParse = (loc: string): void => {
-    const lr = error.LocationRange.fromString("", loc);
+    const lr = lexical.LocationRange.fromString("", loc);
     assert.isNull(lr);
   }
 

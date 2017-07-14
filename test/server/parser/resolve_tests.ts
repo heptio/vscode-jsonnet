@@ -1,13 +1,11 @@
-'use strict';
 import { expect, assert } from 'chai';
 
-import * as ast from '../../../server/parser/node';
-import * as astVisitor from '../../../server/ast/visitor';
-import * as analyze from '../../../server/ast/analyzer';
+import * as ast from '../../../compiler/lexical-analysis/ast';
 import * as local from '../../../server/local';
-import * as error from '../../../server/lexer/static_error';
-import * as lexer from '../../../server/lexer/lexer';
-import * as parser from '../../../server/parser/parser';
+import * as lexical from '../../../compiler/lexical-analysis/lexical';
+import * as lexer from '../../../compiler/lexical-analysis/lexer';
+import * as parser from '../../../compiler/lexical-analysis/parser';
+import * as _static from '../../../compiler/static';
 import * as testWorkspace from '../test_workspace';
 
 class LocatedSpec {
@@ -93,11 +91,11 @@ class RangeSpec<TLocated extends ast.Node, TResolved extends ast.Node> {
       const coords = `(line: ${this.line}, col: ${col})`;
 
       const spec = this.spec;
-      let found = analyze.getNodeAtPositionFromAst(
-        root, new error.Location(this.line, col));
+      let found = _static.getNodeAtPositionFromAst(
+        root, new lexical.Location(this.line, col));
 
       if (isAnalyzableFailedLocatedSpec(spec)) {
-        if (astVisitor.isAnalyzableFindFailure(found)) {
+        if (ast.isAnalyzableFindFailure(found)) {
           found = found.kind === "AfterLineEnd"
             ? <ast.Node>found.terminalNodeOnCursorLine
             : found.tightestEnclosingNode;
@@ -105,20 +103,20 @@ class RangeSpec<TLocated extends ast.Node, TResolved extends ast.Node> {
           throw new Error(`Expected analyzable failure to locate node ${coords}`);
         }
       } else if (isUnAnalyzableFailedLocatedSpec(spec)) {
-        if (!astVisitor.isUnanalyzableFindFailure(found)) {
+        if (!ast.isUnanalyzableFindFailure(found)) {
           throw new Error(`Expected to unanalyzable failure to locate node ${coords}`);
         }
       }
 
       if (spec.locatedCheck != null) {
-        if (astVisitor.isFindFailure(found)) {
+        if (ast.isFindFailure(found)) {
           throw new Error(`Expected to find a node ${coords}`);
         }
         assert.equal(found.type, spec.locatedCheck);
       }
 
       if (isResolvedSpec(spec)) {
-        if (astVisitor.isFindFailure(found)) {
+        if (ast.isFindFailure(found)) {
           throw new Error(`Expected to resolve node, but could not locate ${coords}`);
         }
         if (!ast.isResolvable(found)) {
@@ -137,7 +135,7 @@ class RangeSpec<TLocated extends ast.Node, TResolved extends ast.Node> {
         }
         spec.assertions(resolved.value)
       } else if (isFailedResolvedSpec(spec)) {
-        if (astVisitor.isFindFailure(found)) {
+        if (ast.isFindFailure(found)) {
           throw new Error(`Expected to resolve node, but could not locate ${coords}`);
         }
         if (!ast.isResolvable(found)) {
@@ -267,16 +265,16 @@ const ranges = [
 const documents =
   new testWorkspace.FsDocumentManager(new local.VsPathResolver());
 const compiler = new local.VsCompilerService();
-const analyzer = new analyze.Analyzer(documents, compiler);
+const analyzer = new _static.Analyzer(documents, compiler);
 const ctx = new ast.ResolutionContext(compiler, documents, "");
 
 const tokens = lexer.Lex("test string", source);
-if (error.isStaticError(tokens)) {
+if (lexical.isStaticError(tokens)) {
   throw new Error(`Failed to lex test source`);
 }
 
 const root = parser.Parse(tokens);
-if (error.isStaticError(root)) {
+if (lexical.isStaticError(root)) {
   throw new Error(`Failed to parse test source`);
 }
 
@@ -299,11 +297,11 @@ describe("Finding nodes by position", () => {
 const resolveAt = (
   root: ast.Node, line: number, column: number
 ): ast.Node | null => {
-  const loc = new error.Location(line, column);
-  let node = analyze.getNodeAtPositionFromAst(root, loc);
-  if (astVisitor.isAnalyzableFindFailure(node)) {
+  const loc = new lexical.Location(line, column);
+  let node = _static.getNodeAtPositionFromAst(root, loc);
+  if (ast.isAnalyzableFindFailure(node)) {
     node = node.tightestEnclosingNode;
-  } else if (astVisitor.isUnanalyzableFindFailure(node)) {
+  } else if (ast.isUnanalyzableFindFailure(node)) {
     return null;
   }
 

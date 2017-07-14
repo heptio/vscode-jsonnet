@@ -1,6 +1,5 @@
-'use strict';
-import * as error from '../lexer/static_error';
-import * as lexer from '../lexer/lexer';
+import * as lexer from '../lexical-analysis/lexer';
+import * as lexical from '../lexical-analysis/lexical';
 
 // UiEventListener  listens to events emitted by the UI that a user
 // interacts with, and responds to those events with (e.g.) completion
@@ -9,9 +8,9 @@ import * as lexer from '../lexer/lexer';
 // UiEventListener will dispatch that event to the hook registered
 // with `onHover`.
 export interface UiEventListener {
-  onHover: (fileUri: string, cursorLoc: error.Location) => Promise<HoverInfo>
+  onHover: (fileUri: string, cursorLoc: lexical.Location) => Promise<HoverInfo>
   onComplete: (
-    fileUri: string, cursorLoc: error.Location
+    fileUri: string, cursorLoc: lexical.Location
   ) => Promise<CompletionInfo[]>
 }
 

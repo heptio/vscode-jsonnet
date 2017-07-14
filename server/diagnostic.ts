@@ -2,23 +2,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as server from 'vscode-languageserver';
 
-import * as immutable from 'immutable';
+import * as im from 'immutable';
 
-import * as ast from './parser/node';
-import * as astVisitor from './ast/visitor';
-import * as compile from "./ast/compiler";
-import * as error from './lexer/static_error';
-import * as workspace from './ast/workspace';
+import * as ast from '../compiler/lexical-analysis/ast';
+import * as editor from '../compiler/editor';
+import * as lexical from '../compiler/lexical-analysis/lexical';
+import * as _static from "../compiler/static";
 
 // fromFailure creates a diagnostic from a `LexFailure |
 // ParseFailure`.
 export const fromFailure = (
-  error: compile.LexFailure | compile.ParseFailure
+  error: _static.LexFailure | _static.ParseFailure
 ): server.Diagnostic => {
-  let begin: error.Location | null = null;
-  let end: error.Location | null = null;
+  let begin: lexical.Location | null = null;
+  let end: lexical.Location | null = null;
   let message: string | null = null;
-  if (compile.isLexFailure(error)) {
+  if (_static.isLexFailure(error)) {
     begin = error.lexError.loc.begin;
     end = error.lexError.loc.end;
     message = error.lexError.msg;
@@ -42,7 +41,7 @@ export const fromFailure = (
 // fromAst takes a Jsonnet AST and returns an array of `Diagnostic`
 // issues it finds.
 export const fromAst = (
-  root: ast.Node, libResolver: workspace.LibPathResolver,
+  root: ast.Node, libResolver: editor.LibPathResolver,
 ): server.Diagnostic[] => {
   const diags = new Visitor(root, libResolver);
   diags.visit();
@@ -55,12 +54,12 @@ export const fromAst = (
 
 // Visitor traverses the Jsonnet AST and accumulates `Diagnostic`
 // errors for reporting.
-class Visitor extends astVisitor.VisitorBase {
-  private diags = immutable.List<server.Diagnostic>();
+class Visitor extends ast.VisitorBase {
+  private diags = im.List<server.Diagnostic>();
 
   constructor(
     root: ast.Node,
-    private readonly libResolver: workspace.LibPathResolver,
+    private readonly libResolver: editor.LibPathResolver,
   ) {
     super(root);
   }

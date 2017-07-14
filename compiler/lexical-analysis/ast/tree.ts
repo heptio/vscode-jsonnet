@@ -1,12 +1,11 @@
-'use strict';
 import * as os from 'os';
 import * as path from 'path';
 
 import * as im from 'immutable';
 
-import * as compiler from '../ast/compiler';
-import * as error from '../lexer/static_error';
-import * as workspace from '../ast/workspace';
+import * as editor from '../../editor';
+import * as lexical from '../lexical';
+import * as _static from '../../static';
 
 // ---------------------------------------------------------------------------
 
@@ -161,7 +160,7 @@ export const isValueType = (node: Node): boolean => {
 
 export interface Node {
   readonly type:     NodeKind
-  readonly loc:      error.LocationRange
+  readonly loc:      lexical.LocationRange
 
   prettyPrint(): string
 
@@ -177,7 +176,7 @@ export type Nodes = im.List<Node>
 // for all `Node` implementations.
 abstract class NodeBase implements Node {
   readonly type:     NodeKind
-  readonly loc:      error.LocationRange
+  readonly loc:      lexical.LocationRange
 
   constructor() {
     this.rootObject = null;
@@ -204,7 +203,7 @@ export const isNode = (thing): thing is Node => {
 // Jsonnet file the symbol occurs in.
 export class Resolve {
   constructor(
-    public readonly fileUri:  workspace.FileUri,
+    public readonly fileUri:  editor.FileUri,
     public readonly value: Node | IndexedObjectFields,
   ) {}
 }
@@ -221,12 +220,12 @@ export const isResolve = (thing): thing is Resolve => {
 // this object.
 export class ResolutionContext {
   constructor (
-    public readonly compiler: compiler.CompilerService,
-    public readonly documents: workspace.DocumentManager,
-    public readonly currFile: workspace.FileUri,
+    public readonly compiler: _static.LexicalAnalyzerService,
+    public readonly documents: editor.DocumentManager,
+    public readonly currFile: editor.FileUri,
   ) {}
 
-  public withUri = (currFile: workspace.FileUri): ResolutionContext => {
+  public withUri = (currFile: editor.FileUri): ResolutionContext => {
     return new ResolutionContext(this.compiler, this.documents, currFile);
   }
 }
@@ -263,7 +262,7 @@ export class Identifier extends NodeBase  {
 
   constructor(
     readonly name: IdentifierName,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -320,7 +319,7 @@ export class CppComment extends NodeBase implements Comment {
 
   constructor(
     readonly text: im.List<string>,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -338,7 +337,7 @@ export class CComment extends NodeBase implements Comment {
 
   constructor(
     readonly text: im.List<string>,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -356,7 +355,7 @@ export class HashComment extends NodeBase implements Comment {
 
   constructor(
     readonly text: im.List<string>,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -394,7 +393,7 @@ export class CompSpecIf extends NodeBase implements CompSpec {
 
   constructor(
     readonly expr: Node,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -413,7 +412,7 @@ export class CompSpecFor extends NodeBase implements CompSpec {
   constructor(
     readonly varName: Identifier, // null for `CompSpecIf`
     readonly expr:    Node,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -436,7 +435,7 @@ export class Apply extends NodeBase  {
     readonly args:          Nodes,
     readonly trailingComma: boolean,
     readonly tailStrict:    boolean,
-    readonly loc:           error.LocationRange,
+    readonly loc:           lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -463,7 +462,7 @@ export class ApplyParamAssignment extends NodeBase {
   constructor(
     readonly id:    IdentifierName,
     readonly right: Node,
-    readonly loc:   error.LocationRange,
+    readonly loc:   lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -485,7 +484,7 @@ export class ApplyBrace extends NodeBase {
   constructor(
     readonly left:  Node,
     readonly right: Node,
-    readonly loc:   error.LocationRange,
+    readonly loc:   lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -508,7 +507,7 @@ export class Array extends NodeBase {
     readonly trailingComma:   boolean,
     readonly headingComment:  Comment | null,
     readonly trailingComment: Comment | null,
-    readonly loc:             error.LocationRange,
+    readonly loc:             lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -534,7 +533,7 @@ export class ArrayComp extends NodeBase {
     readonly body:          Node,
     readonly trailingComma: boolean,
     readonly specs:         CompSpecs,
-    readonly loc:           error.LocationRange,
+    readonly loc:           lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -562,7 +561,7 @@ export class Assert extends NodeBase {
     readonly cond:    Node,
     readonly message: Node | null,
     readonly rest:    Node,
-    readonly loc:     error.LocationRange,
+    readonly loc:     lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -664,7 +663,7 @@ export class Binary extends NodeBase implements FieldsResolvable {
     readonly left:  Node,
     readonly op:    BinaryOp,
     readonly right: Node,
-    readonly loc:     error.LocationRange,
+    readonly loc:     lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -728,7 +727,7 @@ export class Builtin extends NodeBase {
   constructor(
     readonly id:     number,
     readonly params: IdentifierNames,
-    readonly loc:    error.LocationRange,
+    readonly loc:    lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -754,7 +753,7 @@ export class Conditional extends NodeBase {
     readonly cond:        Node,
     readonly branchTrue:  Node,
     readonly branchFalse: Node | null,
-    readonly loc:    error.LocationRange,
+    readonly loc:    lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -777,7 +776,7 @@ export class Dollar extends NodeBase implements Resolvable {
   readonly type: "DollarNode" = "DollarNode";
 
   constructor(
-    readonly loc:    error.LocationRange,
+    readonly loc:    lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -804,7 +803,7 @@ export class ErrorNode extends NodeBase {
 
   constructor(
     readonly expr: Node,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -828,7 +827,7 @@ export class Function extends NodeBase {
     readonly body:            Node,
     readonly headingComment:  BindingComment,
     readonly trailingComment: Comments,
-    readonly loc:             error.LocationRange,
+    readonly loc:             lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -849,7 +848,7 @@ export class FunctionParam extends NodeBase {
   constructor(
     readonly id:           IdentifierName,
     readonly defaultValue: Node | null,
-    readonly loc:             error.LocationRange,
+    readonly loc:             lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -873,7 +872,7 @@ export class Import extends NodeBase implements Resolvable {
 
   constructor(
     readonly file: string,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -885,7 +884,7 @@ export class Import extends NodeBase implements Resolvable {
       context.documents.get(this);
     const cached =
       context.compiler.cache(fileUri, docText, version);
-    if (compiler.isFailedParsedDocument(cached)) {
+    if (_static.isFailedParsedDocument(cached)) {
       return Unresolved.Instance;
     }
 
@@ -914,7 +913,7 @@ export class ImportStr extends NodeBase {
 
   constructor(
     readonly file: string,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -991,7 +990,7 @@ export class IndexSubscript extends NodeBase implements Index {
   constructor(
     readonly target: Node,
     readonly index:  Node,
-    readonly loc:    error.LocationRange,
+    readonly loc:    lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1013,7 +1012,7 @@ export class IndexDot extends NodeBase implements Index {
   constructor(
     readonly target: Node,
     readonly id:     Identifier,
-    readonly loc:    error.LocationRange,
+    readonly loc:    lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1040,7 +1039,7 @@ export class LocalBind extends NodeBase {
     readonly functionSugar: boolean,
     readonly params:        FunctionParams, // if functionSugar is true
     readonly trailingComma: boolean,
-    readonly loc:           error.LocationRange,
+    readonly loc:           lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1067,7 +1066,7 @@ export class Local extends NodeBase {
   constructor(
     readonly binds: LocalBinds,
     readonly body:  Node,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1091,7 +1090,7 @@ export class LiteralBoolean extends NodeBase {
 
   constructor(
     readonly value: boolean,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1110,7 +1109,7 @@ export class LiteralNull extends NodeBase {
   readonly type: "LiteralNullNode" = "LiteralNullNode";
 
   constructor(
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1131,7 +1130,7 @@ export class LiteralNumber extends NodeBase {
   constructor(
     readonly value:          number,
     readonly originalString: string,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1170,7 +1169,7 @@ export class LiteralStringSingle extends NodeBase implements LiteralString {
 
   constructor(
     readonly value:       string,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1189,7 +1188,7 @@ export class LiteralStringDouble extends NodeBase implements LiteralString {
 
   constructor(
     readonly value:       string,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1208,7 +1207,7 @@ export class LiteralStringBlock extends NodeBase implements LiteralString {
   constructor(
     readonly value:       string,
     readonly blockIndent: string,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1270,7 +1269,7 @@ export class ObjectField extends NodeBase {
     readonly expr2:           Node | null,     // In scope of the object (can see self).
     readonly expr3:           Node | null,     // In scope of the object (can see self).
     readonly headingComments: BindingComment,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1364,7 +1363,7 @@ export class ObjectNode extends NodeBase implements FieldsResolvable {
     readonly fields:          ObjectFields,
     readonly trailingComma:   boolean,
     readonly headingComments: BindingComment,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1430,7 +1429,7 @@ export class ObjectComp extends NodeBase {
     readonly fields:        ObjectFields,
     readonly trailingComma: boolean,
     readonly specs:         CompSpecs,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1470,7 +1469,7 @@ export class Self extends NodeBase {
   readonly type: "SelfNode" = "SelfNode";
 
   constructor(
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1494,7 +1493,7 @@ export class SuperIndex extends NodeBase {
   constructor(
     readonly index: Node | null,
     readonly id:    Identifier | null,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1540,7 +1539,7 @@ export class Unary extends NodeBase {
   constructor(
     readonly op:   UnaryOp,
     readonly expr: Node,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {
@@ -1560,7 +1559,7 @@ export class Var extends NodeBase implements Resolvable {
 
   constructor(
     readonly id: Identifier,
-    readonly loc:  error.LocationRange,
+    readonly loc:  lexical.LocationRange,
   ) { super(); }
 
   public prettyPrint = (): string => {

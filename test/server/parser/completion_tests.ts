@@ -1,17 +1,13 @@
-'use strict';
 import { expect, assert } from 'chai';
 
 import * as im from 'immutable';
 
-import * as ast from '../../../server/parser/node';
-import * as astVisitor from '../../../server/ast/visitor';
-import * as analyze from '../../../server/ast/analyzer';
-import * as compilerService from '../../../server/ast/compiler';
+import * as ast from '../../../compiler/lexical-analysis/ast';
 import * as local from '../../../server/local';
-import * as error from '../../../server/lexer/static_error';
-import * as lexer from '../../../server/lexer/lexer';
-import * as parser from '../../../server/parser/parser';
-import * as service from '../../../server/ast/service';
+import * as lexical from '../../../compiler/lexical-analysis/lexical';
+import * as lexer from '../../../compiler/lexical-analysis/lexer';
+import * as parser from '../../../compiler/lexical-analysis/parser';
+import * as _static from '../../../compiler/static';
 import * as testWorkspace from '../test_workspace';
 
 class SuccessfulParseCompletionTest {
@@ -19,7 +15,7 @@ class SuccessfulParseCompletionTest {
   constructor(
     public readonly name: string,
     public readonly source: string,
-    public readonly loc: error.Location,
+    public readonly loc: lexical.Location,
     readonly completions: string[],
   ) {
     this.completionSet = im.Set<string>(completions);
@@ -29,19 +25,19 @@ class SuccessfulParseCompletionTest {
     const documents =
       new testWorkspace.FsDocumentManager(new local.VsPathResolver())
     const compiler = new local.VsCompilerService();
-    const analyzer = new analyze.Analyzer(documents, compiler)
+    const analyzer = new _static.Analyzer(documents, compiler)
 
     const tokens = lexer.Lex("test name", this.source);
-    if (error.isStaticError(tokens)) {
+    if (lexical.isStaticError(tokens)) {
       throw new Error(`Failed to lex test source`);
     }
 
     const root = parser.Parse(tokens);
-    if (error.isStaticError(root)) {
+    if (lexical.isStaticError(root)) {
       throw new Error(`Failed to parse test source`);
     }
 
-    const parse = new compilerService.ParsedDocument(
+    const parse = new _static.ParsedDocument(
       this.source, tokens, root, 0);
 
     const cis = await analyzer.completionsFromParse("", parse, this.loc, false);
@@ -63,77 +59,77 @@ const parsedCompletionTests = [
   new SuccessfulParseCompletionTest(
     "Simple object completion",
     `local foo = "3"; {bar: f}`,
-    new error.Location(1, 25),
+    new lexical.Location(1, 25),
     ["foo"]),
   new SuccessfulParseCompletionTest(
     "Simple local completion",
     `local foo = "3"; local bar = f; {}`,
-    new error.Location(1, 31),
+    new lexical.Location(1, 31),
     ["foo", "bar"]),
   new SuccessfulParseCompletionTest(
     "Simple end-of-document completion",
     `local foo = "3"; f`,
-    new error.Location(1, 19),
+    new lexical.Location(1, 19),
     ["foo"]),
   new SuccessfulParseCompletionTest(
     "Suggest nothing when identifier resolves",
     `local foo = "3"; local bar = 4; foo`,
-    new error.Location(1, 36),
+    new lexical.Location(1, 36),
     []),
   new SuccessfulParseCompletionTest(
     "Suggest both variables in environment",
     `local foo = "3"; local bar = 4; f`,
-    new error.Location(1, 36),
+    new lexical.Location(1, 36),
     ["foo", "bar"]),
   new SuccessfulParseCompletionTest(
     "Don't suggest from inside the `local` keyword",
     `local foo = "3"; {}`,
-    new error.Location(1, 3),
+    new lexical.Location(1, 3),
     []),
   new SuccessfulParseCompletionTest(
     "Don't suggest from inside a string literal",
     `local foo = "3"; {bar: "f"}`,
-    new error.Location(1, 26),
+    new lexical.Location(1, 26),
     []),
   new SuccessfulParseCompletionTest(
     "Don't suggest from inside a number literal",
     `local foo = "3"; {bar: 32}`,
-    new error.Location(1, 25),
+    new lexical.Location(1, 25),
     []),
   new SuccessfulParseCompletionTest(
     "Don't suggest from inside a comment",
     `{} // This is a comment`,
-    new error.Location(1, 14),
+    new lexical.Location(1, 14),
     []),
   new SuccessfulParseCompletionTest(
     "Suggest nothing if index ID resolves to object field",
     `local foo = {bar: "bar", baz: "baz"}; foo.bar`,
-    new error.Location(1, 46),
+    new lexical.Location(1, 46),
     []),
   new SuccessfulParseCompletionTest(
     "Suggest only name of index ID if it resolves to object field",
     `local foo = {bar: "bar", baz: "baz"}; foo.ba`,
-    new error.Location(1, 45),
+    new lexical.Location(1, 45),
     ["bar", "baz"]),
   new SuccessfulParseCompletionTest(
     "Suggest name if ID resolves to object",
     `local foo = {bar: "bar", baz: "baz"}; foo`,
-    new error.Location(1, 42),
+    new lexical.Location(1, 42),
     []),
   new SuccessfulParseCompletionTest(
     "Don't suggest completions for members that aren't completable",
     `local foo = {bar: "bar", baz: "baz"}; foo.bar.b`,
-    new error.Location(1, 48),
+    new lexical.Location(1, 48),
     []),
   new SuccessfulParseCompletionTest(
     "Don't suggest completions when target is index with invalid id",
     `local foo = {bar: "bar", baz: "baz"}; foo.bat.b`,
-    new error.Location(1, 48),
+    new lexical.Location(1, 48),
     []),
   new SuccessfulParseCompletionTest(
     "Follow mixins for suggestions",
     `local foo = {bar: "bar"} + {baz: "baz"}; foo.ba`,
-    new error.Location(1, 48),
+    new lexical.Location(1, 48),
     ["bar", "baz"]),
 
   // Tests that will work as `onComplete` becomes more feature-ful.
@@ -178,7 +174,7 @@ const parsedCompletionTests = [
 const documents =
   new testWorkspace.FsDocumentManager(new local.VsPathResolver());
 const compiler = new local.VsCompilerService();
-const analyzer = new analyze.Analyzer(documents, compiler);
+const analyzer = new _static.Analyzer(documents, compiler);
 
 //
 // Tests

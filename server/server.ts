@@ -1,21 +1,18 @@
-'use strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as server from 'vscode-languageserver';
 import * as url from 'url';
 
-import * as immutable from 'immutable';
+import * as im from 'immutable';
 
-import * as analyze from './ast/analyzer';
-import * as ast from './parser/node';
-import * as astVisitor from './ast/visitor';
+import * as ast from '../compiler/lexical-analysis/ast';
 import * as diagnostic from './diagnostic';
-import * as error from './lexer/static_error';
-import * as lexer from './lexer/lexer';
+import * as editor from '../compiler/editor';
+import * as lexer from '../compiler/lexical-analysis/lexer';
+import * as lexical from '../compiler/lexical-analysis/lexical';
 import * as local from './local';
-import * as compile from "./ast/compiler";
-import * as service from './ast/service';
+import * as _static from '../compiler/static';
 
 // Create a connection for the server. The connection uses Node's IPC
 // as a transport
@@ -32,14 +29,14 @@ const compiler = new local.VsCompilerService();
 const libResolver = new local.VsPathResolver();
 const documentManager = new local.VsDocumentManager(docs, libResolver);
 
-const analyzer: analyze.EventedAnalyzer = new analyze.Analyzer(
+const analyzer: _static.EventedAnalyzer = new _static.Analyzer(
   documentManager, compiler);
 
 const reportDiagnostics = (doc: server.TextDocument) => {
   const text = doc.getText();
   const results = compiler.cache(doc.uri, text, doc.version);
 
-  if (compile.isParsedDocument(results)) {
+  if (_static.isParsedDocument(results)) {
     connection.sendDiagnostics({
       uri: doc.uri,
       diagnostics: diagnostic.fromAst(results.parse, libResolver),
@@ -152,19 +149,19 @@ export const configUpdateProvider = (
     jsonnet.libPaths.unshift(jsonnet.executablePath);
   }
 
-  libResolver.libPaths = immutable.List<string>(jsonnet.libPaths);
+  libResolver.libPaths = im.List<string>(jsonnet.libPaths);
 }
 
 const positionToLocation = (
   posParams: server.TextDocumentPositionParams
-): error.Location => {
-  return new error.Location(
+): lexical.Location => {
+  return new lexical.Location(
     posParams.position.line + 1,
     posParams.position.character + 1);
 }
 
 const completionInfoToCompletionItem = (
-  completionInfo: service.CompletionInfo
+  completionInfo: editor.CompletionInfo
 ): server.CompletionItem => {
     let kindMapping: server.CompletionItemKind;
     switch (completionInfo.kind) {

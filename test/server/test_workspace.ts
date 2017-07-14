@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as url from 'url';
 
-import * as ast from '../../server/parser/node';
-import * as workspace from '../../server/ast/workspace';
+import * as ast from '../../compiler/lexical-analysis/ast';
+import * as workspace from '../../compiler/editor';
 
 export class FsDocumentManager implements workspace.DocumentManager {
   constructor(private readonly libResolver: workspace.LibPathResolver) {}

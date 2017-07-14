@@ -2,15 +2,12 @@ import * as url from 'url';
 
 import * as im from 'immutable';
 
-import * as analyze from '../server/ast/analyzer';
-import * as ast from '../server/parser/node';
-import * as astVisitor from '../server/ast/visitor';
-import * as compiler from "../server/ast/compiler";
-import * as service from '../server/ast/service';
-import * as error from '../server/lexer/static_error';
-import * as lexer from '../server/lexer/lexer';
-import * as parser from '../server/parser/parser';
-import * as workspace from "../server/ast/workspace";
+import * as ast from '../compiler/lexical-analysis/ast';
+import * as editor from '../compiler/editor';
+import * as lexer from '../compiler/lexical-analysis/lexer';
+import * as lexical from '../compiler/lexical-analysis/lexical';
+import * as parser from '../compiler/lexical-analysis/parser';
+import * as _static from '../compiler/static';
 
 import * as data from "./data";
 
@@ -20,7 +17,7 @@ const backsplicePrefix = `file:///`;
 const windowDocUri = `${backsplicePrefix}window`;
 
 
-export class BrowserDocumentManager implements workspace.DocumentManager {
+export class BrowserDocumentManager implements editor.DocumentManager {
   get = (
     fileUri: string,
   ): {text: string, version?: number, resolvedPath: string} => {
@@ -74,14 +71,14 @@ export class BrowserDocumentManager implements workspace.DocumentManager {
   private version?: number = undefined;
 }
 
-export class BrowserCompilerService implements compiler.CompilerService {
+export class BrowserCompilerService implements _static.LexicalAnalyzerService {
   //
   // CompilerService implementation.
   //
 
   public cache = (
     fileUri: string, text: string, version?: number
-  ): compiler.ParsedDocument | compiler.FailedParsedDocument => {
+  ): _static.ParsedDocument | _static.FailedParsedDocument => {
     //
     // There are 3 possible outcomes:
     //
@@ -108,26 +105,26 @@ export class BrowserCompilerService implements compiler.CompilerService {
     }
 
     const lex = lexer.Lex(parsedUrl.path, text);
-    if (error.isStaticError(lex)) {
+    if (lexical.isStaticError(lex)) {
       // TODO: emptyTokens is not right. Fill it in.
-      const fail = new compiler.LexFailure(lexer.emptyTokens, lex);
-      return new compiler.FailedParsedDocument(text, fail, version);
+      const fail = new _static.LexFailure(lexer.emptyTokens, lex);
+      return new _static.FailedParsedDocument(text, fail, version);
     }
 
     const parse = parser.Parse(lex);
-    if (error.isStaticError(parse)) {
-      const fail = new compiler.ParseFailure(lex, parse);
-      return new compiler.FailedParsedDocument(text, fail, version);
+    if (lexical.isStaticError(parse)) {
+      const fail = new _static.ParseFailure(lex, parse);
+      return new _static.FailedParsedDocument(text, fail, version);
     }
 
-    const parsedDoc = new compiler.ParsedDocument(text, lex, parse, version);
+    const parsedDoc = new _static.ParsedDocument(text, lex, parse, version);
     this.docCache = this.docCache.set(fileUri, parsedDoc);
     return parsedDoc;
   }
 
   public getLastSuccess = (
     fileUri: string
-  ): compiler.ParsedDocument | null => {
+  ): _static.ParsedDocument | null => {
     return this.docCache.has(fileUri) && this.docCache.get(fileUri) || null;
   }
 
@@ -139,12 +136,12 @@ export class BrowserCompilerService implements compiler.CompilerService {
   // Private members.
   //
 
-  private docCache = im.Map<string, compiler.ParsedDocument>();
+  private docCache = im.Map<string, _static.ParsedDocument>();
 }
 
 const docs = new BrowserDocumentManager();
 const cs = new BrowserCompilerService();
-const analyzer = new analyze.Analyzer(docs, cs);
+const analyzer = new _static.Analyzer(docs, cs);
 
 interface AcePosition {
   row: number,
@@ -158,8 +155,8 @@ global.docOnChange = (text: string, version?: number) => {
 
 global.onComplete = (
   text: string, position: AcePosition
-): Promise<service.CompletionInfo[]> => {
+): Promise<editor.CompletionInfo[]> => {
   return analyzer
     .onComplete(
-      windowDocUri, new error.Location(position.row + 1, position.column));
+      windowDocUri, new lexical.Location(position.row + 1, position.column));
 }

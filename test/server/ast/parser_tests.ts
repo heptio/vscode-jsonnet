@@ -1,9 +1,8 @@
-'use strict';
 import { expect, assert } from 'chai';
 
-import * as lexer from '../../../server/lexer/lexer';
-import * as error from '../../../server/lexer/static_error';
-import * as parser from '../../../server/parser/parser';
+import * as lexer from '../../../compiler/lexical-analysis/lexer';
+import * as lexical from '../../../compiler/lexical-analysis/lexical';
+import * as parser from '../../../compiler/lexical-analysis/parser';
 
 const tests = [
   `true`,
@@ -86,12 +85,12 @@ describe("Successfully parsing text", () => {
   for (let s of tests) {
     it(`${JSON.stringify(s)}`, () => {
       const tokens = lexer.Lex("test", s);
-      if (error.isStaticError(tokens)) {
+      if (lexical.isStaticError(tokens)) {
         throw new Error(`Unexpected lexer to emit tokens\n  input: ${s}`);
       }
 
       const parse = parser.Parse(<lexer.Tokens>tokens);
-      if (error.isStaticError(parse)) {
+      if (lexical.isStaticError(parse)) {
         throw new Error(
           `Unexpected parse error\n  input: ${s}\n  error: ${parse.Error()}`);
       }
@@ -210,13 +209,13 @@ describe("Parsing from text", () => {
   for (let s of errorTests) {
     it(`${JSON.stringify(s.input)}`, () => {
       const tokens = lexer.Lex("test", s.input);
-      if (error.isStaticError(tokens)) {
+      if (lexical.isStaticError(tokens)) {
         throw new Error(
           `Unexpected lex error\n  input: ${s}\n  error: ${tokens.Error()}`);
       }
 
       const parse = parser.Parse(tokens);
-      if (!error.isStaticError(parse)) {
+      if (!lexical.isStaticError(parse)) {
         throw new Error(
           `Expected parse error but got success\n  input: ${s.input}`);
       }
