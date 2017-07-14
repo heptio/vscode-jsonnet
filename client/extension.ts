@@ -1,14 +1,14 @@
-'use strict';
-import * as vs from 'vscode';
 import { execSync } from 'child_process';
+
+import * as client from 'vscode-languageclient';
 import * as os from 'os';
 import * as path from 'path';
+import * as vs from 'vscode';
 import * as yaml from "js-yaml";
-import * as client from 'vscode-languageclient';
 
 import * as im from 'immutable';
 
-import * as error from '../server/lexer/static_error';
+import * as lexical from '../compiler/lexical-analysis/lexical';
 
 // activate registers the Jsonnet language server with vscode, and
 // configures it based on the contents of the workspace JSON file.
@@ -382,9 +382,9 @@ namespace jsonnet {
       this.diagnostics.clear();
       const errorMessage = messageLines.get(0);
 
-      if (errorMessage.startsWith(error.staticErrorPrefix)) {
+      if (errorMessage.startsWith(lexical.staticErrorPrefix)) {
         return this.reportStaticErrorDiagnostics(errorMessage);
-      } else if (errorMessage.startsWith(error.runtimeErrorPrefix)) {
+      } else if (errorMessage.startsWith(lexical.runtimeErrorPrefix)) {
         const stackTrace = messageLines.rest().toList();
         return this.reportRuntimeErrorDiagnostics(
           fileUri, errorMessage, stackTrace);
@@ -400,7 +400,7 @@ namespace jsonnet {
     //
 
     private reportStaticErrorDiagnostics = (message: string): void => {
-      const staticError = message.slice(error.staticErrorPrefix.length);
+      const staticError = message.slice(lexical.staticErrorPrefix.length);
       const match = DiagnosticProvider.fileFromStackFrame(staticError);
       if (match == null) {
         console.log(`Could not parse filename from Jsonnet error: '${message}'`);
@@ -460,7 +460,7 @@ namespace jsonnet {
     }
 
     private static parseRange = (range: string): vs.Range | null => {
-      const lr = error.LocationRange.fromString("Dummy name", range);
+      const lr = lexical.LocationRange.fromString("Dummy name", range);
       if (lr == null) {
         return null;
       }

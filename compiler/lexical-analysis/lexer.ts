@@ -1,7 +1,6 @@
-'use strict';
 import * as im from 'immutable';
 
-import * as error from './static_error';
+import * as lexical from './lexical';
 
 
 export type CodePoints = im.List<string>;
@@ -147,7 +146,7 @@ export class Token {
     readonly stringBlockIndent:     string, // The sequence of whitespace that indented the block.
     readonly stringBlockTermIndent: string, // This is always fewer whitespace characters than in stringBlockIndent.
 
-    readonly loc: error.LocationRange,
+    readonly loc: lexical.LocationRange,
   ) {}
 
   public toString(): string {
@@ -289,7 +288,7 @@ export class lexer {
   // Information about the token we are working on right now
   fodder:        FodderElement[]
   tokenStart:    number
-  tokenStartLoc: error.Location
+  tokenStartLoc: lexical.Location
 
   constructor(fn: string, input: string) {
     this.fileName       = fn;
@@ -297,7 +296,7 @@ export class lexer {
     this.lineNumber     = 1;
     this.prevPos        = LexEOFPos;
     this.prevLineNumber = 1;
-    this.tokenStartLoc  = new error.Location(1, 1);
+    this.tokenStartLoc  = new lexical.Location(1, 1);
 
     this.tokens = im.List<Token>();
     this.fodder = [];
@@ -366,16 +365,16 @@ export class lexer {
     this.prevPos = LexEOFPos;
   };
 
-  public location = (): error.Location => {
-    return new error.Location(this.lineNumber, this.pos - this.lineStart + 1);
+  public location = (): lexical.Location => {
+    return new lexical.Location(this.lineNumber, this.pos - this.lineStart + 1);
   };
 
-  public prevLocation = (): error.Location => {
+  public prevLocation = (): lexical.Location => {
     if (this.prevPos == LexEOFPos) {
       throw new Error(
         "INTERNAL ERROR: prevLocation called with no valid previous rune");
     }
-    return new error.Location(
+    return new lexical.Location(
       this.prevLineNumber, this.prevPos - this.prevLineStart + 1);
   };
 
@@ -397,7 +396,7 @@ export class lexer {
       data,
       stringBlockIndent,
       stringBlockTermIndent,
-      error.MakeLocationRange(
+      lexical.MakeLocationRange(
         this.fileName, this.tokenStartLoc, this.location()),
     ));
     this.fodder = [];
@@ -435,7 +434,7 @@ export class lexer {
   // lexNumber will consume a number and emit a token.  It is assumed
   // that the next rune to be served by the lexer will be a leading
   // digit.
-  public lexNumber = (): error.StaticError | null => {
+  public lexNumber = (): lexical.StaticError | null => {
     // This function should be understood with reference to the linked
     // image: http://www.json.org/number.gif
 
@@ -499,7 +498,7 @@ export class lexer {
           if (r.data >= '0' && r.data <= '9') {
             state = "numAfterDigit";
           } else {
-            return error.MakeStaticErrorPoint(
+            return lexical.MakeStaticErrorPoint(
               `Couldn't lex number, junk after decimal point: '${r.data}'`,
               this.fileName,
               this.prevLocation());
@@ -522,7 +521,7 @@ export class lexer {
           } else if(r.data >= '0' && r.data <= '9') {
             state = "numAfterExpDigit";
           } else {
-            return error.MakeStaticErrorPoint(
+            return lexical.MakeStaticErrorPoint(
               `Couldn't lex number, junk after 'E': '${r.data}'`,
               this.fileName,
               this.prevLocation());
@@ -533,7 +532,7 @@ export class lexer {
           if (r.data >= '0' && r.data <= '9') {
             state = "numAfterExpDigit";
           } else {
-            return error.MakeStaticErrorPoint(
+            return lexical.MakeStaticErrorPoint(
               `Couldn't lex number, junk after exponent sign: '${r.data}'`,
               this.fileName,
               this.prevLocation());
@@ -634,7 +633,7 @@ export class lexer {
   // be a C or C++ comment, block quote or an operator. This function
   // assumes that the next rune to be served by the lexer will be the
   // first rune of the new token.
-  public lexSymbol(): error.StaticError | null {
+  public lexSymbol(): lexical.StaticError | null {
     let r = this.next();
 
     // Single line C++ style comment
@@ -655,7 +654,7 @@ export class lexer {
       this.resetTokenStart(); // Throw out the leading /*
       for (r = this.next(); ; r = this.next()) {
         if (r.codePoint == LexEOF.codePoint) {
-          return error.MakeStaticErrorPoint("Multi-line comment has no terminating */",
+          return lexical.MakeStaticErrorPoint("Multi-line comment has no terminating */",
             this.fileName, commentStartLoc)
         }
         if (r.data === '*' && this.peek().data === '/') {
@@ -686,7 +685,7 @@ export class lexer {
       const stringBlockIndent =
         stringSlice(this.input, this.pos, this.pos+numWhiteSpace);
       if (numWhiteSpace == 0) {
-        return error.MakeStaticErrorPoint(
+        return lexical.MakeStaticErrorPoint(
           "Text block's first line must start with whitespace",
           this.fileName,
           commentStartLoc);
@@ -699,7 +698,7 @@ export class lexer {
         this.acceptN(numWhiteSpace);
         for (r = this.next(); r.data !== '\n'; r = this.next()) {
           if (r.codePoint == LexEOF.codePoint) {
-            return error.MakeStaticErrorPoint("Unexpected EOF",
+            return lexical.MakeStaticErrorPoint("Unexpected EOF",
               this.fileName, commentStartLoc);
           }
           cb = cb.push(r);
@@ -724,7 +723,7 @@ export class lexer {
           }
           this.backup();
           if (!stringSlice(this.input, this.pos).startsWith("|||")) {
-            return error.MakeStaticErrorPoint(
+            return lexical.MakeStaticErrorPoint(
               "Text block not terminated with |||",
               this.fileName,
               commentStartLoc)
@@ -788,7 +787,7 @@ export class lexer {
   // locBeforeLastTokenRange checks whether a location specified by
   // `loc` exists before the range of coordinates of the last token
   // terminates.
-  public locBeforeLastTokenRange = (loc: error.Location): boolean => {
+  public locBeforeLastTokenRange = (loc: lexical.Location): boolean => {
     const numTokens = this.tokens.count();
     if (loc.line == -1 && loc.column == -1) {
       return false;
@@ -803,7 +802,7 @@ export class lexer {
 
   // locInLastTokenRange checks whether a location specified by `loc`
   // exists within the range of coordinates of the last token.
-  public locInLastTokenRange = (loc: error.Location): boolean => {
+  public locInLastTokenRange = (loc: lexical.Location): boolean => {
     const numTokens = this.tokens.count();
     if (loc.line == -1 && loc.column == -1) {
       return false;
@@ -840,7 +839,7 @@ export class lexer {
   // the token range. Note that a corner case is if the range max
   // happens to occur in whitespace; in this case, we will truncate at
   // the last token that occurs before the whitespace begins.
-  public checkTruncateTokenRange = (rangeMax: error.Location): boolean => {
+  public checkTruncateTokenRange = (rangeMax: lexical.Location): boolean => {
     if (rangeMax.line == -1 && rangeMax.column == -1) {
       return false;
     }
@@ -882,17 +881,17 @@ export class lexer {
 
 export const Lex = (
   fn: string, input: string
-): Tokens | error.StaticError => {
-  const unlimitedRange = new error.Location(-1, -1);
+): Tokens | lexical.StaticError => {
+  const unlimitedRange = new lexical.Location(-1, -1);
   return LexRange(fn, input, unlimitedRange);
 }
 
 export const LexRange = (
-  fn: string, input: string, tokenRange: error.Location,
-): Tokens | error.StaticError => {
+  fn: string, input: string, tokenRange: lexical.Location,
+): Tokens | lexical.StaticError => {
   const l = new lexer(fn, input);
 
-  let err: error.StaticError | null = null;
+  let err: lexical.StaticError | null = null;
 
   for (let r = l.next(); r.codePoint != LexEOF.codePoint; r = l.next()) {
     // Terminate lexing if we're past the token range. If we've lexed
@@ -960,7 +959,7 @@ export const LexRange = (
         l.resetTokenStart();
         for (r = l.next(); ; r = l.next()) {
           if (r.codePoint == LexEOF.codePoint) {
-            return error.MakeStaticErrorPoint(
+            return lexical.MakeStaticErrorPoint(
               "Unterminated String", l.fileName, stringStartLoc);
           }
           if (r.data === '"') {
@@ -981,7 +980,7 @@ export const LexRange = (
         l.resetTokenStart(); // Don't include the quotes in the token data
         for (r = l.next(); ; r = l.next()) {
           if (r.codePoint == LexEOF.codePoint) {
-            return error.MakeStaticErrorPoint(
+            return lexical.MakeStaticErrorPoint(
               "Unterminated String", l.fileName, stringStartLoc);
           }
           if (r.data === '\'') {
@@ -1018,7 +1017,7 @@ export const LexRange = (
             return err;
           }
         } else {
-          return error.MakeStaticErrorPoint(
+          return lexical.MakeStaticErrorPoint(
             `Could not lex the character '${r.data}'`,
             l.fileName,
             l.prevLocation());

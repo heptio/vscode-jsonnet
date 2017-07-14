@@ -1,12 +1,10 @@
-'use strict';
 import * as os from 'os';
 
 import * as im from 'immutable';
 
-import * as ast from '../parser/node';
-import * as astVisitor from '../ast/visitor';
-import * as error from '../lexer/static_error';
-import * as lexer from '../lexer/lexer';
+import * as ast from './ast';
+import * as lexer from './lexer';
+import * as lexical from './lexical';
 
 // ---------------------------------------------------------------------------
 
@@ -41,22 +39,22 @@ var bopPrecedence = im.Map<ast.BinaryOp, precedence>({
 
 const makeUnexpectedError = (
   t: lexer.Token, during: string
-): error.StaticError => {
-  return error.MakeStaticError(
+): lexical.StaticError => {
+  return lexical.MakeStaticError(
     `Unexpected: ${t} while ${during}`,
     t.loc);
 }
 
 const locFromTokens = (
   begin: lexer.Token, end: lexer.Token
-): error.LocationRange => {
-  return error.MakeLocationRange(begin.loc.fileName, begin.loc.begin, end.loc.end)
+): lexical.LocationRange => {
+  return lexical.MakeLocationRange(begin.loc.fileName, begin.loc.begin, end.loc.end)
 }
 
 const locFromTokenAST = (
   begin: lexer.Token, end: ast.Node
-): error.LocationRange => {
-  return error.MakeLocationRange(
+): lexical.LocationRange => {
+  return lexical.MakeLocationRange(
     begin.loc.fileName, begin.loc.begin, end.loc.end)
 }
 
@@ -77,10 +75,10 @@ class parser {
 
   public popExpect = (
     tk: lexer.TokenKind
-  ): lexer.Token | error.StaticError => {
+  ): lexer.Token | lexical.StaticError => {
     const t = this.pop();
     if (t.kind !== tk) {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         `Expected token ${lexer.TokenKindStrings.get(tk)} but got ${t}`,
         t.loc);
     }
@@ -89,10 +87,10 @@ class parser {
 
   public popExpectOp = (
     op: string
-  ): lexer.Token | error.StaticError => {
+  ): lexer.Token | lexical.StaticError => {
     const t = this.pop();
     if (t.kind !== "TokenOperator" || t.data != op) {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         `Expected operator ${op} but got ${t}`, t.loc);
     }
     return t
@@ -245,8 +243,8 @@ class parser {
 
   public parseCommaList = <T extends ast.Node>(
     end: lexer.TokenKind, elementKind: string,
-    elementCallback: (e: ast.Node) => T | error.StaticError = (e) => <T>e,
-  ): {next: lexer.Token, exprs: im.List<T>, gotComma: boolean} | error.StaticError => {
+    elementCallback: (e: ast.Node) => T | lexical.StaticError = (e) => <T>e,
+  ): {next: lexer.Token, exprs: im.List<T>, gotComma: boolean} | lexical.StaticError => {
     let exprs = im.List<T>();
     let gotComma = false;
     let first = true;
@@ -265,17 +263,17 @@ class parser {
       }
 
       if (!first && !gotComma) {
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           `Expected a comma before next ${elementKind}.`, next.loc);
       }
 
       const expr = this.parse(maxPrecedence, null);
-      if (error.isStaticError(expr)) {
+      if (lexical.isStaticError(expr)) {
         return expr;
       }
 
       const mappedExpr = elementCallback(expr);
-      if (error.isStaticError(mappedExpr)) {
+      if (lexical.isStaticError(mappedExpr)) {
         return mappedExpr;
       }
       exprs = exprs.push(mappedExpr);
@@ -287,11 +285,11 @@ class parser {
 
   public parseArgsList = (
     elementKind: string
-  ): {next: lexer.Token, params: ast.Nodes, gotComma: boolean} | error.StaticError => {
+  ): {next: lexer.Token, params: ast.Nodes, gotComma: boolean} | lexical.StaticError => {
     const result = this.parseCommaList<ast.Node>(
       "TokenParenR",
       elementKind,
-      (expr): ast.Node | error.StaticError => {
+      (expr): ast.Node | lexical.StaticError => {
         const next = this.peek();
         let rhs: ast.Node | null = null;
         if (ast.isVar(expr) && next.kind === "TokenOperator" &&
@@ -299,7 +297,7 @@ class parser {
         ) {
           this.pop();
           const assignment = this.parse(maxPrecedence, null);
-          if (error.isStaticError(assignment)) {
+          if (lexical.isStaticError(assignment)) {
             return assignment;
           }
           return new ast.ApplyParamAssignment(
@@ -308,7 +306,7 @@ class parser {
 
         return expr;
       });
-    if (error.isStaticError(result)) {
+    if (lexical.isStaticError(result)) {
       return result;
     }
 
@@ -317,13 +315,13 @@ class parser {
 
   public parseParamsList = (
     elementKind: string
-  ): {next: lexer.Token, params: ast.FunctionParams, gotComma: boolean} | error.StaticError => {
+  ): {next: lexer.Token, params: ast.FunctionParams, gotComma: boolean} | lexical.StaticError => {
     const result = this.parseCommaList<ast.FunctionParam>(
       "TokenParenR",
       elementKind,
-      (expr): ast.FunctionParam | error.StaticError => {
+      (expr): ast.FunctionParam | lexical.StaticError => {
         if (!ast.isVar(expr)) {
-          return error.MakeStaticError(
+          return lexical.MakeStaticError(
             `Expected simple identifier but got a complex expression.`,
             expr.loc);
         }
@@ -333,14 +331,14 @@ class parser {
         if (next.kind === "TokenOperator" && next.data === "=") {
           this.pop();
           const assignment = this.parse(maxPrecedence, null);
-          if (error.isStaticError(assignment)) {
+          if (lexical.isStaticError(assignment)) {
             return assignment;
           }
           rhs = assignment;
         }
         return new ast.FunctionParam(expr.id.name, rhs, expr.loc);
       });
-    if (error.isStaticError(result)) {
+    if (lexical.isStaticError(result)) {
       return result;
     }
 
@@ -349,15 +347,15 @@ class parser {
 
   public parseBind = (
     localToken: lexer.Token, binds: ast.LocalBinds
-  ): ast.LocalBinds | error.StaticError => {
+  ): ast.LocalBinds | lexical.StaticError => {
     const varID = this.popExpect("TokenIdentifier");
-    if (error.isStaticError(varID)) {
+    if (lexical.isStaticError(varID)) {
       return varID;
     }
 
     for (let b of binds.toArray()) {
       if (b.variable.name === varID.data) {
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           `Duplicate local var: ${varID.data}`, varID.loc);
       }
     }
@@ -365,17 +363,17 @@ class parser {
     if (this.peek().kind === "TokenParenL") {
       this.pop();
       const result = this.parseParamsList("function parameter");
-      if (error.isStaticError(result)) {
+      if (lexical.isStaticError(result)) {
         return result;
       }
 
       const pop = this.popExpectOp("=")
-      if (error.isStaticError(pop)) {
+      if (lexical.isStaticError(pop)) {
         return pop;
       }
 
       const body = this.parse(maxPrecedence, null);
-      if (error.isStaticError(body)) {
+      if (lexical.isStaticError(body)) {
         return body;
       }
       const id = new ast.Identifier(varID.data, varID.loc);
@@ -386,11 +384,11 @@ class parser {
       binds = binds.push(bind);
     } else {
       const pop = this.popExpectOp("=");
-      if (error.isStaticError(pop)) {
+      if (lexical.isStaticError(pop)) {
         return pop;
       }
       const body = this.parse(maxPrecedence, null);
-      if (error.isStaticError(body)) {
+      if (lexical.isStaticError(body)) {
         return body;
       }
       const id = new ast.Identifier(varID.data, varID.loc);
@@ -404,12 +402,12 @@ class parser {
   };
 
   public parseObjectAssignmentOp = (
-  ): {plusSugar: boolean, hide: ast.ObjectFieldHide} | error.StaticError => {
+  ): {plusSugar: boolean, hide: ast.ObjectFieldHide} | lexical.StaticError => {
     let plusSugar = false;
     let hide: ast.ObjectFieldHide | null = null;
 
     const op = this.popExpect("TokenOperator");
-    if (error.isStaticError(op)) {
+    if (lexical.isStaticError(op)) {
       return op;
     }
 
@@ -422,7 +420,7 @@ class parser {
     let numColons = 0
     while (opStr.length > 0) {
       if (opStr[0] !== ':') {
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           `Expected one of :, ::, :::, +:, +::, +:::, got: ${op.data}`,
           op.loc);
       }
@@ -441,7 +439,7 @@ class parser {
         hide = "ObjectFieldVisible"
         break;
       default:
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           `Expected one of :, ::, :::, +:, +::, +:::, got: ${op.data}`,
           op.loc);
       }
@@ -459,7 +457,7 @@ class parser {
   public parseObjectCompRemainder = (
     first: lexer.Token, forTok: lexer.Token, gotComma: boolean,
     fields: ast.ObjectFields,
-  ): {comp: ast.Node, last: lexer.Token} | error.StaticError => {
+  ): {comp: ast.Node, last: lexer.Token} | lexical.StaticError => {
     let numFields = 0;
     let numAsserts = 0;
     let field = fields.first();
@@ -475,23 +473,23 @@ class parser {
     }
 
     if (numAsserts > 0) {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         "Object comprehension cannot have asserts.", forTok.loc);
     }
     if (numFields != 1) {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         "Object comprehension can only have one field.", forTok.loc);
     }
     if (field.hide != "ObjectFieldInherit") {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         "Object comprehensions cannot have hidden fields.", forTok.loc);
     }
     if (field.kind !== "ObjectFieldExpr") {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         "Object comprehensions can only have [e] fields.", forTok.loc);
     }
     const result = this.parseCompSpecs("TokenBraceR");
-    if (error.isStaticError(result)) {
+    if (lexical.isStaticError(result)) {
       return result;
     }
 
@@ -508,7 +506,7 @@ class parser {
   public parseObjectField = (
     headingComments: ast.BindingComment, next: lexer.Token,
     literalFields: im.Set<literalField>,
-  ): {field: ast.ObjectField, literals: im.Set<literalField>} | error.StaticError => {
+  ): {field: ast.ObjectField, literals: im.Set<literalField>} | lexical.StaticError => {
     let kind: ast.ObjectFieldKind;
     let expr1: ast.Node | null = null;
     let id: ast.Identifier | null = null;
@@ -538,11 +536,11 @@ class parser {
       default: {
         kind = "ObjectFieldExpr"
         const expr1 = this.parse(maxPrecedence, null);
-        if (error.isStaticError(expr1)) {
+        if (lexical.isStaticError(expr1)) {
           return expr1;
         }
         const pop = this.popExpect("TokenBracketR");
-        if (error.isStaticError(pop)) {
+        if (lexical.isStaticError(pop)) {
           return pop;
         }
         break;
@@ -555,7 +553,7 @@ class parser {
     if (this.peek().kind === "TokenParenL") {
       this.pop();
       const result = this.parseParamsList("method parameter");
-      if (error.isStaticError(result)) {
+      if (lexical.isStaticError(result)) {
         return result;
       }
       params = result.params;
@@ -563,25 +561,25 @@ class parser {
     }
 
     const result = this.parseObjectAssignmentOp();
-    if (error.isStaticError(result)) {
+    if (lexical.isStaticError(result)) {
       return result;
     }
 
     if (result.plusSugar && isMethod) {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         `Cannot use +: syntax sugar in a method: ${next.data}`, next.loc);
     }
 
     if (kind !== "ObjectFieldExpr") {
       if (literalFields.contains(next.data)) {
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           `Duplicate field: ${next.data}`, next.loc);
       }
       literalFields = literalFields.add(next.data);
     }
 
     const body = this.parse(maxPrecedence, null);
-    if (error.isStaticError(body)) {
+    if (lexical.isStaticError(body)) {
       return body;
     }
 
@@ -613,14 +611,14 @@ class parser {
   // object to create an appropriate location range for the field.
   public parseObjectLocal = (
     localToken: lexer.Token, binds: ast.IdentifierSet,
-  ): {field: ast.ObjectField, binds: ast.IdentifierSet} | error.StaticError => {
+  ): {field: ast.ObjectField, binds: ast.IdentifierSet} | lexical.StaticError => {
     const varID = this.popExpect("TokenIdentifier");
-    if (error.isStaticError(varID)) {
+    if (lexical.isStaticError(varID)) {
       return varID;
     }
     const id = new ast.Identifier(varID.data, varID.loc);
     if (binds.contains(id.name)) {
-      return error.MakeStaticError(
+      return lexical.MakeStaticError(
         `Duplicate local var: ${id.name}`, varID.loc);
     }
 
@@ -630,19 +628,19 @@ class parser {
     if (this.peek().kind === "TokenParenL") {
       this.pop();
       const result = this.parseParamsList("function parameter");
-      if (error.isStaticError(result)) {
+      if (lexical.isStaticError(result)) {
         return result;
       }
       isMethod = true;
       params = result.params;
     }
     const pop = this.popExpectOp("=");
-    if (error.isStaticError(pop)) {
+    if (lexical.isStaticError(pop)) {
       return pop;
     }
 
     const body = this.parse(maxPrecedence, null);
-    if (error.isStaticError(body)) {
+    if (lexical.isStaticError(body)) {
       return body;
     }
 
@@ -672,16 +670,16 @@ class parser {
   // appropriate location range for the field.
   public parseObjectAssert = (
     localToken: lexer.Token,
-  ): ast.ObjectField | error.StaticError => {
+  ): ast.ObjectField | lexical.StaticError => {
     const cond = this.parse(maxPrecedence, null)
-    if (error.isStaticError(cond)) {
+    if (lexical.isStaticError(cond)) {
       return cond;
     }
     let msg: ast.Node | null = null;
     if (this.peek().kind === "TokenOperator" && this.peek().data == ":") {
       this.pop();
       const result = this.parse(maxPrecedence, null);
-      if (error.isStaticError(result)) {
+      if (lexical.isStaticError(result)) {
         return result;
       }
       msg = result;
@@ -689,7 +687,7 @@ class parser {
 
     // Message is optional, so location range changes based on whether
     // it's present.
-    const loc: error.LocationRange = msg == null
+    const loc: lexical.LocationRange = msg == null
       ?  locFromTokenAST(localToken, cond)
       : locFromTokenAST(localToken, msg);
 
@@ -713,7 +711,7 @@ class parser {
   // immediately after we encounter the '{' character.
   public parseObjectRemainder = (
     tok: lexer.Token, heading: ast.BindingComment,
-  ): {objRemainder: ast.Node, next: lexer.Token} | error.StaticError => {
+  ): {objRemainder: ast.Node, next: lexer.Token} | lexical.StaticError => {
     let fields = im.List<ast.ObjectField>();
     let literalFields = im.Set<literalField>();
     let binds = im.Set<ast.IdentifierName>()
@@ -776,14 +774,14 @@ class parser {
       if (next.kind === "TokenFor") {
         const result = this.parseObjectCompRemainder(
           tok, next, gotComma, fields)
-        if (error.isStaticError(result)) {
+        if (lexical.isStaticError(result)) {
           return result;
         }
         return {objRemainder: result.comp, next: result.last};
       }
 
       if (!gotComma && !first) {
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           "Expected a comma before next field.", next.loc);
       }
       first = false;
@@ -802,7 +800,7 @@ class parser {
         case "TokenStringBlock": {
           const result = this.parseObjectField(
             headingComments, next, literalFields);
-          if (error.isStaticError(result)) {
+          if (lexical.isStaticError(result)) {
             return result;
           }
           literalFields = result.literals;
@@ -812,7 +810,7 @@ class parser {
 
         case "TokenLocal": {
           const result = this.parseObjectLocal(next, binds);
-          if (error.isStaticError(result)) {
+          if (lexical.isStaticError(result)) {
             return result;
           }
           binds = result.binds;
@@ -822,7 +820,7 @@ class parser {
 
         case "TokenAssert": {
           const field = this.parseObjectAssert(next);
-          if (error.isStaticError(field)) {
+          if (lexical.isStaticError(field)) {
             return field;
           }
           fields = fields.push(field);
@@ -842,21 +840,21 @@ class parser {
   // for y in expr if expr for z in expr ...`
   public parseCompSpecs = (
     end: lexer.TokenKind
-  ): {compSpecs: ast.CompSpecs, maybeIf: lexer.Token} | error.StaticError => {
+  ): {compSpecs: ast.CompSpecs, maybeIf: lexer.Token} | lexical.StaticError => {
     let specs = im.List<ast.CompSpec>();
     while (true) {
       const varID = this.popExpect("TokenIdentifier");
-      if (error.isStaticError(varID)) {
+      if (lexical.isStaticError(varID)) {
         return varID;
       }
 
       const id: ast.Identifier = new ast.Identifier(varID.data, varID.loc);
       const pop = this.popExpect("TokenIn");
-      if (error.isStaticError(pop)) {
+      if (lexical.isStaticError(pop)) {
         return pop;
       }
       const arr = this.parse(maxPrecedence, null);
-      if (error.isStaticError(arr)) {
+      if (lexical.isStaticError(arr)) {
         return arr;
       }
       specs = specs.push(new ast.CompSpecFor(
@@ -865,7 +863,7 @@ class parser {
       let maybeIf = this.pop();
       for (; maybeIf.kind === "TokenIf"; maybeIf = this.pop()) {
         const cond = this.parse(maxPrecedence, null);
-        if (error.isStaticError(cond)) {
+        if (lexical.isStaticError(cond)) {
           return cond;
         }
         specs = specs.push(new ast.CompSpecIf(
@@ -877,7 +875,7 @@ class parser {
 
       if (maybeIf.kind !== "TokenFor") {
         const tokenKind = lexer.TokenKindStrings.get(end);
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           `Expected for, if or ${tokenKind} after for clause, got: ${maybeIf}`, maybeIf.loc);
       }
 
@@ -888,7 +886,7 @@ class parser {
   // typically immediately after we encounter the '[' character.
   public parseArrayRemainder = (
     tok: lexer.Token
-  ): ast.Node | error.StaticError => {
+  ): ast.Node | lexical.StaticError => {
     let next = this.peek();
     if (next.kind === "TokenBracketR") {
       this.pop();
@@ -897,7 +895,7 @@ class parser {
     }
 
     const first = this.parse(maxPrecedence, null);
-    if (error.isStaticError(first)) {
+    if (lexical.isStaticError(first)) {
       return first;
     }
     let gotComma = false;
@@ -912,7 +910,7 @@ class parser {
       // It's a comprehension
       this.pop();
       const result = this.parseCompSpecs("TokenBracketR");
-      if (error.isStaticError(result)) {
+      if (lexical.isStaticError(result)) {
         return result;
       }
 
@@ -929,11 +927,11 @@ class parser {
         break;
       }
       if (!gotComma) {
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           "Expected a comma before next array element.", next.loc);
       }
       const nextElem = this.parse(maxPrecedence, null);
-      if (error.isStaticError(nextElem)) {
+      if (lexical.isStaticError(nextElem)) {
         return nextElem;
       }
       elements = elements.push(nextElem);
@@ -964,7 +962,7 @@ class parser {
 
   public parseTerminal = (
     heading: ast.BindingComment,
-  ): ast.Node | error.StaticError => {
+  ): ast.Node | lexical.StaticError => {
     let tok = this.pop();
     switch (tok.kind) {
       case "TokenAssert":
@@ -989,11 +987,11 @@ class parser {
         return makeUnexpectedError(tok, "parsing terminal");
 
       case "TokenEndOfFile":
-        return error.MakeStaticError("Unexpected end of file.", tok.loc);
+        return lexical.MakeStaticError("Unexpected end of file.", tok.loc);
 
       case "TokenBraceL": {
         const result = this.parseObjectRemainder(tok, heading);
-        if (error.isStaticError(result)) {
+        if (lexical.isStaticError(result)) {
           return result;
         }
         return result.objRemainder;
@@ -1004,11 +1002,11 @@ class parser {
 
       case "TokenParenL": {
         const inner = this.parse(maxPrecedence, null);
-        if (error.isStaticError(inner)) {
+        if (lexical.isStaticError(inner)) {
           return inner;
         }
         const pop = this.popExpect("TokenParenR");
-        if (error.isStaticError(pop)) {
+        if (lexical.isStaticError(pop)) {
           return pop;
         }
         return inner;
@@ -1021,7 +1019,7 @@ class parser {
         const num = Number(tok.data);
         // TODO: Figure out whether this is correct.
         if (isNaN(num) && tok.data !== "NaN") {
-          return error.MakeStaticError(
+          return lexical.MakeStaticError(
             "Could not parse floating point number.", tok.loc);
         }
         return new ast.LiteralNumber(num, tok.data, tok.loc);
@@ -1056,41 +1054,41 @@ class parser {
         switch (next.kind) {
           case "TokenDot": {
             const fieldID = this.popExpect("TokenIdentifier");
-            if (error.isStaticError(fieldID)) {
+            if (lexical.isStaticError(fieldID)) {
               return fieldID;
             }
             id = new ast.Identifier(fieldID.data, fieldID.loc);
             break;
           }
           case "TokenBracketL": {
-            let parseErr: error.StaticError | null;
+            let parseErr: lexical.StaticError | null;
             const result = this.parse(maxPrecedence, null);
-            if (error.isStaticError(result)) {
+            if (lexical.isStaticError(result)) {
               return result;
             }
             index = result;
             const pop = this.popExpect("TokenBracketR");
-            if (error.isStaticError(pop)) {
+            if (lexical.isStaticError(pop)) {
               return pop;
             }
             break;
           }
         default:
-          return error.MakeStaticError(
+          return lexical.MakeStaticError(
             "Expected . or [ after super.", tok.loc);
         }
         return new ast.SuperIndex(index, id, tok.loc);
       }
     }
 
-    return error.MakeStaticError(
+    return lexical.MakeStaticError(
       `INTERNAL ERROR: Unknown tok kind: ${tok.kind}`, tok.loc);
   }
 
   // parse is the main parsing routine.
   public parse = (
     prec: precedence, heading: ast.BindingComment
-  ): ast.Node | error.StaticError => {
+  ): ast.Node | lexical.StaticError => {
     let begin = this.peek();
 
     // Consume heading comments if they exist.
@@ -1102,24 +1100,24 @@ class parser {
       case "TokenAssert": {
         this.pop();
         const cond = this.parse(maxPrecedence, null);
-        if (error.isStaticError(cond)) {
+        if (lexical.isStaticError(cond)) {
           return cond;
         }
         let msg: ast.Node | null = null;
         if (this.peek().kind === "TokenOperator" && this.peek().data === ":") {
           this.pop();
           const result = this.parse(maxPrecedence, null);
-          if (error.isStaticError(result)) {
+          if (lexical.isStaticError(result)) {
             return result;
           }
           msg = result;
         }
         const pop = this.popExpect("TokenSemicolon");
-        if (error.isStaticError(pop)) {
+        if (lexical.isStaticError(pop)) {
           return pop;
         }
         const rest = this.parse(maxPrecedence, null);
-        if (error.isStaticError(rest)) {
+        if (lexical.isStaticError(rest)) {
           return rest;
         }
         return new ast.Assert(cond, msg, rest, locFromTokenAST(begin, rest));
@@ -1128,7 +1126,7 @@ class parser {
       case "TokenError": {
         this.pop();
         const expr = this.parse(maxPrecedence, null);
-        if (error.isStaticError(expr)) {
+        if (lexical.isStaticError(expr)) {
           return expr;
         }
         return new ast.ErrorNode(expr, locFromTokenAST(begin, expr));
@@ -1137,15 +1135,15 @@ class parser {
       case "TokenIf": {
         this.pop();
         const cond = this.parse(maxPrecedence, null);
-        if (error.isStaticError(cond)) {
+        if (lexical.isStaticError(cond)) {
           return cond;
         }
         const pop = this.popExpect("TokenThen");
-        if (error.isStaticError(pop)) {
+        if (lexical.isStaticError(pop)) {
           return pop;
         }
         const branchTrue = this.parse(maxPrecedence, null);
-        if (error.isStaticError(branchTrue)) {
+        if (lexical.isStaticError(branchTrue)) {
           return branchTrue;
         }
         let branchFalse: ast.Node | null = null;
@@ -1153,7 +1151,7 @@ class parser {
         if (this.peek().kind === "TokenElse") {
           this.pop();
           const branchFalse = this.parse(maxPrecedence, null);
-          if (error.isStaticError(branchFalse)) {
+          if (lexical.isStaticError(branchFalse)) {
             return branchFalse;
           }
           lr = locFromTokenAST(begin, branchFalse)
@@ -1166,12 +1164,12 @@ class parser {
         const next = this.pop();
         if (next.kind === "TokenParenL") {
           const result = this.parseParamsList("function parameter");
-          if (error.isStaticError(result)) {
+          if (lexical.isStaticError(result)) {
             return result;
           }
 
           const body = this.parse(maxPrecedence, null);
-          if (error.isStaticError(body)) {
+          if (lexical.isStaticError(body)) {
             return body;
           }
           const fn = new ast.Function(
@@ -1184,32 +1182,32 @@ class parser {
           );
           return fn;
         }
-        return error.MakeStaticError(`Expected ( but got ${next}`, next.loc);
+        return lexical.MakeStaticError(`Expected ( but got ${next}`, next.loc);
       }
 
       case "TokenImport": {
         this.pop();
         const body = this.parse(maxPrecedence, null);
-        if (error.isStaticError(body)) {
+        if (lexical.isStaticError(body)) {
           return body;
         }
         if (ast.isLiteralString(body)) {
           return new ast.Import(body.value, locFromTokenAST(begin, body));
         }
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           "Computed imports are not allowed", body.loc);
       }
 
       case "TokenImportStr": {
         this.pop();
         const body = this.parse(maxPrecedence, null);
-        if (error.isStaticError(body)) {
+        if (lexical.isStaticError(body)) {
           return body;
         }
         if (ast.isLiteralString(body)) {
           return new ast.ImportStr(body.value, locFromTokenAST(begin, body));
         }
-        return error.MakeStaticError(
+        return lexical.MakeStaticError(
           "Computed imports are not allowed", body.loc);
       }
 
@@ -1218,7 +1216,7 @@ class parser {
         let binds = im.List<ast.LocalBind>();
         while (true) {
           const newBinds = this.parseBind(begin, binds);
-          if (error.isStaticError(newBinds)) {
+          if (lexical.isStaticError(newBinds)) {
             return newBinds;
           }
           binds = newBinds;
@@ -1227,9 +1225,9 @@ class parser {
             const msg = `Expected , or ; but got ${delim}`;
             const rest = restFromBinds(newBinds);
             if (rest == null) {
-              return error.MakeStaticError(msg, delim.loc);
+              return lexical.MakeStaticError(msg, delim.loc);
             }
-            return error.MakeStaticErrorRest(
+            return lexical.MakeStaticErrorRest(
               rest, msg, delim.loc);
           }
           if (delim.kind === "TokenSemicolon") {
@@ -1237,7 +1235,7 @@ class parser {
           }
         }
         const body = this.parse(maxPrecedence, null);
-        if (error.isStaticError(body)) {
+        if (lexical.isStaticError(body)) {
           return body;
         }
         return new ast.Local(binds, body, locFromTokenAST(begin, body));
@@ -1248,13 +1246,13 @@ class parser {
         if (begin.kind === "TokenOperator") {
           const uop = ast.UopMap.get(begin.data);
           if (uop == undefined) {
-            return error.MakeStaticError(
+            return lexical.MakeStaticError(
               `Not a unary operator: ${begin.data}`, begin.loc);
           }
           if (prec == unaryPrecedence) {
             const op = this.pop();
             const expr = this.parse(prec, null);
-            if (error.isStaticError(expr)) {
+            if (lexical.isStaticError(expr)) {
               return expr;
             }
             return new ast.Unary(uop, expr, locFromTokenAST(op, expr));
@@ -1267,7 +1265,7 @@ class parser {
         }
 
         let lhs = this.parse(prec-1, heading);
-        if (error.isStaticError(lhs)) {
+        if (lexical.isStaticError(lhs)) {
           return lhs;
         }
 
@@ -1293,7 +1291,7 @@ class parser {
               }
               bop = ast.BopMap.get(this.peek().data);
               if (bop == undefined) {
-                return error.MakeStaticError(
+                return lexical.MakeStaticError(
                   `Not a binary operator: ${this.peek().data}`, this.peek().loc);
               }
 
@@ -1320,11 +1318,11 @@ class parser {
           switch (op.kind) {
             case "TokenBracketL": {
               const index = this.parse(maxPrecedence, null);
-              if (error.isStaticError(index)) {
+              if (lexical.isStaticError(index)) {
                 return index;
               }
               const end = this.popExpect("TokenBracketR");
-              if (error.isStaticError(end)) {
+              if (lexical.isStaticError(end)) {
                 return end;
               }
 
@@ -1334,14 +1332,14 @@ class parser {
             }
             case "TokenDot": {
               const fieldID = this.popExpect("TokenIdentifier");
-              if (error.isStaticError(fieldID)) {
+              if (lexical.isStaticError(fieldID)) {
                 // After the user types a `.`, the document very
                 // likely doesn't parse. For autocomplete facilities,
                 // it's useful to return the AST that precedes the `.`
                 // character (typically a `Var` or `Index`
                 // expression), so that it is easier to discern what
                 // to complete.
-                return error.MakeStaticErrorRest(lhs, fieldID.msg, fieldID.loc);
+                return lexical.MakeStaticErrorRest(lhs, fieldID.msg, fieldID.loc);
               }
               const id = new ast.Identifier(fieldID.data, fieldID.loc);
               lhs = new ast.IndexDot(lhs, id, locFromTokens(begin, fieldID));
@@ -1349,7 +1347,7 @@ class parser {
             }
             case "TokenParenL": {
               const result = this.parseArgsList("function argument");
-              if (error.isStaticError(result)) {
+              if (lexical.isStaticError(result)) {
                 return result;
               }
 
@@ -1365,7 +1363,7 @@ class parser {
             }
             case "TokenBraceL": {
               const result = this.parseObjectRemainder(op, heading);
-              if (error.isStaticError(result)) {
+              if (lexical.isStaticError(result)) {
                 return result;
               }
               lhs = new ast.ApplyBrace(
@@ -1374,7 +1372,7 @@ class parser {
             }
             default: {
               const rhs = this.parse(prec-1, null);
-              if (error.isStaticError(rhs)) {
+              if (lexical.isStaticError(rhs)) {
                 return rhs;
               }
               if (bop == null) {
@@ -1416,10 +1414,10 @@ const restFromBinds = (newBinds: ast.LocalBinds): ast.Var | null => {
 
 export const Parse = (
   t: lexer.Tokens
-): ast.Node | error.StaticError => {
+): ast.Node | lexical.StaticError => {
   const p = new parser(t);
   const expr = p.parse(maxPrecedence, null);
-  if (error.isStaticError(expr)) {
+  if (lexical.isStaticError(expr)) {
     return expr;
   }
 
@@ -1427,9 +1425,9 @@ export const Parse = (
   p.parseOptionalComments();
 
   if (p.peek().kind !== "TokenEndOfFile") {
-    return error.MakeStaticError(`Did not expect: ${p.peek()}`, p.peek().loc);
+    return lexical.MakeStaticError(`Did not expect: ${p.peek()}`, p.peek().loc);
   }
-  new astVisitor.InitializingVisitor(expr).visit();
+  new ast.InitializingVisitor(expr).visit();
 
   return expr;
 }

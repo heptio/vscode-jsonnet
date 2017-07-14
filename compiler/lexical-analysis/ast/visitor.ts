@@ -1,22 +1,21 @@
-'use strict';
 import * as server from 'vscode-languageserver';
-import * as immutable from 'immutable';
 
-import * as ast from '../parser/node';
-import * as error from '../lexer/static_error';
-import * as lexer from '../lexer/lexer';
+import * as im from 'immutable';
+
+import * as lexical from '../lexical';
+import * as tree from './tree';
 
 export interface Visitor {
   visit(): void
 }
 
 export abstract class VisitorBase implements Visitor {
-  protected rootObject: ast.Node | null = null;
+  protected rootObject: tree.Node | null = null;
 
   constructor(
-    protected rootNode: ast.Node,
-    private parent: ast.Node | null = null,
-    private env: ast.Environment = ast.emptyEnvironment,
+    protected rootNode: tree.Node,
+    private parent: tree.Node | null = null,
+    private env: tree.Environment = tree.emptyEnvironment,
   ) {}
 
   public visit = () => {
@@ -24,7 +23,7 @@ export abstract class VisitorBase implements Visitor {
   }
 
   protected visitHelper = (
-    node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
+    node: tree.Node, parent: tree.Node | null, currEnv: tree.Environment
   ): void => {
     if (node == null) {
       throw Error("INTERNAL ERROR: Can't visit a null node");
@@ -34,44 +33,44 @@ export abstract class VisitorBase implements Visitor {
 
     switch(node.type) {
       case "CommentNode": {
-        this.visitComment(<ast.Comment>node);
+        this.visitComment(<tree.Comment>node);
         return;
       }
       case "CompSpecNode": {
-        const castedNode = <ast.CompSpec>node;
+        const castedNode = <tree.CompSpec>node;
         this.visitCompSpec(castedNode);
         castedNode.varName && this.visitHelper(castedNode.varName, castedNode, currEnv);
         this.visitHelper(castedNode.expr, castedNode, currEnv);
         return;
       }
       case "ApplyNode": {
-        const castedNode = <ast.Apply>node;
+        const castedNode = <tree.Apply>node;
         this.visitApply(castedNode);
         this.visitHelper(castedNode.target, castedNode, currEnv);
-        castedNode.args.forEach((arg: ast.Node) => {
+        castedNode.args.forEach((arg: tree.Node) => {
           this.visitHelper(arg, castedNode, currEnv);
         });
         return;
       }
       case "ApplyBraceNode": {
-        const castedNode = <ast.ApplyBrace>node;
+        const castedNode = <tree.ApplyBrace>node;
         this.visitApplyBrace(castedNode);
         this.visitHelper(castedNode.left, castedNode, currEnv);
         this.visitHelper(castedNode.right, castedNode, currEnv);
         return;
       }
       case "ApplyParamAssignmentNode": {
-        const castedNode = <ast.ApplyParamAssignment>node;
+        const castedNode = <tree.ApplyParamAssignment>node;
         this.visitApplyParamAssignmentNode(castedNode);
         this.visitHelper(castedNode.right, castedNode, currEnv);
         return;
       }
       case "ArrayNode": {
-        const castedNode = <ast.Array>node;
+        const castedNode = <tree.Array>node;
         this.visitArray(castedNode);
         castedNode.headingComment && this.visitHelper(
           castedNode.headingComment, castedNode, currEnv);
-        castedNode.elements.forEach((e: ast.Node) => {
+        castedNode.elements.forEach((e: tree.Node) => {
           this.visitHelper(e, castedNode, currEnv);
         });
         castedNode.trailingComment && this.visitHelper(
@@ -79,15 +78,15 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "ArrayCompNode": {
-        const castedNode = <ast.ArrayComp>node;
+        const castedNode = <tree.ArrayComp>node;
         this.visitArrayComp(castedNode);
         this.visitHelper(castedNode.body, castedNode, currEnv);
-        castedNode.specs.forEach((spec: ast.CompSpec) =>
+        castedNode.specs.forEach((spec: tree.CompSpec) =>
           this.visitHelper(spec, castedNode, currEnv));
         return;
       }
       case "AssertNode": {
-        const castedNode = <ast.Assert>node;
+        const castedNode = <tree.Assert>node;
         this.visitAssert(castedNode);
         this.visitHelper(castedNode.cond, castedNode, currEnv);
         castedNode.message && this.visitHelper(
@@ -96,19 +95,19 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "BinaryNode": {
-        const castedNode = <ast.Binary>node;
+        const castedNode = <tree.Binary>node;
         this.visitBinary(castedNode);
         this.visitHelper(castedNode.left, castedNode, currEnv);
         this.visitHelper(castedNode.right, castedNode, currEnv);
         return;
       }
       case "BuiltinNode": {
-        const castedNode = <ast.Builtin>node;
+        const castedNode = <tree.Builtin>node;
         this.visitBuiltin(castedNode);
         return;
       }
       case "ConditionalNode": {
-        const castedNode = <ast.Conditional>node;
+        const castedNode = <tree.Conditional>node;
         this.visitConditional(castedNode);
         this.visitHelper(castedNode.cond, castedNode, currEnv);
         this.visitHelper(castedNode.branchTrue, castedNode, currEnv);
@@ -117,18 +116,18 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "DollarNode": {
-        const castedNode = <ast.Dollar>node;
+        const castedNode = <tree.Dollar>node;
         this.visitDollar(castedNode);
         return;
       }
       case "ErrorNode": {
-        const castedNode = <ast.ErrorNode>node;
+        const castedNode = <tree.ErrorNode>node;
         this.visitError(castedNode);
         this.visitHelper(castedNode.expr, castedNode, currEnv);
         return;
       }
       case "FunctionNode": {
-        const castedNode = <ast.Function>node;
+        const castedNode = <tree.Function>node;
         this.visitFunction(castedNode);
 
         if (castedNode.headingComment != null) {
@@ -137,40 +136,40 @@ export abstract class VisitorBase implements Visitor {
 
         // Add params to environment before visiting body.
         const envWithParams = currEnv.merge(
-          ast.envFromParams(castedNode.parameters));
+          tree.envFromParams(castedNode.parameters));
 
-        castedNode.parameters.forEach((param: ast.FunctionParam) => {
+        castedNode.parameters.forEach((param: tree.FunctionParam) => {
           this.visitHelper(param, castedNode, envWithParams);
         });
 
         // Visit body.
         this.visitHelper(castedNode.body, castedNode, envWithParams);
-        castedNode.trailingComment.forEach((comment: ast.Comment) => {
+        castedNode.trailingComment.forEach((comment: tree.Comment) => {
           // NOTE: Using `currEnv` instead of `envWithparams`.
           this.visitHelper(comment, castedNode, currEnv);
         });
         return;
       }
       case "FunctionParamNode": {
-        const castedNode = <ast.FunctionParam>node;
+        const castedNode = <tree.FunctionParam>node;
         castedNode.defaultValue && this.visitHelper(
           castedNode.defaultValue, castedNode, currEnv);
         return;
       }
       case "IdentifierNode": {
-        this.visitIdentifier(<ast.Identifier>node);
+        this.visitIdentifier(<tree.Identifier>node);
         return;
       }
       case "ImportNode": {
-        this.visitImport(<ast.Import>node);
+        this.visitImport(<tree.Import>node);
         return;
       }
       case "ImportStrNode": {
-        this.visitImportStr(<ast.ImportStr>node);
+        this.visitImportStr(<tree.ImportStr>node);
         return;
       }
       case "IndexNode": {
-        const castedNode = <ast.Index>node;
+        const castedNode = <tree.Index>node;
         this.visitIndex(castedNode);
         castedNode.id != null && this.visitHelper(castedNode.id, castedNode, currEnv);
         castedNode.target != null && this.visitHelper(
@@ -180,15 +179,15 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "LocalBindNode": {
-        const castedNode = <ast.LocalBind>node;
-        this.visitLocalBind(<ast.LocalBind>node);
+        const castedNode = <tree.LocalBind>node;
+        this.visitLocalBind(<tree.LocalBind>node);
 
         // NOTE: If `functionSugar` is false, the params will be
         // empty.
         const envWithParams = currEnv.merge(
-          ast.envFromParams(castedNode.params));
+          tree.envFromParams(castedNode.params));
 
-        castedNode.params.forEach((param: ast.FunctionParam) => {
+        castedNode.params.forEach((param: tree.FunctionParam) => {
           this.visitHelper(param, castedNode, envWithParams)
         });
 
@@ -196,15 +195,15 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "LocalNode": {
-        const castedNode = <ast.Local>node;
+        const castedNode = <tree.Local>node;
         this.visitLocal(castedNode);
 
         // NOTE: The binds of a `local` are in scope for both the
         // binds themselves, as well as the body of the `local`.
-        const envWithBinds = currEnv.merge(ast.envFromLocalBinds(castedNode));
+        const envWithBinds = currEnv.merge(tree.envFromLocalBinds(castedNode));
         castedNode.env = envWithBinds;
 
-        castedNode.binds.forEach((bind: ast.LocalBind) => {
+        castedNode.binds.forEach((bind: tree.LocalBind) => {
           this.visitHelper(bind, castedNode, envWithBinds);
         });
 
@@ -212,34 +211,34 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "LiteralBooleanNode": {
-        const castedNode = <ast.LiteralBoolean>node;
+        const castedNode = <tree.LiteralBoolean>node;
         this.visitLiteralBoolean(castedNode);
         return;
       }
       case "LiteralNullNode": {
-        const castedNode = <ast.LiteralNull>node;
+        const castedNode = <tree.LiteralNull>node;
         this.visitLiteralNull(castedNode);
         return;
       }
-      case "LiteralNumberNode": { return this.visitLiteralNumber(<ast.LiteralNumber>node); }
+      case "LiteralNumberNode": { return this.visitLiteralNumber(<tree.LiteralNumber>node); }
       case "LiteralStringNode": {
-        const castedNode = <ast.LiteralString>node;
+        const castedNode = <tree.LiteralString>node;
         this.visitLiteralString(castedNode);
         return;
       }
       case "ObjectFieldNode": {
-        const castedNode = <ast.ObjectField>node;
+        const castedNode = <tree.ObjectField>node;
         this.visitObjectField(castedNode);
 
         // NOTE: If `methodSugar` is false, the params will be empty.
-        let envWithParams = currEnv.merge(ast.envFromParams(castedNode.ids));
+        let envWithParams = currEnv.merge(tree.envFromParams(castedNode.ids));
 
         castedNode.id != null && this.visitHelper(
           castedNode.id, castedNode, envWithParams);
         castedNode.expr1 != null && this.visitHelper(
           castedNode.expr1, castedNode, envWithParams);
 
-        castedNode.ids.forEach((param: ast.FunctionParam) => {
+        castedNode.ids.forEach((param: tree.FunctionParam) => {
           this.visitHelper(param, castedNode, envWithParams);
         });
 
@@ -253,7 +252,7 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "ObjectNode": {
-        const castedNode = <ast.ObjectNode>node;
+        const castedNode = <tree.ObjectNode>node;
         if (this.rootObject == null) {
           this.rootObject = castedNode;
           castedNode.rootObject = castedNode;
@@ -273,9 +272,9 @@ export abstract class VisitorBase implements Visitor {
         // create a new environment that includes them, and pass that
         // on to each field we visit.
         const envWithLocals = currEnv.merge(
-          ast.envFromFields(castedNode.fields));
+          tree.envFromFields(castedNode.fields));
 
-        castedNode.fields.forEach((field: ast.ObjectField) => {
+        castedNode.fields.forEach((field: tree.ObjectField) => {
           // NOTE: If this is a `local` field, there is no need to
           // remove current field from environment. It is perfectly
           // legal to do something like `local foo = foo; foo` (though
@@ -285,36 +284,36 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "DesugaredObjectFieldNode": {
-        const castedNode = <ast.DesugaredObjectField>node;
+        const castedNode = <tree.DesugaredObjectField>node;
         this.visitDesugaredObjectField(castedNode);
         this.visitHelper(castedNode.name, castedNode, currEnv);
         this.visitHelper(castedNode.body, castedNode, currEnv);
         return;
       }
       case "DesugaredObjectNode": {
-        const castedNode = <ast.DesugaredObject>node;
+        const castedNode = <tree.DesugaredObject>node;
         this.visitDesugaredObject(castedNode);
-        castedNode.asserts.forEach((a: ast.Assert) => {
+        castedNode.asserts.forEach((a: tree.Assert) => {
           this.visitHelper(a, castedNode, currEnv);
         });
-        castedNode.fields.forEach((field: ast.DesugaredObjectField) => {
+        castedNode.fields.forEach((field: tree.DesugaredObjectField) => {
           this.visitHelper(field, castedNode, currEnv);
         });
         return;
       }
       case "ObjectCompNode": {
-        const castedNode = <ast.ObjectComp>node;
+        const castedNode = <tree.ObjectComp>node;
         this.visitObjectComp(castedNode);
-        castedNode.specs.forEach((spec: ast.CompSpec) => {
+        castedNode.specs.forEach((spec: tree.CompSpec) => {
           this.visitHelper(spec, castedNode, currEnv);
         });
-        castedNode.fields.forEach((field: ast.ObjectField) => {
+        castedNode.fields.forEach((field: tree.ObjectField) => {
           this.visitHelper(field, castedNode, currEnv);
         });
         return;
       }
       case "ObjectComprehensionSimpleNode": {
-        const castedNode = <ast.ObjectComprehensionSimple>node;
+        const castedNode = <tree.ObjectComprehensionSimple>node;
         this.visitObjectComprehensionSimple(castedNode);
         this.visitHelper(castedNode.id, castedNode, currEnv);
         this.visitHelper(castedNode.field, castedNode, currEnv);
@@ -323,25 +322,25 @@ export abstract class VisitorBase implements Visitor {
         return;
       }
       case "SelfNode": {
-        const castedNode = <ast.Self>node;
+        const castedNode = <tree.Self>node;
         this.visitSelf(castedNode);
         return;
       }
       case "SuperIndexNode": {
-        const castedNode = <ast.SuperIndex>node;
+        const castedNode = <tree.SuperIndex>node;
         this.visitSuperIndex(castedNode);
         castedNode.index && this.visitHelper(castedNode.index, castedNode, currEnv);
         castedNode.id && this.visitHelper(castedNode.id, castedNode, currEnv);
         return;
       }
       case "UnaryNode": {
-        const castedNode = <ast.Unary>node;
+        const castedNode = <tree.Unary>node;
         this.visitUnary(castedNode);
         this.visitHelper(castedNode.expr, castedNode, currEnv);
         return;
       }
       case "VarNode": {
-        const castedNode = <ast.Var>node;
+        const castedNode = <tree.Var>node;
         this.visitVar(castedNode);
         castedNode.id != null && this.visitHelper(castedNode.id, castedNode, currEnv);
         return
@@ -352,46 +351,46 @@ export abstract class VisitorBase implements Visitor {
   }
 
   protected previsit = (
-    node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
+    node: tree.Node, parent: tree.Node | null, currEnv: tree.Environment
   ): void => {}
 
-  protected visitComment = (node: ast.Comment): void => {}
-  protected visitCompSpec = (node: ast.CompSpec): void => {}
-  protected visitApply = (node: ast.Apply): void => {}
-  protected visitApplyBrace = (node: ast.ApplyBrace): void => {}
-  protected visitApplyParamAssignmentNode = (node: ast.ApplyParamAssignment): void => {}
-  protected visitArray = (node: ast.Array): void => {}
-  protected visitArrayComp = (node: ast.ArrayComp): void => {}
-  protected visitAssert = (node: ast.Assert): void => {}
-  protected visitBinary = (node: ast.Binary): void => {}
-  protected visitBuiltin = (node: ast.Builtin): void => {}
-  protected visitConditional = (node: ast.Conditional): void => {}
-  protected visitDollar = (node: ast.Dollar): void => {}
-  protected visitError = (node: ast.ErrorNode): void => {}
-  protected visitFunction = (node: ast.Function): void => {}
+  protected visitComment = (node: tree.Comment): void => {}
+  protected visitCompSpec = (node: tree.CompSpec): void => {}
+  protected visitApply = (node: tree.Apply): void => {}
+  protected visitApplyBrace = (node: tree.ApplyBrace): void => {}
+  protected visitApplyParamAssignmentNode = (node: tree.ApplyParamAssignment): void => {}
+  protected visitArray = (node: tree.Array): void => {}
+  protected visitArrayComp = (node: tree.ArrayComp): void => {}
+  protected visitAssert = (node: tree.Assert): void => {}
+  protected visitBinary = (node: tree.Binary): void => {}
+  protected visitBuiltin = (node: tree.Builtin): void => {}
+  protected visitConditional = (node: tree.Conditional): void => {}
+  protected visitDollar = (node: tree.Dollar): void => {}
+  protected visitError = (node: tree.ErrorNode): void => {}
+  protected visitFunction = (node: tree.Function): void => {}
 
-  protected visitIdentifier = (node: ast.Identifier): void => {}
-  protected visitImport = (node: ast.Import): void => {}
-  protected visitImportStr = (node: ast.ImportStr): void => {}
-  protected visitIndex = (node: ast.Index): void => {}
-  protected visitLocalBind = (node: ast.LocalBind): void => {}
-  protected visitLocal = (node: ast.Local): void => {}
+  protected visitIdentifier = (node: tree.Identifier): void => {}
+  protected visitImport = (node: tree.Import): void => {}
+  protected visitImportStr = (node: tree.ImportStr): void => {}
+  protected visitIndex = (node: tree.Index): void => {}
+  protected visitLocalBind = (node: tree.LocalBind): void => {}
+  protected visitLocal = (node: tree.Local): void => {}
 
-  protected visitLiteralBoolean = (node: ast.LiteralBoolean): void => {}
-  protected visitLiteralNull = (node: ast.LiteralNull): void => {}
+  protected visitLiteralBoolean = (node: tree.LiteralBoolean): void => {}
+  protected visitLiteralNull = (node: tree.LiteralNull): void => {}
 
-  protected visitLiteralNumber = (node: ast.LiteralNumber): void => {}
-  protected visitLiteralString = (node: ast.LiteralString): void => {}
-  protected visitObjectField = (node: ast.ObjectField): void => {}
-  protected visitObject = (node: ast.ObjectNode): void => {}
-  protected visitDesugaredObjectField = (node: ast.DesugaredObjectField): void => {}
-  protected visitDesugaredObject = (node: ast.DesugaredObject): void => {}
-  protected visitObjectComp = (node: ast.ObjectComp): void => {}
-  protected visitObjectComprehensionSimple = (node: ast.ObjectComprehensionSimple): void => {}
-  protected visitSelf = (node: ast.Self): void => {}
-  protected visitSuperIndex = (node: ast.SuperIndex): void => {}
-  protected visitUnary = (node: ast.Unary): void => {}
-  protected visitVar = (node: ast.Var): void => {}
+  protected visitLiteralNumber = (node: tree.LiteralNumber): void => {}
+  protected visitLiteralString = (node: tree.LiteralString): void => {}
+  protected visitObjectField = (node: tree.ObjectField): void => {}
+  protected visitObject = (node: tree.ObjectNode): void => {}
+  protected visitDesugaredObjectField = (node: tree.DesugaredObjectField): void => {}
+  protected visitDesugaredObject = (node: tree.DesugaredObject): void => {}
+  protected visitObjectComp = (node: tree.ObjectComp): void => {}
+  protected visitObjectComprehensionSimple = (node: tree.ObjectComprehensionSimple): void => {}
+  protected visitSelf = (node: tree.Self): void => {}
+  protected visitSuperIndex = (node: tree.SuperIndex): void => {}
+  protected visitUnary = (node: tree.Unary): void => {}
+  protected visitVar = (node: tree.Var): void => {}
 }
 
 // ----------------------------------------------------------------------------
@@ -402,7 +401,7 @@ export abstract class VisitorBase implements Visitor {
 // and `env` values in every node.
 export class InitializingVisitor extends VisitorBase {
   protected previsit = (
-    node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment
+    node: tree.Node, parent: tree.Node | null, currEnv: tree.Environment
   ): void => {
     node.parent = parent;
     node.env = currEnv;
@@ -441,8 +440,8 @@ export class AnalyzableFindFailure {
 
   constructor(
     public readonly kind: "AfterLineEnd" | "NotIdentifier",
-    public readonly tightestEnclosingNode: ast.Node,
-    public readonly terminalNodeOnCursorLine: ast.Node | null,
+    public readonly tightestEnclosingNode: tree.Node,
+    public readonly terminalNodeOnCursorLine: tree.Node | null,
   ) {}
 }
 
@@ -489,8 +488,8 @@ export class CursorVisitor extends VisitorBase {
   //     `"AfterDocEnd"`.
 
   constructor(
-    private cursor: error.Location,
-    root: ast.Node,
+    private cursor: lexical.Location,
+    root: tree.Node,
   ) {
     super(root);
     this.terminalNode = root;
@@ -499,15 +498,15 @@ export class CursorVisitor extends VisitorBase {
   // Identifier whose range encloses the cursor, if there is one. This
   // can be a multi-line node (e.g., perhaps an empty object), or a
   // single line node (e.g., a number literal).
-  private enclosingNode: ast.Node | null = null;
+  private enclosingNode: tree.Node | null = null;
 
   // Last node in the tree.
-  private terminalNode: ast.Node;
+  private terminalNode: tree.Node;
 
   // Last node in the line our cursor lies on, if there is one.
-  private terminalNodeOnCursorLine: ast.Node | null = null;
+  private terminalNodeOnCursorLine: tree.Node | null = null;
 
-  get nodeAtPosition(): ast.Identifier | FindFailure {
+  get nodeAtPosition(): tree.Identifier | FindFailure {
     if (this.enclosingNode == null) {
       if (this.cursor.strictlyBeforeRange(this.rootNode.loc)) {
         return new UnanalyzableFindFailure("BeforeDocStart");
@@ -516,7 +515,7 @@ export class CursorVisitor extends VisitorBase {
       }
       throw new Error(
         "INTERNAL ERROR: No wrapping identifier was found, but node didn't lie outside of document range");
-    } else if (!ast.isIdentifier(this.enclosingNode)) {
+    } else if (!tree.isIdentifier(this.enclosingNode)) {
       if (
         this.terminalNodeOnCursorLine != null &&
         this.cursor.strictlyAfterRange(this.terminalNodeOnCursorLine.loc)
@@ -531,7 +530,7 @@ export class CursorVisitor extends VisitorBase {
   }
 
   protected previsit = (
-    node: ast.Node, parent: ast.Node | null, currEnv: ast.Environment,
+    node: tree.Node, parent: tree.Node | null, currEnv: tree.Environment,
   ): void => {
     const nodeEnd = node.loc.end;
 
@@ -564,7 +563,7 @@ export class CursorVisitor extends VisitorBase {
 // NOTE: Function currently works for expressions that are on one
 // line.
 const nodeRangeIsCloser = (
-  pos: error.Location, thisNode: ast.Node, thatNode: ast.Node
+  pos: lexical.Location, thisNode: tree.Node, thatNode: tree.Node
 ): boolean => {
   const thisLoc = thisNode.loc;
   const thatLoc = thatNode.loc;

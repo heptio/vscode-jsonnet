@@ -1,29 +1,26 @@
-'use strict';
 import * as os from 'os';
 import * as path from 'path';
 
-import * as immutable from 'immutable';
+import * as im from 'immutable';
 
-import * as ast from '../parser/node';
-import * as astVisitor from './visitor';
-import * as compiler from './compiler';
-import * as error from '../lexer/static_error';
-import * as lexer from '../lexer/lexer';
-import * as workspace from './workspace';
+import * as ast from '../lexical-analysis/ast';
+import * as lexer from '../lexical-analysis/lexer';
+import * as lexical from '../lexical-analysis/lexical';
 import * as service from './service';
+import * as editor from '../editor';
 
 //
 // Analyzer.
 //
 
 export interface EventedAnalyzer
-  extends workspace.DocumentEventListener, service.UiEventListener { }
+  extends editor.DocumentEventListener, editor.UiEventListener { }
 
 // TODO: Rename this to `EventedAnalyzer`.
 export class Analyzer implements EventedAnalyzer {
   constructor(
-    private documents: workspace.DocumentManager,
-    private compilerService: compiler.CompilerService,
+    private documents: editor.DocumentManager,
+    private compilerService: service.LexicalAnalyzerService,
   ) { }
 
   //
@@ -41,16 +38,16 @@ export class Analyzer implements EventedAnalyzer {
   //
 
   public onHover = (
-    fileUri: string, cursorLoc: error.Location
-  ): Promise<service.HoverInfo> => {
+    fileUri: string, cursorLoc: lexical.Location
+  ): Promise<editor.HoverInfo> => {
     const emptyOnHover = Promise.resolve().then(
-      () => <service.HoverInfo>{
+      () => <editor.HoverInfo>{
         contents: [],
       });
 
     const onHoverPromise = (
       node: ast.Node | ast.IndexedObjectFields,
-    ): Promise<service.HoverInfo> => {
+    ): Promise<editor.HoverInfo> => {
       if (node == null) {
         return emptyOnHover;
       }
@@ -58,7 +55,7 @@ export class Analyzer implements EventedAnalyzer {
       try {
         const msg = this.renderOnhoverMessage(fileUri, node);
         return Promise.resolve().then(
-          () => <service.HoverInfo> {
+          () => <editor.HoverInfo> {
             contents: msg,
           });
       } catch(err) {
@@ -71,13 +68,13 @@ export class Analyzer implements EventedAnalyzer {
       const {text: docText, version: version, resolvedPath: resolvedUri} =
         this.documents.get(fileUri);
       const cached = this.compilerService.cache(fileUri, docText, version);
-      if (compiler.isFailedParsedDocument(cached)) {
+      if (service.isFailedParsedDocument(cached)) {
         return emptyOnHover;
       }
 
       // Get symbol we're hovering over.
       const nodeAtPos = getNodeAtPositionFromAst(cached.parse, cursorLoc);
-      if (astVisitor.isFindFailure(nodeAtPos)) {
+      if (ast.isFindFailure(nodeAtPos)) {
         return emptyOnHover;
       }
 
@@ -121,12 +118,12 @@ export class Analyzer implements EventedAnalyzer {
   }
 
   public onComplete = (
-    fileUri: workspace.FileUri, cursorLoc: error.Location
-  ): Promise<service.CompletionInfo[]> => {
+    fileUri: editor.FileUri, cursorLoc: lexical.Location
+  ): Promise<editor.CompletionInfo[]> => {
     const doc = this.documents.get(fileUri);
 
     return Promise.resolve().then(
-      (): service.CompletionInfo[] => {
+      (): editor.CompletionInfo[] => {
         //
         // Generate suggestions. This process follows three steps:
         //
@@ -151,7 +148,7 @@ export class Analyzer implements EventedAnalyzer {
             lines[cursorLoc.line-1][cursorLoc.column-2] === ".";
 
           let node: ast.Node | null = null;
-          if (compiler.isParsedDocument(compiled)) {
+          if (service.isParsedDocument(compiled)) {
             // Success case. The document parses, and we can offer
             // suggestions from a well-formed document.
 
@@ -182,17 +179,17 @@ export class Analyzer implements EventedAnalyzer {
   // indication of whether the user is "dotting in" to a property, and
   // produces a list of autocomplete suggestions.
   public completionsFromParse = (
-    fileUri: workspace.FileUri, compiled: compiler.ParsedDocument,
-    cursorLoc: error.Location,
+    fileUri: editor.FileUri, compiled: service.ParsedDocument,
+    cursorLoc: lexical.Location,
     lastCharIsDot: boolean,
-  ): service.CompletionInfo[] => {
+  ): editor.CompletionInfo[] => {
     // IMPLEMENTATION NOTES: We have kept this method relatively free
     // of calls to `this` so that we don't have to mock out more of
     // the analyzer to test it.
 
     let foundNode = getNodeAtPositionFromAst(
       compiled.parse, cursorLoc);
-    if (astVisitor.isAnalyzableFindFailure(foundNode)) {
+    if (ast.isAnalyzableFindFailure(foundNode)) {
       if (foundNode.kind === "NotIdentifier") {
         return [];
       }
@@ -201,7 +198,7 @@ export class Analyzer implements EventedAnalyzer {
       } else {
         foundNode = foundNode.tightestEnclosingNode;
       }
-    } else if (astVisitor.isUnanalyzableFindFailure(foundNode)) {
+    } else if (ast.isUnanalyzableFindFailure(foundNode)) {
       return [];
     }
 
@@ -215,10 +212,10 @@ export class Analyzer implements EventedAnalyzer {
   // an indication of whether the user is "dotting in" to a property,
   // and produces a list of autocomplete suggestions.
   public completionsFromFailedParse = (
-    fileUri: workspace.FileUri, compiled: compiler.FailedParsedDocument,
-    lastParse: compiler.ParsedDocument,
-    cursorLoc: error.Location, lastCharIsDot: boolean,
-  ): service.CompletionInfo[] => {
+    fileUri: editor.FileUri, compiled: service.FailedParsedDocument,
+    lastParse: service.ParsedDocument,
+    cursorLoc: lexical.Location, lastCharIsDot: boolean,
+  ): editor.CompletionInfo[] => {
     // IMPLEMENTATION NOTES: We have kept this method relatively free
     // of calls to `this` so that we don't have to mock out more of
     // the analyzer to test it.
@@ -234,7 +231,7 @@ export class Analyzer implements EventedAnalyzer {
     //    of where the user is typing.
 
     if (
-      compiler.isLexFailure(compiled.parse) ||
+      service.isLexFailure(compiled.parse) ||
       compiled.parse.parseError.rest == null
     ) {
       return [];
@@ -262,13 +259,13 @@ export class Analyzer implements EventedAnalyzer {
     // Step 2, try to find the "best guess".
     let foundNode = getNodeAtPositionFromAst(
       lastParse.parse, cursorLoc);
-    if (astVisitor.isAnalyzableFindFailure(foundNode)) {
+    if (ast.isAnalyzableFindFailure(foundNode)) {
       if (foundNode.terminalNodeOnCursorLine != null) {
         foundNode = foundNode.terminalNodeOnCursorLine;
       } else {
         foundNode = foundNode.tightestEnclosingNode;
       }
-    } else if (astVisitor.isUnanalyzableFindFailure(foundNode)) {
+    } else if (ast.isUnanalyzableFindFailure(foundNode)) {
       return [];
     }
 
@@ -278,7 +275,7 @@ export class Analyzer implements EventedAnalyzer {
     if (foundNode.env == null) {
       throw new Error("INTERNAL ERROR: Node environment can't be null");
     }
-    new astVisitor
+    new ast
       .InitializingVisitor(rest, foundNode, foundNode.env)
       .visit();
 
@@ -290,9 +287,9 @@ export class Analyzer implements EventedAnalyzer {
   // indication of whether the user is "dotting in" to a property, and
   // produces a list of autocomplete suggestions.
   private completionsFromNode = (
-    fileUri: workspace.FileUri, node: ast.Node, cursorLoc: error.Location,
+    fileUri: editor.FileUri, node: ast.Node, cursorLoc: lexical.Location,
     lastCharIsDot: boolean,
-  ): service.CompletionInfo[] => {
+  ): editor.CompletionInfo[] => {
     // Attempt to resolve the node.
     const ctx = new ast.ResolutionContext(
       this.compilerService, this.documents, fileUri);
@@ -351,13 +348,13 @@ export class Analyzer implements EventedAnalyzer {
 
   private completionsFromFields = (
     fieldSet: ast.IndexedObjectFields
-  ): service.CompletionInfo[] => {
+  ): editor.CompletionInfo[] => {
     // Attempt to get all the possible fields we could suggest. If the
     // resolved item is an `ObjectNode`, just use its fields; if it's
     // a mixin of two objects, merge them and use the merged fields
     // instead.
 
-    return immutable.List(fieldSet.values())
+    return im.List(fieldSet.values())
       .filter((field: ast.ObjectField) =>
         field != null && field.id != null && field.expr2 != null && field.kind !== "ObjectLocal")
       .map((field: ast.ObjectField) => {
@@ -366,7 +363,7 @@ export class Analyzer implements EventedAnalyzer {
             `INTERNAL ERROR: Filtered out null fields, but found field null`);
         }
 
-        let kind: service.CompletionType = "Field";
+        let kind: editor.CompletionType = "Field";
         if (field.methodSugar) {
           kind = "Method";
         }
@@ -386,8 +383,8 @@ export class Analyzer implements EventedAnalyzer {
   // --------------------------------------------------------------------------
 
   private renderOnhoverMessage = (
-    fileUri: workspace.FileUri, node: ast.Node | ast.IndexedObjectFields,
-  ): service.LanguageString[] => {
+    fileUri: editor.FileUri, node: ast.Node | ast.IndexedObjectFields,
+  ): editor.LanguageString[] => {
     if (ast.isIndexedObjectFields(node)) {
       if (node.count() === 0) {
         return [];
@@ -416,7 +413,7 @@ export class Analyzer implements EventedAnalyzer {
 
     line = node.prettyPrint();
 
-    return <service.LanguageString[]>[
+    return <editor.LanguageString[]>[
       {language: 'jsonnet', value: line},
       commentText,
     ];
@@ -470,8 +467,8 @@ export class Analyzer implements EventedAnalyzer {
 //
 
 export const getNodeAtPositionFromAst = (
-  rootNode: ast.Node, pos: error.Location
-): ast.Node | astVisitor.FindFailure => {
+  rootNode: ast.Node, pos: lexical.Location
+): ast.Node | ast.FindFailure => {
   // Special case. Make sure that if the cursor is beyond the range
   // of text of the last good parse, we just return the last node.
   // For example, if the user types a `.` character at the end of
@@ -482,18 +479,18 @@ export const getNodeAtPositionFromAst = (
     pos = endLoc;
   }
 
-  const visitor = new astVisitor.CursorVisitor(pos, rootNode);
+  const visitor = new ast.CursorVisitor(pos, rootNode);
   visitor.visit();
   const tightestNode = visitor.nodeAtPosition;
   return tightestNode;
 }
 
-const envToSuggestions = (env: ast.Environment): service.CompletionInfo[] => {
+const envToSuggestions = (env: ast.Environment): editor.CompletionInfo[] => {
     return env.map((value: ast.LocalBind | ast.FunctionParam, key: string) => {
       // TODO: Fill in documentation later. This might involve trying
       // to parse function comment to get comments about different
       // parameters.
-      return <service.CompletionInfo>{
+      return <editor.CompletionInfo>{
         label: key,
         kind: "Variable",
       };

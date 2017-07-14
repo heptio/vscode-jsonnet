@@ -1,28 +1,26 @@
-'use strict';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as proc from 'child_process';
 import * as url from 'url';
 
-import * as immutable from 'immutable';
+import * as im from 'immutable';
 import * as server from 'vscode-languageserver';
 
-import * as ast from './parser/node';
-import * as astVisitor from './ast/visitor';
-import * as compiler from "./ast/compiler";
-import * as error from './lexer/static_error';
-import * as lexer from './lexer/lexer';
-import * as parser from './parser/parser';
-import * as workspace from './ast/workspace';
+import * as ast from '../compiler/lexical-analysis/ast';
+import * as editor from '../compiler/editor';
+import * as lexer from '../compiler/lexical-analysis/lexer';
+import * as lexical from '../compiler/lexical-analysis/lexical';
+import * as parser from '../compiler/lexical-analysis/parser';
+import * as _static from "../compiler/static";
 
-export class VsDocumentManager implements workspace.DocumentManager {
+export class VsDocumentManager implements editor.DocumentManager {
   constructor(
     private readonly documents: server.TextDocuments,
-    private readonly libResolver: workspace.LibPathResolver,
+    private readonly libResolver: editor.LibPathResolver,
   ) { }
 
   get = (
-    fileSpec: workspace.FileUri | ast.Import | ast.ImportStr,
+    fileSpec: editor.FileUri | ast.Import | ast.ImportStr,
   ): {text: string, version?: number, resolvedPath: string} => {
     const parsedFileUri = this.libResolver.resolvePath(fileSpec);
     if (parsedFileUri == null) {
@@ -69,17 +67,17 @@ export class VsDocumentManager implements workspace.DocumentManager {
     }
   }
 
-  private fsCache = immutable.Map<string, {text: string, version: number}>();
+  private fsCache = im.Map<string, {text: string, version: number}>();
 }
 
-export class VsCompilerService implements compiler.CompilerService {
+export class VsCompilerService implements _static.LexicalAnalyzerService {
   //
   // CompilerService implementation.
   //
 
   public cache = (
     fileUri: string, text: string, version?: number
-  ): compiler.ParsedDocument | compiler.FailedParsedDocument => {
+  ): _static.ParsedDocument | _static.FailedParsedDocument => {
     //
     // There are 3 possible outcomes:
     //
@@ -106,26 +104,26 @@ export class VsCompilerService implements compiler.CompilerService {
     }
 
     const lex = lexer.Lex(parsedUrl.path, text);
-    if (error.isStaticError(lex)) {
+    if (lexical.isStaticError(lex)) {
       // TODO: emptyTokens is not right. Fill it in.
-      const fail = new compiler.LexFailure(lexer.emptyTokens, lex);
-      return new compiler.FailedParsedDocument(text, fail, version);
+      const fail = new _static.LexFailure(lexer.emptyTokens, lex);
+      return new _static.FailedParsedDocument(text, fail, version);
     }
 
     const parse = parser.Parse(lex);
-    if (error.isStaticError(parse)) {
-      const fail = new compiler.ParseFailure(lex, parse);
-      return new compiler.FailedParsedDocument(text, fail, version);
+    if (lexical.isStaticError(parse)) {
+      const fail = new _static.ParseFailure(lex, parse);
+      return new _static.FailedParsedDocument(text, fail, version);
     }
 
-    const parsedDoc = new compiler.ParsedDocument(text, lex, parse, version);
+    const parsedDoc = new _static.ParsedDocument(text, lex, parse, version);
     this.docCache = this.docCache.set(fileUri, parsedDoc);
     return parsedDoc;
   }
 
   public getLastSuccess = (
     fileUri: string
-  ): compiler.ParsedDocument | null => {
+  ): _static.ParsedDocument | null => {
     return this.docCache.has(fileUri) && this.docCache.get(fileUri) || null;
   }
 
@@ -137,10 +135,10 @@ export class VsCompilerService implements compiler.CompilerService {
   // Private members.
   //
 
-  private docCache = immutable.Map<string, compiler.ParsedDocument>();
+  private docCache = im.Map<string, _static.ParsedDocument>();
 }
 
-export class VsPathResolver extends workspace.LibPathResolver {
+export class VsPathResolver extends editor.LibPathResolver {
   protected pathExists = (path: string): boolean => {
     try {
       return fs.existsSync(path);

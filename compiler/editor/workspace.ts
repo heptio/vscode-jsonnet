@@ -1,10 +1,9 @@
-'use strict';
 import * as path from 'path';
 import * as url from 'url';
 
 import * as im from 'immutable';
 
-import * as ast from '../parser/node';
+import * as ast from '../lexical-analysis/ast';
 
 // DocumentEventListener listens to events emitted by a
 // `DocumentManager` in response to changes to documents that it

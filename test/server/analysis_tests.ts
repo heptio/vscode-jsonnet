@@ -1,28 +1,25 @@
-'use strict';
 import { expect, assert } from 'chai';
 import * as fs from 'fs';
 import * as mocha from 'mocha';
 import * as os from 'os';
 import * as url from 'url';
 
-import * as analyze from '../../server/ast/analyzer';
-import * as ast from '../../server/parser/node';
-import * as astVisitor from '../../server/ast/visitor';
-import * as compiler from "../../server/ast/compiler";
-import * as error from '../../server/lexer/static_error';
-import * as lexer from '../../server/lexer/lexer';
+import * as ast from '../../compiler/lexical-analysis/ast';
+import * as editor from '../../compiler/editor';
+import * as lexical from '../../compiler/lexical-analysis/lexical';
+import * as lexer from '../../compiler/lexical-analysis/lexer';
 import * as local from '../../server/local';
+import * as _static from '../../compiler/static';
 import * as testWorkspace from './test_workspace';
-import * as workspace from '../../server/ast/workspace';
 
 const dataDir = `${__dirname}/../../../test/data`;
 
-const makeLocation = (line: number, column: number): error.Location => {
-  return new error.Location(line, column);
+const makeLocation = (line: number, column: number): lexical.Location => {
+  return new lexical.Location(line, column);
 }
 
 const assertLocationRange = (
-  lr: error.LocationRange, startLine: number, startCol: number,
+  lr: lexical.LocationRange, startLine: number, startCol: number,
   endLine: number, endCol: number
 ): void => {
   assert.equal(lr.begin.line, startLine);
@@ -32,13 +29,13 @@ const assertLocationRange = (
 }
 
 const resolveSymbolAtPositionFromAst = (
-  analyzer: analyze.Analyzer, context: ast.ResolutionContext,
-  rootNode: ast.Node, pos: error.Location,
+  analyzer: _static.Analyzer, context: ast.ResolutionContext,
+  rootNode: ast.Node, pos: lexical.Location,
 ): ast.Node | null => {
-  let nodeAtPos = analyze.getNodeAtPositionFromAst(rootNode, pos);
-  if (astVisitor.isAnalyzableFindFailure(nodeAtPos)) {
+  let nodeAtPos = _static.getNodeAtPositionFromAst(rootNode, pos);
+  if (ast.isAnalyzableFindFailure(nodeAtPos)) {
     nodeAtPos = nodeAtPos.tightestEnclosingNode;
-  } else if (astVisitor.isUnanalyzableFindFailure(nodeAtPos)) {
+  } else if (ast.isUnanalyzableFindFailure(nodeAtPos)) {
     return null;
   }
 
@@ -64,12 +61,12 @@ describe("Compiler service", () => {
     {
       const cachedParse1 = compilerService.cache(
         mockFilename, mockDocumentText1, 1);
-      assert.isTrue(compiler.isParsedDocument(cachedParse1));
+      assert.isTrue(_static.isParsedDocument(cachedParse1));
       assert.equal(cachedParse1.text, mockDocumentText1);
       assert.equal(cachedParse1.version, 1);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse1.parse) &&
-        !compiler.isParseFailure(cachedParse1.parse) &&
+        !_static.isLexFailure(cachedParse1.parse) &&
+        !_static.isParseFailure(cachedParse1.parse) &&
         cachedParse1.parse.type == "ObjectNode");
     }
 
@@ -78,12 +75,12 @@ describe("Compiler service", () => {
       // of parsing the new document text.
       const cachedParse2 = compilerService.cache(
         mockFilename, mockDocumentText2, 1);
-      assert.isTrue(compiler.isParsedDocument(cachedParse2));
+      assert.isTrue(_static.isParsedDocument(cachedParse2));
       assert.equal(cachedParse2.text, mockDocumentText1);
       assert.equal(cachedParse2.version, 1);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse2.parse) &&
-        !compiler.isParseFailure(cachedParse2.parse) &&
+        !_static.isLexFailure(cachedParse2.parse) &&
+        !_static.isParseFailure(cachedParse2.parse) &&
         cachedParse2.parse.type == "ObjectNode");
     }
 
@@ -91,12 +88,12 @@ describe("Compiler service", () => {
       // Parse the new version of the document.
       const cachedParse3 = compilerService.cache(
         mockFilename, mockDocumentText2, 2);
-      assert.isTrue(compiler.isParsedDocument(cachedParse3));
+      assert.isTrue(_static.isParsedDocument(cachedParse3));
       assert.equal(cachedParse3.text, mockDocumentText2);
       assert.equal(cachedParse3.version, 2);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse3.parse) &&
-        !compiler.isParseFailure(cachedParse3.parse) &&
+        !_static.isLexFailure(cachedParse3.parse) &&
+        !_static.isParseFailure(cachedParse3.parse) &&
         cachedParse3.parse.type == "ArrayNode");
     }
   });
@@ -107,12 +104,12 @@ describe("Compiler service", () => {
     {
       const cachedParse1 = compilerService.cache(
         mockFilename, mockDocumentText1, undefined);
-      assert.isTrue(compiler.isParsedDocument(cachedParse1));
+      assert.isTrue(_static.isParsedDocument(cachedParse1));
       assert.equal(cachedParse1.text, mockDocumentText1);
       assert.equal(cachedParse1.version, undefined);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse1.parse) &&
-        !compiler.isParseFailure(cachedParse1.parse) &&
+        !_static.isLexFailure(cachedParse1.parse) &&
+        !_static.isParseFailure(cachedParse1.parse) &&
         cachedParse1.parse.type == "ObjectNode");
     }
 
@@ -121,12 +118,12 @@ describe("Compiler service", () => {
       // `undefined`.
       const cachedParse2 = compilerService.cache(
         mockFilename, mockDocumentText2, undefined);
-      assert.isTrue(compiler.isParsedDocument(cachedParse2));
+      assert.isTrue(_static.isParsedDocument(cachedParse2));
       assert.equal(cachedParse2.text, mockDocumentText2);
       assert.equal(cachedParse2.version, undefined);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse2.parse) &&
-        !compiler.isParseFailure(cachedParse2.parse) &&
+        !_static.isLexFailure(cachedParse2.parse) &&
+        !_static.isParseFailure(cachedParse2.parse) &&
         cachedParse2.parse.type == "ArrayNode");
     }
 
@@ -135,12 +132,12 @@ describe("Compiler service", () => {
       // `undefined`, but we now have a version number.
       const cachedParse3 = compilerService.cache(
         mockFilename, mockDocumentText1, 1);
-      assert.isTrue(compiler.isParsedDocument(cachedParse3));
+      assert.isTrue(_static.isParsedDocument(cachedParse3));
       assert.equal(cachedParse3.text, mockDocumentText1);
       assert.equal(cachedParse3.version, 1);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse3.parse) &&
-        !compiler.isParseFailure(cachedParse3.parse) &&
+        !_static.isLexFailure(cachedParse3.parse) &&
+        !_static.isParseFailure(cachedParse3.parse) &&
         cachedParse3.parse.type == "ObjectNode");
     }
 
@@ -149,12 +146,12 @@ describe("Compiler service", () => {
       // version number, but now we don't.
       const cachedParse4 = compilerService.cache(
         mockFilename, mockDocumentText2, undefined);
-      assert.isTrue(compiler.isParsedDocument(cachedParse4));
+      assert.isTrue(_static.isParsedDocument(cachedParse4));
       assert.equal(cachedParse4.text, mockDocumentText2);
       assert.equal(cachedParse4.version, undefined);
       assert.isTrue(
-        !compiler.isLexFailure(cachedParse4.parse) &&
-        !compiler.isParseFailure(cachedParse4.parse) &&
+        !_static.isLexFailure(cachedParse4.parse) &&
+        !_static.isParseFailure(cachedParse4.parse) &&
         cachedParse4.parse.type == "ArrayNode");
     }
   });
@@ -164,13 +161,13 @@ describe("Searching an AST by position", () => {
   const compilerService = new local.VsCompilerService();
   const documents =
     new testWorkspace.FsDocumentManager(new local.VsPathResolver());
-  const analyzer = new analyze.Analyzer(documents, compilerService);
+  const analyzer = new _static.Analyzer(documents, compilerService);
 
   const file = `file://${dataDir}/simple-nodes.jsonnet`;
   const ctx = new ast.ResolutionContext(compilerService, documents, file);
   const doc = documents.get(file);
   const compiled = compilerService.cache(file, doc.text, doc.version);
-  if (compiler.isFailedParsedDocument(compiled)) {
+  if (_static.isFailedParsedDocument(compiled)) {
     throw new Error(`Failed to parse document '${file}'`);
   }
 
@@ -179,7 +176,7 @@ describe("Searching an AST by position", () => {
   it("Object field assigned value of `local` symbol", () => {
     // Property.
     {
-      const property1Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const property1Id = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 5));
       assert.isNotNull(property1Id);
       assert.equal(property1Id.type, "IdentifierNode");
@@ -195,7 +192,7 @@ describe("Searching an AST by position", () => {
 
     // Target.
     {
-      const target1Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const target1Id = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(2, 14));
       assert.isNotNull(target1Id);
       assert.equal(target1Id.type, "IdentifierNode");
@@ -218,9 +215,9 @@ describe("Searching an AST by position", () => {
   it("Object field assigned literal number", () => {
     // Target.
     const found =
-      <astVisitor.AnalyzableFindFailure>analyze.getNodeAtPositionFromAst(
+      <ast.AnalyzableFindFailure>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(3, 15));
-    assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
+    assert.isTrue(ast.isAnalyzableFindFailure(found));
     assert.equal(found.kind, "NotIdentifier");
 
     const target2Id = <ast.LiteralNumber>found.tightestEnclosingNode;
@@ -238,7 +235,7 @@ describe("Searching an AST by position", () => {
   it("`local` object field assigned value", () => {
     // Property.
     {
-      const property3Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const property3Id = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(4, 9));
       assert.isNotNull(property3Id);
       assert.equal(property3Id.type, "IdentifierNode");
@@ -255,9 +252,9 @@ describe("Searching an AST by position", () => {
     // Target.
     {
       const found =
-        <astVisitor.AnalyzableFindFailure>analyze.getNodeAtPositionFromAst(
+        <ast.AnalyzableFindFailure>_static.getNodeAtPositionFromAst(
           rootNode, makeLocation(4, 15));
-      assert.isTrue(astVisitor.isAnalyzableFindFailure(found));
+      assert.isTrue(ast.isAnalyzableFindFailure(found));
       assert.equal(found.kind, "NotIdentifier");
 
       const target3Id = <ast.LiteralNumber>found.tightestEnclosingNode;
@@ -280,7 +277,7 @@ describe("Searching an AST by position", () => {
     // the current field. This tests that we correctly resolve that
     // reference, even though it occurs after the current object
     // field.
-    const property4Id = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+    const property4Id = <ast.Identifier>_static.getNodeAtPositionFromAst(
       rootNode, makeLocation(5, 20));
     assert.isNotNull(property4Id);
     assert.equal(property4Id.type, "IdentifierNode");
@@ -294,7 +291,7 @@ describe("Searching an AST by position", () => {
   it("Can resolve identifiers that refer to mixins", () => {
     // merged1.b
     {
-      const merged1 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const merged1 = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 23));
       assert.isNotNull(merged1);
       assert.equal(merged1.type, "IdentifierNode");
@@ -308,7 +305,7 @@ describe("Searching an AST by position", () => {
 
     // merged2.a
     {
-      const merged2 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const merged2 = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 34));
       assert.isNotNull(merged2);
       assert.equal(merged2.type, "IdentifierNode");
@@ -321,7 +318,7 @@ describe("Searching an AST by position", () => {
 
     // merged3.a
     {
-      const merged3 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const merged3 = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 45));
       assert.isNotNull(merged3);
       assert.equal(merged3.type, "IdentifierNode");
@@ -334,7 +331,7 @@ describe("Searching an AST by position", () => {
 
     // merged4.a
     {
-      const merged4 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const merged4 = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(11, 56));
       assert.isNotNull(merged4);
       assert.equal(merged4.type, "IdentifierNode");
@@ -348,7 +345,7 @@ describe("Searching an AST by position", () => {
 
     // merged4.a
     {
-      const merged5 = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+      const merged5 = <ast.Identifier>_static.getNodeAtPositionFromAst(
         rootNode, makeLocation(15, 28));
       assert.isNotNull(merged5);
       assert.equal(merged5.type, "IdentifierNode");
@@ -366,7 +363,7 @@ describe("Searching an AST by position", () => {
     // points to another variable. In this case, `numberVal2` refers
     // to `numberVal1`.
 
-    const node = <ast.Identifier>analyze.getNodeAtPositionFromAst(
+    const node = <ast.Identifier>_static.getNodeAtPositionFromAst(
       rootNode, makeLocation(18, 19));
     assert.isNotNull(node);
     assert.equal(node.type, "IdentifierNode");
@@ -383,7 +380,7 @@ describe("Imported symbol resolution", () => {
   const compilerService = new local.VsCompilerService();
   const documents =
     new testWorkspace.FsDocumentManager(new local.VsPathResolver());
-  const analyzer = new analyze.Analyzer(documents, compilerService);
+  const analyzer = new _static.Analyzer(documents, compilerService);
 
   const file = `file://${dataDir}/simple-import.jsonnet`;
   const document = documents.get(file);
@@ -391,7 +388,7 @@ describe("Imported symbol resolution", () => {
 
   const ctx = new ast.ResolutionContext(compilerService, documents, file);
 
-  if (compiler.isFailedParsedDocument(compile)) {
+  if (_static.isFailedParsedDocument(compile)) {
     throw new Error(`Failed to parse document '${file}'`);
   }
 

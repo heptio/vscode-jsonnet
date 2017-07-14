@@ -4,13 +4,13 @@ import * as url from 'url';
 
 import * as im from 'immutable';
 
-import * as ast from '../../../server/parser/node';
-import * as error from '../../../server/lexer/static_error';
-import * as workspace from '../../../server/ast/workspace';
+import * as ast from '../../../compiler/lexical-analysis/ast';
+import * as editor from '../../../compiler/editor';
+import * as lexical from '../../../compiler/lexical-analysis/lexical';
 
 const wd = path.resolve(".");
 
-class TestLibPathResolver extends workspace.LibPathResolver {
+class TestLibPathResolver extends editor.LibPathResolver {
   private fs = im.Set<string>([
     "/usr/share/file1.libsonnet",
     `${wd}/file2.libsonnet`,
@@ -38,7 +38,7 @@ class SuccessTest {
   ) {}
 }
 
-const dummyLoc = new error.Location(-1, -1);
+const dummyLoc = new lexical.Location(-1, -1);
 
 const successTests = im.List<SuccessTest>([
   new SuccessTest(
@@ -49,19 +49,19 @@ const successTests = im.List<SuccessTest>([
     "Resolves simple file imported from lib path",
     new ast.Import(
       "file1.libsonnet",
-      error.MakeLocationRange("test.jsonnet", dummyLoc, dummyLoc)),
+      lexical.MakeLocationRange("test.jsonnet", dummyLoc, dummyLoc)),
       "file:///usr/share/file1.libsonnet"),
   new SuccessTest(
     "Resolves simple file imported from current directory",
     new ast.Import(
       "file2.libsonnet",
-      error.MakeLocationRange("test.jsonnet", dummyLoc, dummyLoc)),
+      lexical.MakeLocationRange("test.jsonnet", dummyLoc, dummyLoc)),
       `file://${wd}/file2.libsonnet`),
   new SuccessTest(
     "Resolves simple file imported absolute path",
     new ast.Import(
       "/usr/share/file3.libsonnet",
-      error.MakeLocationRange("test.jsonnet", dummyLoc, dummyLoc)),
+      lexical.MakeLocationRange("test.jsonnet", dummyLoc, dummyLoc)),
     "file:///usr/share/file3.libsonnet"),
 ]);
 

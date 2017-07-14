@@ -1,11 +1,9 @@
-'use strict';
-import * as immutable from 'immutable';
+import * as im from 'immutable';
 
-import * as ast from '../parser/node';
-import * as astVisitor from './visitor';
-import * as error from '../lexer/static_error';
-import * as parser from '../parser/parser';
-import * as lexer from '../lexer/lexer';
+import * as ast from '../lexical-analysis/ast';
+import * as lexer from '../lexical-analysis/lexer';
+import * as lexical from '../lexical-analysis/lexical';
+import * as parser from '../lexical-analysis/parser';
 
 // ParsedDocument represents a successfully-parsed document.
 export class ParsedDocument {
@@ -40,7 +38,7 @@ export const isFailedParsedDocument = (
 export class LexFailure {
   constructor(
     readonly lex: lexer.Tokens,
-    readonly lexError: error.StaticError,
+    readonly lexError: lexical.StaticError,
   ) {}
 }
 
@@ -54,7 +52,7 @@ export class ParseFailure {
     readonly lex: lexer.Tokens,
     // TODO: Enable this.
     // readonly parse: ast.Node,
-    readonly parseError: error.StaticError,
+    readonly parseError: lexical.StaticError,
   ) {}
 }
 
@@ -64,7 +62,7 @@ export const isParseFailure = (testMe: any): testMe is ParseFailure => {
 
 // CompilerService represents the core service for parsing and caching
 // parses of documents.
-export interface CompilerService {
+export interface LexicalAnalyzerService {
   cache: (
     fileUri: string, text: string, version?: number
   ) => ParsedDocument | FailedParsedDocument
