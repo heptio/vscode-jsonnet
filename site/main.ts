@@ -1,3 +1,4 @@
+import * as http from 'http';
 import * as url from 'url';
 
 import * as im from 'immutable';
@@ -9,49 +10,68 @@ import * as lexical from '../compiler/lexical-analysis/lexical';
 import * as parser from '../compiler/lexical-analysis/parser';
 import * as _static from '../compiler/static';
 
-import * as data from "./data";
-
 declare var global: any;
 
-const backsplicePrefix = `file:///`;
-const windowDocUri = `${backsplicePrefix}window`;
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
 
+const getUrl = (url: string, cb) => {
+  let text = '';
+  http.get(url, function (res) {
+    const { statusCode } = res;
+    let error;
+    if (statusCode !== 200) {
+      res.resume();
+      throw new Error(`Request Failed.\n Status Code: ${statusCode}`);
+    }
+
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => { text += chunk; });
+    res.on('end', () => {
+      cb(text);
+    });
+  });
+};
+
+// ----------------------------------------------------------------------------
+// Browser-specific implementations of core analyzer constructs.
+// ----------------------------------------------------------------------------
 
 export class BrowserDocumentManager implements editor.DocumentManager {
+  public k: string;
+  public k8s: string;
+
+  // URI utilities.
+  public readonly backsplicePrefix = `file:///`;
+  public readonly windowDocUri = `${this.backsplicePrefix}window`;
+  public readonly k8sUri = `${this.backsplicePrefix}k8s.libsonnet`;
+
+  // The ksonnet files (e.g., `k.libsonnet`) never change. Because
+  // static analysis of their files is expensive, we assign them
+  // version 0 so that it's _always_ cached.
+  public readonly staticsVersion = 0;
+
   get = (
-    fileUri: string,
+    file: editor.FileUri | ast.Import | ast.ImportStr,
   ): {text: string, version?: number, resolvedPath: string} => {
-    if (fileUri === `${backsplicePrefix}apps.v1beta1.libsonnet`) {
+    const fileUri = ast.isImport(file) || ast.isImportStr(file)
+      ? `${this.backsplicePrefix}${file.file}`
+      : file;
+
+    if (fileUri === `${this.backsplicePrefix}ksonnet.beta.2/k.libsonnet`) {
       return {
-        text: data.appsV1Beta1File,
-        version: 0,
+        text: this.k,
+        version: this.staticsVersion,
         resolvedPath: fileUri,
       };
-    } else if (fileUri === `${backsplicePrefix}core.v1.libsonnet`) {
+    } else if (fileUri === this.k8sUri) {
       return {
-        text: data.coreV1File,
-        version: 0,
+        text: this.k8s,
+        version: this.staticsVersion,
         resolvedPath: fileUri,
       };
-    } else if (fileUri === `${backsplicePrefix}extensions.v1beta1.libsonnet`) {
-      return {
-        text: data.extensionsV1Beta1File,
-        version: 0,
-        resolvedPath: fileUri,
-      };
-    } else if (fileUri === `${backsplicePrefix}k.libsonnet`) {
-      return {
-        text: data.kBeta1File,
-        version: 0,
-        resolvedPath: fileUri,
-      };
-    } else if (fileUri === `${backsplicePrefix}util.libsonnet`) {
-      return {
-        text: data.utilFile,
-        version: 0,
-        resolvedPath: fileUri,
-      };
-    } else if (fileUri === windowDocUri) {
+    } else if (fileUri === this.windowDocUri) {
       return {
         text: this.windowText,
         version: this.version,
@@ -72,10 +92,6 @@ export class BrowserDocumentManager implements editor.DocumentManager {
 }
 
 export class BrowserCompilerService implements _static.LexicalAnalyzerService {
-  //
-  // CompilerService implementation.
-  //
-
   public cache = (
     fileUri: string, text: string, version?: number
   ): _static.ParsedDocument | _static.FailedParsedDocument => {
@@ -139,24 +155,48 @@ export class BrowserCompilerService implements _static.LexicalAnalyzerService {
   private docCache = im.Map<string, _static.ParsedDocument>();
 }
 
+// ----------------------------------------------------------------------------
+// Set up analyzer in browser.
+// ----------------------------------------------------------------------------
+
 const docs = new BrowserDocumentManager();
 const cs = new BrowserCompilerService();
 const analyzer = new _static.Analyzer(docs, cs);
 
-interface AcePosition {
-  row: number,
+// ----------------------------------------------------------------------------
+// Get ksonnet files.
+// ----------------------------------------------------------------------------
+
+getUrl(
+  'https://raw.githubusercontent.com/ksonnet/ksonnet-lib/bd6b2d618d6963ea6a81fcc5623900d8ba110a32/ksonnet.beta.2/k.libsonnet',
+  text => {docs.k = text;});
+getUrl(
+  "https://raw.githubusercontent.com/ksonnet/ksonnet-lib/bd6b2d618d6963ea6a81fcc5623900d8ba110a32/ksonnet.beta.2/k8s.libsonnet",
+  text => {
+    docs.k8s = text;
+    // Static analysis on `k8s.libsonnet` takes multiple seconds to
+    // complete, so do this immediately.
+    cs.cache(docs.k8sUri, text, docs.staticsVersion);
+  });
+
+interface MonacoPosition {
+  lineNumber: number,
   column: number,
 };
 
+// ----------------------------------------------------------------------------
+// Public functions for the Monaco editor to call.
+// ----------------------------------------------------------------------------
+
 global.docOnChange = (text: string, version?: number) => {
   docs.setWindowText(text, version);
-  cs.cache(windowDocUri, text, version);
+  cs.cache(docs.windowDocUri, text, version);
 }
 
 global.onComplete = (
-  text: string, position: AcePosition
+  text: string, position: MonacoPosition
 ): Promise<editor.CompletionInfo[]> => {
   return analyzer
     .onComplete(
-      windowDocUri, new lexical.Location(position.row + 1, position.column));
+      docs.windowDocUri, new lexical.Location(position.lineNumber, position.column));
 }
