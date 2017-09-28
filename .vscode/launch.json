@@ -33,6 +33,15 @@
             "preLaunchTask": "npm"
         },
         {
+            "name": "Attach to TS Server",
+            "type": "node",
+            "request": "attach",
+            "port": 6009,
+            "sourceMaps": true,
+            "outFiles": [ "${workspaceRoot}/out/**/*.js" ],
+            "preLaunchTask": "npm"
+        },
+        {
             "name": "Launch Tests",
             "type": "extensionHost",
             "request": "launch",
