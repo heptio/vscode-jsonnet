@@ -249,6 +249,17 @@ export const isFieldsResolvable = (
     typeof node["resolveFields"] === "function";
 }
 
+export interface TypeGuessResolvable extends NodeBase {
+  resolveTypeGuess(context: ResolutionContext): Resolve | ResolveFailure
+}
+
+export const isTypeGuessResolvable = (
+  node: NodeBase
+): node is TypeGuessResolvable => {
+  return node instanceof NodeBase &&
+    typeof node["resolveTypeGuess"] === "function";
+}
+
 // ---------------------------------------------------------------------------
 
 // IdentifierName represents a variable / parameter / field name.
@@ -427,7 +438,7 @@ export const isCompSpecFor = (node): node is CompSpec => {
 // ---------------------------------------------------------------------------
 
 // Apply represents a function call
-export class Apply extends NodeBase  {
+export class Apply extends NodeBase implements TypeGuessResolvable {
   readonly type: "ApplyNode" = "ApplyNode";
 
   constructor(
@@ -449,6 +460,25 @@ export class Apply extends NodeBase  {
       : "";
 
     return `${this.target.prettyPrint()}(${argsString}${tailStrictString})`;
+  }
+
+  public resolveTypeGuess = (
+    context: ResolutionContext
+  ): Resolve | ResolveFailure => {
+    if (!isResolvable(this.target)) {
+      return Unresolved.Instance;
+    }
+
+    const fn = this.target.resolve(context);
+    if (!isResolvedFunction(fn) || !isObjectField(fn.functionNode)) {
+      return Unresolved.Instance;
+    }
+
+    const body = fn.functionNode.expr2;
+    if (isBinary(body) && body.op == "BopPlus" && isSelf(body.left)) {
+      return body.left.resolve(context);
+    }
+    return Unresolved.Instance;
   }
 }
 
@@ -941,7 +971,10 @@ export interface Index extends Node, Resolvable {
 const resolveIndex = (
   index: Index, context: ResolutionContext,
 ): Resolve | ResolveFailure => {
-  if (index.target == null || !isResolvable(index.target)) {
+  if (
+    index.target == null ||
+    (!isResolvable(index.target) && !isFieldsResolvable(index.target) && !isTypeGuessResolvable(index.target))
+  ) {
     throw new Error(
       `INTERNAL ERROR: Index node must have a resolvable target:\n${renderAsJson(index)}`);
   } else if (index.id == null) {
@@ -1465,7 +1498,7 @@ export const isObjectComprehensionSimple = (
 // ---------------------------------------------------------------------------
 
 // Self represents the self keyword.
-export class Self extends NodeBase {
+export class Self extends NodeBase implements Resolvable {
   readonly type: "SelfNode" = "SelfNode";
 
   constructor(
@@ -1474,6 +1507,20 @@ export class Self extends NodeBase {
 
   public prettyPrint = (): string => {
     return `self`;
+  }
+
+  public resolve = (context: ResolutionContext): Resolve | ResolveFailure => {
+    let curr: Node | null = this;
+    while (true) {
+      if (curr == null || curr.parent == null) {
+        return Unresolved.Instance
+      }
+
+      if (isObjectNode(curr)) {
+        return curr.resolveFields(context);
+      }
+      curr = curr.parent;
+    }
   }
 };
 
@@ -1657,6 +1704,8 @@ export const tryResolveIndirections = (
       resolved = resolved.value.resolve(context.withUri(resolved.fileUri));
     } else if (isFieldsResolvable(resolved.value)) {
       resolved = resolved.value.resolveFields(context.withUri(resolved.fileUri));
+    } else if (isTypeGuessResolvable(resolved.value)) {
+      resolved = resolved.value.resolveTypeGuess(context.withUri(resolved.fileUri));
     } else if (isValueType(resolved.value)) {
       // We've resolved to a value. Return.
       return resolved;
