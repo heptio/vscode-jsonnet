@@ -248,12 +248,44 @@ export class Analyzer implements EventedAnalyzer {
       !cursorLoc.inRange(rest.loc) &&
       !(restEnd.line === cursorLoc.line && cursorLoc.column === restEnd.column + 1)
     ) {
-      // Return no suggestions if the parse is not broken at
-      // the cursor.
-      //
       // NOTE: the `+ 1` correctly captures the case of the
       // user typing `.`.
-      return [];
+
+      // Explicitly handle the case that the user has pressed a
+      // newline and `.` character. For example, in the third line
+      // below:
+      //
+      //   metadata.withAnnotations({foo: "bar"})
+      //
+      //     .;
+      //
+      // Return no suggestions if the parse is not broken at the
+      // cursor.
+      const lines = compiled.text.split(/\r\n|\r|\n/g);
+      const gapLines = lines.slice(restEnd.line, cursorLoc.line);
+      if (gapLines.length == 0) {
+        return [];
+      } else if (gapLines.length === 1) {
+        const gap = gapLines[0].slice(cursorLoc.column, restEnd.column);
+        if (gap.trim().length != 0) {
+          return [];
+        }
+      } else {
+        const firstGap = gapLines[0].slice(restEnd.column);
+        const lastGap = gapLines[gapLines.length - 1]
+          .slice(
+            0,
+            cursorLoc.column - (lastCharIsDot ? 2 : 1));
+        const middleGapLengths = gapLines
+          .slice(1, gapLines.length - 2)
+          .reduce((gapLenAcc: number, line: string) => gapLenAcc + line.trim().length, 0);
+
+        if (firstGap.trim().length !== 0 || middleGapLengths !== 0 || lastGap.trim().length !== 0) {
+          return [];
+        }
+      }
+
+      cursorLoc = restEnd;
     }
 
     // Step 2, try to find the "best guess".
