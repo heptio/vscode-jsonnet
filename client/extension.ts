@@ -236,7 +236,7 @@ namespace jsonnet {
 
   export const languageClient = (serverModule: string) => {
     // The debug options for the server
-    let debugOptions = { execArgv: ["--nolazy", "--debug=6009"] };
+    let debugOptions = { execArgv: ["--nolazy", "--inspect=6009"] };
 
     // If the extension is launched in debug mode then the debug
     // server options are used. Otherwise the run options are used
@@ -244,6 +244,7 @@ namespace jsonnet {
       run : {
         module: serverModule,
         transport: client.TransportKind.ipc,
+        options: debugOptions
       },
       debug: {
         module: serverModule,
