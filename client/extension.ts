@@ -244,7 +244,6 @@ namespace jsonnet {
       run : {
         module: serverModule,
         transport: client.TransportKind.ipc,
-        options: debugOptions
       },
       debug: {
         module: serverModule,
