@@ -3,12 +3,14 @@ import { execSync } from 'child_process';
 import * as client from 'vscode-languageclient';
 import * as os from 'os';
 import * as path from 'path';
+import * as fs from 'fs';
 import * as vs from 'vscode';
 import * as yaml from "js-yaml";
 
 import * as im from 'immutable';
 
 import * as lexical from '../compiler/lexical-analysis/lexical';
+
 
 // activate registers the Jsonnet language server with vscode, and
 // configures it based on the contents of the workspace JSON file.
@@ -26,6 +28,7 @@ namespace register {
     // The server is implemented in node
     let languageClient = jsonnet.languageClient(
       context.asAbsolutePath(path.join('out', 'server', 'server.js')));
+
 
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation
@@ -106,14 +109,14 @@ namespace workspace {
     return extStrsObj == null
       ? ""
       : Object.keys(extStrsObj)
-          .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
-          .join(" ");
+        .map(key => `--ext-str ${key}="${extStrsObj[key]}"`)
+        .join(" ");
   }
 
   export const libPaths = (): string => {
     const libPaths = vs.workspace.getConfiguration('jsonnet')["libPaths"];
     if (libPaths == null) {
-       return "";
+      return "";
     }
 
     // Add executable to the beginning of the library paths, because
@@ -241,7 +244,7 @@ namespace jsonnet {
     // If the extension is launched in debug mode then the debug
     // server options are used. Otherwise the run options are used
     let serverOptions: client.ServerOptions = {
-      run : {
+      run: {
         module: serverModule,
         transport: client.TransportKind.ipc,
       },
@@ -268,10 +271,10 @@ namespace jsonnet {
 
     // Create the language client and start the client.
     return new client.LanguageClient(
-    "JsonnetLanguageServer",
-    'Jsonnet Language Server',
-    serverOptions,
-    clientOptions);
+      "JsonnetLanguageServer",
+      'Jsonnet Language Server',
+      serverOptions,
+      clientOptions);
   }
 
   export const canonicalPreviewUri = (fileUri: vs.Uri) => {
@@ -291,7 +294,7 @@ namespace jsonnet {
   export class RuntimeFailure {
     constructor(
       readonly error: string,
-    ) {}
+    ) { }
   }
 
   export const isRuntimeFailure = (thing): thing is RuntimeFailure => {
@@ -325,12 +328,33 @@ namespace jsonnet {
     public cachePreview = (sourceDoc: vs.TextDocument): RuntimeFailure | string => {
       const sourceUri = sourceDoc.uri.toString();
       const sourceFile = sourceDoc.uri.fsPath
+
+      let codePaths = '';
+
+      if (ksonnet.isInApp(sourceFile)) {
+        const dir = path.dirname(sourceFile);
+        const paramsPath = path.join(dir, "params.libsonnet");
+        const rootDir = ksonnet.rootPath(sourceFile);
+        const envParamsPath = path.join(rootDir, "environments", "default", "params.libsonnet");
+
+        let codeImports = {
+          '__ksonnet/params': path.join(dir, "params.libsonnet"),
+          '__ksonnet/environments': envParamsPath,
+        };
+
+        codePaths = Object.keys(codeImports)
+          .map(k => `--ext-code-file "${k}"=${codeImports[k]}`)
+          .join(' ');
+
+        console.log(codePaths);
+      }
+
       try {
         // Compile the preview Jsonnet file.
         const extStrs = workspace.extStrs();
         const libPaths = workspace.libPaths();
         const jsonOutput = execSync(
-          `${jsonnet.executable} ${libPaths} ${extStrs} ${sourceFile}`
+          `${jsonnet.executable} ${libPaths} ${extStrs} ${codePaths} ${sourceFile}`
         ).toString();
 
         // Cache.
@@ -373,7 +397,7 @@ namespace jsonnet {
   // either (1) report diagnostics issues (e.g., errors, warnings) to
   // the user, or (2) clear them if the compilation was successful.
   export class DiagnosticProvider {
-    constructor(private readonly diagnostics: vs.DiagnosticCollection) {}
+    constructor(private readonly diagnostics: vs.DiagnosticCollection) { }
 
     public report = (fileUri: vs.Uri, message: string): void => {
       const messageLines = im.List<string>((<string>message).split(os.EOL)).rest();
@@ -414,7 +438,7 @@ namespace jsonnet {
         return;
       }
       const diag = new vs.Diagnostic(
-        range, locAndMessage,  vs.DiagnosticSeverity.Error);
+        range, locAndMessage, vs.DiagnosticSeverity.Error);
       this.diagnostics.set(vs.Uri.file(match.file), [diag]);
     }
 
@@ -453,7 +477,7 @@ namespace jsonnet {
             ? acc.set(match.file, im.List<vs.Diagnostic>([diag]))
             : acc.set(match.file, prev.push(diag));
         },
-        im.Map<string, im.List<vs.Diagnostic>>());
+          im.Map<string, im.List<vs.Diagnostic>>());
 
       const fileDiags = diagnostics.get(fileUri.fsPath, undefined);
       fileDiags != null && this.diagnostics.set(fileUri, fileDiags.toArray());
@@ -475,7 +499,7 @@ namespace jsonnet {
 
     private static fileFromStackFrame = (
       frameMessage: string
-    ): {fullMatch: string, fileWithLeadingWhitespace: string, file: string} | null => {
+    ): { fullMatch: string, fileWithLeadingWhitespace: string, file: string } | null => {
       const fileMatch = frameMessage.match(/(\s*)(.*?):/);
       return fileMatch == null
         ? null
@@ -528,11 +552,70 @@ namespace display {
 
     switch (active.viewColumn) {
       case vs.ViewColumn.One:
-      return vs.ViewColumn.Two;
+        return vs.ViewColumn.Two;
       case vs.ViewColumn.Two:
-      return vs.ViewColumn.Three;
+        return vs.ViewColumn.Three;
     }
 
     return active.viewColumn;
+  }
+}
+
+export namespace ksonnet {
+  // find the root of the components structure.
+  export function isInApp(filePath: string, fsRoot = '/'): boolean {
+    const currentPath = path.join(fsRoot, filePath)
+    return checkForKsonnet(currentPath);
+  }
+
+  export function rootPath(filePath: string, fsRoot = '/'): string {
+    const currentPath = path.join(fsRoot, filePath)
+    return findRootPath(currentPath);
+  }
+
+  function checkForKsonnet(filePath: string): boolean {
+    if (filePath === "/") {
+      return false;
+    }
+
+    const dir = path.dirname(filePath);
+    const parts = dir.split(path.sep)
+    if (parts[parts.length - 1] === "components") {
+      const root = path.dirname(dir);
+      const ksConfig = path.join(root, "app.yaml")
+
+      try {
+        const stats = fs.statSync(ksConfig)
+        return true;
+      }
+      catch (err) {
+        return false;
+      }
+    }
+
+    return checkForKsonnet(dir);
+  }
+
+  function findRootPath(filePath: string): string {
+    if (filePath === "/") {
+      return '';
+    }
+
+    const dir = path.dirname(filePath);
+    const parts = dir.split(path.sep)
+    if (parts[parts.length - 1] === "components") {
+      const root = path.dirname(dir);
+      const ksConfig = path.join(root, "app.yaml")
+
+      try {
+        const stats = fs.statSync(ksConfig)
+        return root;
+      }
+      catch (err) {
+        return '';
+      }
+    }
+
+    return findRootPath(dir);
   }
 }
