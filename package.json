@@ -117,5 +117,5 @@
         "test": "node ./node_modules/vscode/bin/test",
         "vscode:prepublish": "tsc -p ./"
     },
-    "version": "0.0.15"
+    "version": "0.1.0"
 }
